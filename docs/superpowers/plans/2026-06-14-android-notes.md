@@ -21,7 +21,7 @@ app/
   src/
     main/
       AndroidManifest.xml
-      java/com/notes/
+      java/app/tessera/
         NotesApplication.kt                     # @HiltAndroidApp
         MainActivity.kt                         # setContent { NotesApp() }
         NotesApp.kt                             # NavHost root
@@ -101,13 +101,13 @@ app/
           DeleteTombstonesWorker.kt              # daily
 
     test/                                        # JVM unit tests
-      java/com/notes/
+      java/app/tessera/
         domain/usecase/...
         data/repository/SyncRepositoryImplTest.kt
         data/mapper/NoteMapperTest.kt
 
     androidTest/                                 # instrumented (Room, UI)
-      java/com/notes/
+      java/app/tessera/
         data/local/NoteDaoTest.kt
         ui/notes/NotesListScreenTest.kt
         ui/editor/NoteEditorScreenTest.kt
@@ -140,10 +140,10 @@ The plan is split into **8 chunks**. Each is self-contained and ends with a runn
 **Files:**
 - Create: `settings.gradle.kts`, `build.gradle.kts` (root), `app/build.gradle.kts`, `gradle/libs.versions.toml`
 - Create: `app/src/main/AndroidManifest.xml`
-- Create: `app/src/main/java/com/notes/NotesApplication.kt`
-- Create: `app/src/main/java/com/notes/MainActivity.kt`
-- Create: `app/src/main/java/com/notes/NotesApp.kt`
-- Create: `app/src/main/java/com/notes/core/ui/theme/{Color,Theme,Type}.kt`
+- Create: `app/src/main/java/app/tessera/NotesApplication.kt`
+- Create: `app/src/main/java/app/tessera/MainActivity.kt`
+- Create: `app/src/main/java/app/tessera/NotesApp.kt`
+- Create: `app/src/main/java/app/tessera/core/ui/theme/{Color,Theme,Type}.kt`
 - Create: `.gitignore`
 
 ### Task 1.1: Bootstrap Gradle project
@@ -274,15 +274,15 @@ plugins {
 }
 
 android {
-    namespace = "com.notes"
+    namespace = "app.tessera"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.notes"
+        applicationId = "app.tessera"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        testInstrumentationRunner = "com.notes.HiltTestRunner"
+        testInstrumentationRunner = "app.tessera.HiltTestRunner"
     }
     buildFeatures { compose = true }
     compileOptions {
@@ -398,7 +398,7 @@ git commit -m "chore: bootstrap gradle + version catalog"
 - [ ] **Step 3: Create `NotesApplication.kt`**
 
 ```kotlin
-package com.notes
+package app.tessera
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
@@ -411,7 +411,7 @@ class NotesApplication : Application()
 
 `core/ui/theme/Color.kt`:
 ```kotlin
-package com.notes.core.ui.theme
+package app.tessera.core.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
@@ -424,7 +424,7 @@ val CapsuleTintDark = Color.Black.copy(alpha = 0.55f)
 
 `core/ui/theme/Type.kt`:
 ```kotlin
-package com.notes.core.ui.theme
+package app.tessera.core.ui.theme
 
 import androidx.compose.material3.Typography
 val NotesTypography = Typography()
@@ -432,7 +432,7 @@ val NotesTypography = Typography()
 
 `core/ui/theme/Theme.kt`:
 ```kotlin
-package com.notes.core.ui.theme
+package app.tessera.core.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -465,7 +465,7 @@ fun NotesTheme(
 
 `MainActivity.kt`:
 ```kotlin
-package com.notes
+package app.tessera
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -485,7 +485,7 @@ class MainActivity : ComponentActivity() {
 
 `NotesApp.kt`:
 ```kotlin
-package com.notes
+package app.tessera
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -494,7 +494,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.notes.core.ui.theme.NotesTheme
+import app.tessera.core.ui.theme.NotesTheme
 
 @Composable
 fun NotesApp() {
@@ -510,7 +510,7 @@ fun NotesApp() {
 
 - [ ] **Step 6: Run on device/emulator**
 
-Run: `./gradlew :app:installDebug && adb shell am start -n com.notes/.MainActivity`
+Run: `./gradlew :app:installDebug && adb shell am start -n app.tessera/.MainActivity`
 Expected: "Hello, Notes" centred on screen.
 
 - [ ] **Step 7: Commit**
@@ -534,15 +534,15 @@ git commit -m "feat(bootstrap): minimal Compose app with Hilt + theme"
 - Create: `data/local/NotesDatabase.kt`
 - Create: `core/di/DatabaseModule.kt`
 - Create: `core/util/Clock.kt`
-- Test: `app/src/androidTest/java/com/notes/data/local/NoteDaoTest.kt`
-- Test: `app/src/androidTest/java/com/notes/HiltTestRunner.kt`
+- Test: `app/src/androidTest/java/app/tessera/data/local/NoteDaoTest.kt`
+- Test: `app/src/androidTest/java/app/tessera/HiltTestRunner.kt`
 
 ### Task 2.1: Entities
 
 - [ ] **Step 1: Create `NoteEntity.kt`**
 
 ```kotlin
-package com.notes.data.local.entity
+package app.tessera.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.Index
@@ -588,7 +588,7 @@ data class NoteTagCrossRef(val noteId: String, val tagId: String)
 - [ ] **Step 3: Create `NoteFtsEntity.kt`**
 
 ```kotlin
-package com.notes.data.local.entity
+package app.tessera.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.Fts4
@@ -601,7 +601,7 @@ data class NoteFtsEntity(val title: String, val content: String)
 - [ ] **Step 4: Commit**
 
 ```bash
-git add app/src/main/java/com/notes/data/local/entity
+git add app/src/main/java/app/tessera/data/local/entity
 git commit -m "feat(data): note + tag + FTS entities"
 ```
 
@@ -610,10 +610,10 @@ git commit -m "feat(data): note + tag + FTS entities"
 - [ ] **Step 1: Create `NoteDao.kt`**
 
 ```kotlin
-package com.notes.data.local.dao
+package app.tessera.data.local.dao
 
 import androidx.room.*
-import com.notes.data.local.entity.NoteEntity
+import app.tessera.data.local.entity.NoteEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -670,11 +670,11 @@ interface NoteDao {
 - [ ] **Step 2: Create `TagDao.kt`**
 
 ```kotlin
-package com.notes.data.local.dao
+package app.tessera.data.local.dao
 
 import androidx.room.*
-import com.notes.data.local.entity.NoteTagCrossRef
-import com.notes.data.local.entity.TagEntity
+import app.tessera.data.local.entity.NoteTagCrossRef
+import app.tessera.data.local.entity.TagEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -705,7 +705,7 @@ interface TagDao {
 - [ ] **Step 3: Commit**
 
 ```bash
-git add app/src/main/java/com/notes/data/local/dao
+git add app/src/main/java/app/tessera/data/local/dao
 git commit -m "feat(data): NoteDao + TagDao"
 ```
 
@@ -714,16 +714,16 @@ git commit -m "feat(data): NoteDao + TagDao"
 - [ ] **Step 1: Create `NotesDatabase.kt`**
 
 ```kotlin
-package com.notes.data.local
+package app.tessera.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import com.notes.data.local.dao.NoteDao
-import com.notes.data.local.dao.TagDao
-import com.notes.data.local.entity.NoteEntity
-import com.notes.data.local.entity.NoteFtsEntity
-import com.notes.data.local.entity.NoteTagCrossRef
-import com.notes.data.local.entity.TagEntity
+import app.tessera.data.local.dao.NoteDao
+import app.tessera.data.local.dao.TagDao
+import app.tessera.data.local.entity.NoteEntity
+import app.tessera.data.local.entity.NoteFtsEntity
+import app.tessera.data.local.entity.NoteTagCrossRef
+import app.tessera.data.local.entity.TagEntity
 
 @Database(
     entities = [
@@ -749,7 +749,7 @@ ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 - [ ] **Step 2: Create `core/util/Clock.kt`**
 
 ```kotlin
-package com.notes.core.util
+package app.tessera.core.util
 
 interface Clock { fun nowMs(): Long }
 class SystemClock : Clock { override fun nowMs(): Long = System.currentTimeMillis() }
@@ -758,15 +758,15 @@ class SystemClock : Clock { override fun nowMs(): Long = System.currentTimeMilli
 - [ ] **Step 3: Create `core/di/DatabaseModule.kt`**
 
 ```kotlin
-package com.notes.core.di
+package app.tessera.core.di
 
 import android.content.Context
 import androidx.room.Room
-import com.notes.core.util.Clock
-import com.notes.core.util.SystemClock
-import com.notes.data.local.NotesDatabase
-import com.notes.data.local.dao.NoteDao
-import com.notes.data.local.dao.TagDao
+import app.tessera.core.util.Clock
+import app.tessera.core.util.SystemClock
+import app.tessera.data.local.NotesDatabase
+import app.tessera.data.local.dao.NoteDao
+import app.tessera.data.local.dao.TagDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -797,9 +797,9 @@ Expected: BUILD SUCCESSFUL. Room generates DAO impls.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/src/main/java/com/notes/data/local/NotesDatabase.kt \
-        app/src/main/java/com/notes/core/util/Clock.kt \
-        app/src/main/java/com/notes/core/di/DatabaseModule.kt \
+git add app/src/main/java/app/tessera/data/local/NotesDatabase.kt \
+        app/src/main/java/app/tessera/core/util/Clock.kt \
+        app/src/main/java/app/tessera/core/di/DatabaseModule.kt \
         app/build.gradle.kts
 git commit -m "feat(data): NotesDatabase + DatabaseModule + Clock"
 ```
@@ -808,9 +808,9 @@ git commit -m "feat(data): NotesDatabase + DatabaseModule + Clock"
 
 - [ ] **Step 1: Create custom test runner**
 
-`app/src/androidTest/java/com/notes/HiltTestRunner.kt`:
+`app/src/androidTest/java/app/tessera/HiltTestRunner.kt`:
 ```kotlin
-package com.notes
+package app.tessera
 
 import android.app.Application
 import android.content.Context
@@ -831,15 +831,15 @@ kspAndroidTest("com.google.dagger:hilt-android-compiler:2.52")
 
 - [ ] **Step 2: Write failing DAO test**
 
-`app/src/androidTest/java/com/notes/data/local/NoteDaoTest.kt`:
+`app/src/androidTest/java/app/tessera/data/local/NoteDaoTest.kt`:
 ```kotlin
-package com.notes.data.local
+package app.tessera.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
-import com.notes.data.local.entity.NoteEntity
+import app.tessera.data.local.entity.NoteEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before

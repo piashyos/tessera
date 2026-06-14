@@ -1,4 +1,4 @@
-package com.notes.core.ui.theme
+package app.tessera.core.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

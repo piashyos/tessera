@@ -9,15 +9,15 @@ plugins {
 }
 
 android {
-    namespace = "com.notes"
+    namespace = "app.tessera"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.notes"
+        applicationId = "app.tessera"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        testInstrumentationRunner = "com.notes.HiltTestRunner"
+        testInstrumentationRunner = "app.tessera.HiltTestRunner"
     }
     buildFeatures { compose = true }
     compileOptions {

@@ -1,4 +1,4 @@
-package com.notes
+package app.tessera
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,6 +11,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent { NotesApp() }
+        setContent { TesseraApp() }
     }
 }

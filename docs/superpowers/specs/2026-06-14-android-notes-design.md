@@ -1,4 +1,7 @@
-# Android Notes — Design Spec
+# Tessera — Android Notes App Design Spec
+
+**App name:** Tessera (a mosaic piece — small notes that form a bigger picture)
+**Package / applicationId:** `app.tessera`
 
 **Date:** 2026-06-14
 **Status:** Draft (pending review)

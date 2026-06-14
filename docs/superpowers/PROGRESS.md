@@ -1,6 +1,8 @@
-# Implementation Progress
+# Tessera — Implementation Progress
 
-Tracks completed chunks of the [Android Notes plan](plans/2026-06-14-android-notes.md).
+**App name:** Tessera · **Package:** `app.tessera`
+
+Tracks completed chunks of the [Tessera plan](plans/2026-06-14-android-notes.md).
 Resume in a new session by reading this file + the plan, then continuing with the first **pending** chunk.
 
 ## Status

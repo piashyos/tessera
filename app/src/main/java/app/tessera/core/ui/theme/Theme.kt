@@ -1,4 +1,4 @@
-package com.notes.core.ui.theme
+package app.tessera.core.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -11,7 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
-fun NotesTheme(
+fun TesseraTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
@@ -23,5 +23,5 @@ fun NotesTheme(
         darkTheme -> darkColorScheme()
         else -> lightColorScheme()
     }
-    MaterialTheme(colorScheme = scheme, typography = NotesTypography, content = content)
+    MaterialTheme(colorScheme = scheme, typography = TesseraTypography, content = content)
 }
