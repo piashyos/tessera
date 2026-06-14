@@ -46,6 +46,7 @@ fun TesseraPopup(
 ) {
     val focusManager = LocalFocusManager.current
     val maxCardHeight = (LocalConfiguration.current.screenHeightDp * 0.6f).dp
+    val frostColor = MaterialTheme.colorScheme.surface
     val dismiss: () -> Unit = {
         focusManager.clearFocus(force = true)
         onDismiss()
@@ -64,7 +65,9 @@ fun TesseraPopup(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeEffect(state = hazeState)
+                    .hazeEffect(state = hazeState) {
+                        backgroundColor = frostColor
+                    }
                     .background(Color.Black.copy(alpha = 0.25f))
                     .testTag(UiTestTags.PopupScrim)
                     .clickable(
