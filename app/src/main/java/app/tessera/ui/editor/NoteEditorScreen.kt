@@ -33,6 +33,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -55,6 +59,7 @@ import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.components.ChecklistBody
 import app.tessera.ui.editor.components.MarkdownToolbar
 import app.tessera.ui.editor.components.TagChips
+import app.tessera.ui.editor.components.TagPickerPopup
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
@@ -78,7 +83,9 @@ fun NoteEditorScreen(
     } else {
         Color.White
     }
-    val hazeState = androidx.compose.runtime.remember { HazeState() }
+    val hazeState = remember { HazeState() }
+    val popupHazeState = remember { HazeState() }
+    var tagPickerVisible by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -86,196 +93,211 @@ fun NoteEditorScreen(
             .background(pageColor)
             .testTag(UiTestTags.EditorRoot),
     ) {
-        // Scrollable content surface
-        Surface(
+        // Inner wrapper — everything that the popup blurs over
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(hazeState),
-            color = pageColor,
+                .hazeSource(popupHazeState),
         ) {
-            Column(
+            // Scrollable content surface
+            Surface(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .hazeSource(hazeState),
+                color = pageColor,
             ) {
-                // Space for top capsule + safe area
-                Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.safeDrawing))
-                Spacer(modifier = Modifier.height(86.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // Space for top capsule + safe area
+                    Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.safeDrawing))
+                    Spacer(modifier = Modifier.height(86.dp))
 
-                // Title field
-                BasicTextField(
-                    value = state.title,
-                    onValueChange = onTitleChange,
+                    // Title field
+                    BasicTextField(
+                        value = state.title,
+                        onValueChange = onTitleChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.EditorTitleField),
+                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        decorationBox = { innerTextField ->
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                if (state.title.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.editor_title_hint),
+                                        style = MaterialTheme.typography.headlineMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                    )
+
+                    // Body / checklist
+                    ChecklistBody(
+                        content = state.content,
+                        onContentChange = onContentChange,
+                        onToggleChecklist = onToggleChecklist,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    // Bottom spacing for the floating bottom capsule
+                    Spacer(modifier = Modifier.height(160.dp))
+                    Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
+                }
+            }
+
+            // Top edge fade scrim
+            EdgeFadeScrim(
+                hazeState = hazeState,
+                scrimColor = pageColor,
+                edge = ScrimEdge.Top,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .height(150.dp),
+            )
+
+            // Top floating capsule — back + pin
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 20.dp),
+            ) {
+                Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.safeDrawing))
+                FloatingCapsule(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag(UiTestTags.EditorTitleField),
-                    textStyle = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { innerTextField ->
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            if (state.title.isEmpty()) {
-                                Text(
-                                    text = stringResource(R.string.editor_title_hint),
-                                    style = MaterialTheme.typography.headlineMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = RoundedCornerShape(28.dp),
+                            ambientColor = FloatingShadowAmbient,
+                            spotColor = FloatingShadowSpot,
+                        ),
+                    blurRadius = 24.dp,
+                    shadowElevation = 3.dp,
+                    hazeState = hazeState,
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag(UiTestTags.EditorBack),
+                        ) {
+                            Icon(
+                                imageVector = Lucide.ArrowLeft,
+                                contentDescription = stringResource(R.string.editor_back),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = onTogglePin,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag(UiTestTags.EditorPin),
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Pin,
+                                    contentDescription = stringResource(
+                                        if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
                                     ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (state.isPinned) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(20.dp),
                                 )
                             }
-                            innerTextField()
+
+                            IconButton(
+                                onClick = onDelete,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag(UiTestTags.EditorDelete),
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Trash2,
+                                    contentDescription = stringResource(R.string.editor_delete),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
-                    },
-                )
+                    }
+                }
+            }
 
-                // Body / checklist
-                ChecklistBody(
-                    content = state.content,
-                    onContentChange = onContentChange,
-                    onToggleChecklist = onToggleChecklist,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                // Bottom spacing for the floating bottom capsule
-                Spacer(modifier = Modifier.height(160.dp))
+            // Bottom floating capsule — tags + markdown toolbar
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .imePadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+            ) {
+                FloatingCapsule(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = RoundedCornerShape(28.dp),
+                            ambientColor = FloatingShadowAmbient,
+                            spotColor = FloatingShadowSpot,
+                        ),
+                    blurRadius = 20.dp,
+                    shadowElevation = 4.dp,
+                    hazeState = hazeState,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MarkdownToolbar(onInsertToken = onInsertToken)
+                        TagChips(
+                            tags = state.tags,
+                            onRemoveTag = onRemoveTag,
+                            onAddTagClick = { tagPickerVisible = true },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
             }
         }
 
-        // Top edge fade scrim
-        EdgeFadeScrim(
-            hazeState = hazeState,
-            scrimColor = pageColor,
-            edge = ScrimEdge.Top,
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .height(150.dp),
+        // Tag picker popup — drawn on top of everything
+        TagPickerPopup(
+            visible = tagPickerVisible,
+            availableTags = state.availableTags,
+            onAddTag = { onAddTag(it); tagPickerVisible = false },
+            onDismiss = { tagPickerVisible = false },
+            hazeState = popupHazeState,
         )
-
-        // Top floating capsule — back + pin
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .padding(horizontal = 20.dp),
-        ) {
-            Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.safeDrawing))
-            FloatingCapsule(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(
-                        elevation = 12.dp,
-                        shape = RoundedCornerShape(28.dp),
-                        ambientColor = FloatingShadowAmbient,
-                        spotColor = FloatingShadowSpot,
-                    ),
-                blurRadius = 24.dp,
-                shadowElevation = 3.dp,
-                hazeState = hazeState,
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .testTag(UiTestTags.EditorBack),
-                    ) {
-                        Icon(
-                            imageVector = Lucide.ArrowLeft,
-                            contentDescription = stringResource(R.string.editor_back),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = onTogglePin,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag(UiTestTags.EditorPin),
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Pin,
-                                contentDescription = stringResource(
-                                    if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
-                                ),
-                                tint = if (state.isPinned) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-
-                        IconButton(
-                            onClick = onDelete,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag(UiTestTags.EditorDelete),
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Trash2,
-                                contentDescription = stringResource(R.string.editor_delete),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Bottom floating capsule — tags + markdown toolbar
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .imePadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-        ) {
-            FloatingCapsule(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(
-                        elevation = 12.dp,
-                        shape = RoundedCornerShape(28.dp),
-                        ambientColor = FloatingShadowAmbient,
-                        spotColor = FloatingShadowSpot,
-                    ),
-                blurRadius = 20.dp,
-                shadowElevation = 4.dp,
-                hazeState = hazeState,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MarkdownToolbar(onInsertToken = onInsertToken)
-                    TagChips(
-                        tags = state.tags,
-                        availableTags = state.availableTags,
-                        onAddTag = onAddTag,
-                        onRemoveTag = onRemoveTag,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
-        }
     }
 }
 
