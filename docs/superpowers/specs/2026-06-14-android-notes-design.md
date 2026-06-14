@@ -22,9 +22,9 @@
 | Auth | Firebase Auth (Google Sign-In через Credential Manager API) |
 | Cloud | Cloud Firestore |
 | Background | WorkManager |
-| Markdown rendering | `compose-markdown` или Markwon |
-| Min SDK | API 26+ (предпочт. API 31+ для `Modifier.blur`, ниже — fallback без blur) |
-| Target SDK | актуальный |
+| Markdown rendering | Markwon (через `AndroidView`) |
+| Min SDK | API 26 (`Modifier.blur` доступен с API 31 — на ниже используется полупрозрачная заливка без blur) |
+| Target SDK | 35 |
 
 ## 3. Архитектура
 
@@ -66,7 +66,7 @@
 
 **`tags`** (`id`, `name`) + **`note_tags`** (`noteId`, `tagId`) — many-to-many.
 
-**`notes_fts`** — FTS4 виртуальная таблица по `title + content`.
+**`notes_fts`** — FTS4 виртуальная таблица по `title + content`. Синхронизируется с `notes` через SQL-триггеры (`AFTER INSERT/UPDATE/DELETE`), декларированные в Room через `@Fts4(contentEntity = NoteEntity::class)`.
 
 **Индексы**: `(ownerId, updatedAt)`, `(isPinned, updatedAt)`, `(deletedAt)`.
 
@@ -91,6 +91,7 @@ users/{uid}/notes/{noteId}
 2. **Steady state**: Firestore listener на `users/{uid}/notes` пишет изменения в Room. Локальные правки помечаются `syncedAt = null` и WorkManager пушит их в Firestore.
 3. **Удаление**: soft delete (`deletedAt != null` локально, `deleted: true` в Firestore). Удаление имеет приоритет, если его `updatedAt` свежее.
 4. **Тумбстоуны**: `DeleteTombstonesWorker` (ежедневный) чистит записи с `deletedAt` старше 30 дней.
+5. **Race между listener и локальной правкой**: при получении снапшота из Firestore SyncRepository перед записью в Room сравнивает `remote.updatedAt` с локальным `updatedAt`. Если локальный свежее (юзер только что отредактировал) — снапшот игнорируется, локальная версия будет запушена следующим pending-write'ом.
 
 ## 6. Экраны и навигация
 
@@ -110,7 +111,7 @@ Navigation Compose, 3 destination: `notes`, `editor/{noteId?}`, `settings`.
 - **Контент**: TextField для title (крупный) + TextField для тела. Чекбоксы `[ ]` / `[x]` рендерятся inline кликабельно — тап переключает.
 - **Floating bottom capsule**: чипы тегов (тап открывает picker) + иконки markdown (bold / list / checkbox-insert).
 - **Автосейв** в Room с debounce 500ms.
-- Пустая заметка (title + content пустые) при выходе — удаляется без следа.
+- Пустая заметка (title + content пустые) при выходе — удаляется hard delete из Room (она ни разу не успела синхронизироваться, т.к. автосейв не пишет пустые заметки в Firestore — `pushNote` пропускает их).
 
 ### 6.3 SettingsScreen
 - Sign in with Google / Sign out (Credential Manager).
@@ -155,7 +156,7 @@ Navigation Compose, 3 destination: `notes`, `editor/{noteId?}`, `settings`.
 ### 8.3 Sign-in / Sign-out
 - **Sign-in**: Credential Manager API → Firebase Auth. Локальные заметки с `ownerId = null` получают текущий uid и пушатся.
 - **Sign-out**: диалог "Заметки останутся на устройстве, но не будут синхронизироваться". Локальные данные **не** чистим (включая `ownerId`), чтобы повторный логин тем же аккаунтом не создал дубликаты.
-- **Другой аккаунт**: явный диалог "На устройстве есть заметки из другого аккаунта. Загрузить в новый аккаунт или удалить?".
+- **Другой аккаунт**: при sign-in проверяем в Room наличие заметок с `ownerId != null && ownerId != newUid`. Если такие есть — показываем явный диалог "На устройстве есть заметки из другого аккаунта. Загрузить в новый аккаунт или удалить?". "Загрузить" = перезаписать `ownerId` на новый uid и пометить `syncedAt = null` для пуша. "Удалить" = hard delete этих строк.
 
 ### 8.4 Удаление
 - Soft delete + undo snackbar (5 сек).
@@ -169,7 +170,8 @@ Navigation Compose, 3 destination: `notes`, `editor/{noteId?}`, `settings`.
 
 - **Unit (JVM)**: use-cases, merge-logic в SyncRepository (LWW, тумбстоуны, миграция local→cloud при логине).
 - **Room тесты**: in-memory DB — DAO + FTS-поиск.
-- **Compose UI тесты**: создать/удалить заметку (с undo), свайп влево раскрывает actions, чекбокс переключается.
+- **Compose UI тесты**: создать/удалить заметку (с undo), свайп влево раскрывает actions, чекбокс переключается, диалог account-switch на sign-in с заметками другого uid.
+- **Worker тесты**: `DeleteTombstonesWorker` чистит записи на границе 30 дней (тест с фиксированным `Clock`).
 - **Firestore (опц.)**: SyncRepository против Firebase Local Emulator в CI.
 
 ## 10. Не входит в MVP (backlog)
