@@ -20,6 +20,8 @@ object UiTestTags {
 
     fun editorChecklistItem(index: Int): String = "editor_checklist_$index"
 
+    const val ReusableTextField = "reusable_text_field"
+
     fun noteCard(noteId: String): String = "note_card_$noteId"
 
     fun revealPinAction(noteId: String): String = "pin_action_$noteId"
