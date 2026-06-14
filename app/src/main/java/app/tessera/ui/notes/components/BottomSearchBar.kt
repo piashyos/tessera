@@ -1,27 +1,24 @@
 package app.tessera.ui.notes.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.components.FloatingCapsule
+import app.tessera.core.ui.components.TesseraTextField
 import dev.chrisbanes.haze.HazeState
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -45,32 +42,16 @@ fun BottomSearchBar(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            BasicTextField(
+            TesseraTextField(
                 value = query,
                 onValueChange = onQueryChange,
+                placeholder = stringResource(R.string.search_hint),
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 36.dp)
                     .onFocusChanged { onFocusChanged(it.isFocused) }
                     .testTag(UiTestTags.SearchField),
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        if (query.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.search_hint),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
+                imeAction = ImeAction.Search,
             )
 
             if (showFilters && availableTags.isNotEmpty()) {
