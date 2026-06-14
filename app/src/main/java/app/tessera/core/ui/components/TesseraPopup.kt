@@ -13,11 +13,15 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -45,8 +50,11 @@ fun TesseraPopup(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
     val maxCardHeight = (LocalConfiguration.current.screenHeightDp * 0.6f).dp
     val frostColor = MaterialTheme.colorScheme.surface
+    val keyboardVisible = WindowInsets.ime.getBottom(density) > WindowInsets.navigationBars.getBottom(density)
+    val cardBottomGap = if (keyboardVisible) 12.dp else 24.dp
     val dismiss: () -> Unit = {
         focusManager.clearFocus(force = true)
         onDismiss()
@@ -77,38 +85,39 @@ fun TesseraPopup(
                     ),
             )
 
-            // Bottom-anchored card, 12dp side margins, 12dp gap above keyboard/bottom
-            AnimatedVisibility(
-                visible = visible,
-                enter = slideInVertically(spring()) { it },
-                exit = slideOutVertically(spring()) { it },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 3.dp,
-                    shadowElevation = 8.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .imePadding()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
-                        .testTag(UiTestTags.PopupCard)
-                        // card taps must not reach the scrim
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {},
-                        ),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = maxCardHeight)
-                            .verticalScroll(rememberScrollState())
-                            .padding(20.dp),
-                        content = content,
+            // Bottom-anchored card; slides up while the scrim fades.
+            // Sits above the keyboard (12dp gap) or, when the keyboard is hidden,
+            // above the nav bar with a doubled 24dp gap.
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .animateEnterExit(
+                        enter = slideInVertically(spring()) { it },
+                        exit = slideOutVertically(spring()) { it },
                     )
-                }
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = cardBottomGap)
+                    .testTag(UiTestTags.PopupCard)
+                    // card taps must not reach the scrim
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                    ),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = maxCardHeight)
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
+                    content = content,
+                )
             }
         }
     }
