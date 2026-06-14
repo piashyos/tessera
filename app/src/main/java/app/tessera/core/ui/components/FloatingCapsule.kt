@@ -100,7 +100,7 @@ fun FloatingCapsule(
                         .hazeEffect(state = hazeState) {
                             this.backgroundColor = frostBase
                             this.blurRadius = blurRadius
-                            this.tints = listOf(HazeTint(tintColor.copy(alpha = tintColor.alpha * 0.7f)))
+                            this.tints = listOf(HazeTint(tintColor))
                         },
                 )
             }
