@@ -22,6 +22,9 @@ object UiTestTags {
 
     const val ReusableTextField = "reusable_text_field"
 
+    const val PopupScrim = "popup_scrim"
+    const val PopupCard = "popup_card"
+
     fun noteCard(noteId: String): String = "note_card_$noteId"
 
     fun revealPinAction(noteId: String): String = "pin_action_$noteId"
