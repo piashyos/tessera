@@ -16,6 +16,7 @@ object UiTestTags {
     const val EditorBodyField = "editor_body_field"
     const val EditorBack = "editor_back"
     const val EditorPin = "editor_pin"
+    const val EditorDelete = "editor_delete"
 
     fun editorChecklistItem(index: Int): String = "editor_checklist_$index"
 

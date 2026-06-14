@@ -32,6 +32,7 @@ class NoteEditorScreenTest {
                 onTogglePin = {},
                 onInsertToken = {},
                 onBack = {},
+                onDelete = {},
             )
         }
 
@@ -58,6 +59,7 @@ class NoteEditorScreenTest {
                 onTogglePin = {},
                 onInsertToken = {},
                 onBack = {},
+                onDelete = {},
             )
         }
 
@@ -84,6 +86,7 @@ class NoteEditorScreenTest {
                 onTogglePin = {},
                 onInsertToken = {},
                 onBack = { backInvoked = true },
+                onDelete = {},
             )
         }
 
@@ -109,12 +112,39 @@ class NoteEditorScreenTest {
                 onTogglePin = { pinToggled = true },
                 onInsertToken = {},
                 onBack = {},
+                onDelete = {},
             )
         }
 
         composeRule.onNodeWithTag(UiTestTags.EditorPin).performClick()
 
         assertTrue(pinToggled)
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 5: tapping the delete control invokes onDelete
+    // -----------------------------------------------------------------------
+    @Test
+    fun tappingDeleteControlInvokesOnDelete() {
+        var deleteInvoked = false
+        composeRule.setContent {
+            NoteEditorScreen(
+                state = editorState(),
+                onTitleChange = {},
+                onContentChange = {},
+                onToggleChecklist = {},
+                onAddTag = {},
+                onRemoveTag = {},
+                onTogglePin = {},
+                onInsertToken = {},
+                onBack = {},
+                onDelete = { deleteInvoked = true },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.EditorDelete).performClick()
+
+        assertTrue(deleteInvoked)
     }
 }
 

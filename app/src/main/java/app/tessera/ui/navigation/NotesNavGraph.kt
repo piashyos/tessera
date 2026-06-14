@@ -53,6 +53,12 @@ fun NotesNavGraph(
                     navController.popBackStack()
                 }
             }
+            val deleteAction: () -> Unit = remember(viewModel, navController) {
+                {
+                    viewModel.delete()
+                    navController.popBackStack()
+                }
+            }
 
             BackHandler { backAction() }
 
@@ -68,6 +74,7 @@ fun NotesNavGraph(
                     viewModel.onContentChange(state.content + token)
                 },
                 onBack = backAction,
+                onDelete = deleteAction,
             )
         }
     }

@@ -12,19 +12,21 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.PushPin
+import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.Trash2
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +70,7 @@ fun NoteEditorScreen(
     onTogglePin: () -> Unit,
     onInsertToken: (String) -> Unit,
     onBack: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val pageColor = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
@@ -171,8 +174,10 @@ fun NoteEditorScreen(
                         ambientColor = FloatingShadowAmbient,
                         spotColor = FloatingShadowSpot,
                     ),
-                blurRadius = 20.dp,
-                shadowElevation = 4.dp,
+                blurRadius = 24.dp,
+                shadowElevation = 3.dp,
+                hazeState = hazeState,
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -181,34 +186,52 @@ fun NoteEditorScreen(
                 ) {
                     IconButton(
                         onClick = onBack,
-                        modifier = Modifier.testTag(UiTestTags.EditorBack),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag(UiTestTags.EditorBack),
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Lucide.ArrowLeft,
                             contentDescription = stringResource(R.string.editor_back),
                             tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
 
-                    IconButton(
-                        onClick = onTogglePin,
-                        modifier = Modifier.testTag(UiTestTags.EditorPin),
-                    ) {
-                        Icon(
-                            imageVector = if (state.isPinned) {
-                                Icons.Filled.PushPin
-                            } else {
-                                Icons.Outlined.PushPin
-                            },
-                            contentDescription = stringResource(
-                                if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
-                            ),
-                            tint = if (state.isPinned) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = onTogglePin,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag(UiTestTags.EditorPin),
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Pin,
+                                contentDescription = stringResource(
+                                    if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
+                                ),
+                                tint = if (state.isPinned) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag(UiTestTags.EditorDelete),
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Trash2,
+                                contentDescription = stringResource(R.string.editor_delete),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -233,21 +256,21 @@ fun NoteEditorScreen(
                     ),
                 blurRadius = 20.dp,
                 shadowElevation = 4.dp,
+                hazeState = hazeState,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             ) {
-                Column(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    MarkdownToolbar(onInsertToken = onInsertToken)
                     TagChips(
                         tags = state.tags,
                         availableTags = state.availableTags,
                         onAddTag = onAddTag,
                         onRemoveTag = onRemoveTag,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    MarkdownToolbar(
-                        onInsertToken = onInsertToken,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -277,6 +300,7 @@ private fun NoteEditorScreenLightPreview() {
             onTogglePin = {},
             onInsertToken = {},
             onBack = {},
+            onDelete = {},
         )
     }
 }

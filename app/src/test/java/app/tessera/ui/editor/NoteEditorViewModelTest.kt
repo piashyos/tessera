@@ -6,6 +6,7 @@ import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.Tag
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.NotesRepository
+import app.tessera.domain.usecase.DeleteNoteUseCase
 import app.tessera.domain.usecase.GetNoteUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
@@ -211,6 +212,33 @@ class NoteEditorViewModelTest {
             assertTrue("compose" in available, "compose should be available")
             assertTrue("hilt" in available, "hilt should be available")
         }
+
+    // -------------------------------------------------------------------------
+    // 7. delete() cancels pending autosave and soft-deletes without re-saving
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `delete cancels pending autosave and deletes the note without updateNote`() =
+        runTest(dispatcher.scheduler) {
+            val note = sampleNote("note-7", title = "Doomed", content = "Body")
+            val repo = FakeEditorRepository(notes = listOf(note))
+            val vm = repo.createViewModel(noteId = "note-7")
+            runCurrent()
+
+            vm.onTitleChange("edited")
+            advanceTimeBy(100)
+            assertTrue(repo.updateCalls.isEmpty())
+
+            vm.delete()
+            runCurrent()
+
+            assertEquals(listOf(NoteId("note-7")), repo.deleteCalls)
+
+            // The cancelled autosave must not fire and resurrect the note
+            advanceTimeBy(500)
+            runCurrent()
+            assertTrue(repo.updateCalls.isEmpty(), "delete must cancel the pending autosave")
+        }
 }
 
 // =============================================================================
@@ -223,6 +251,7 @@ private class FakeEditorRepository(
 
     private val notesFlow = MutableStateFlow(notes)
     val updateCalls = mutableListOf<Note>()
+    val deleteCalls = mutableListOf<NoteId>()
 
     override fun observeNotes(): Flow<List<Note>> = notesFlow
     override fun observeNote(id: NoteId): Flow<Note?> =
@@ -238,7 +267,9 @@ private class FakeEditorRepository(
         notesFlow.value = updated
         return note
     }
-    override suspend fun deleteNote(id: NoteId) {}
+    override suspend fun deleteNote(id: NoteId) {
+        deleteCalls += id
+    }
     override suspend fun restoreNote(id: NoteId) {}
     override suspend fun togglePin(id: NoteId) {}
 
@@ -248,6 +279,7 @@ private class FakeEditorRepository(
             getNoteUseCase = GetNoteUseCase(this),
             updateNoteUseCase = UpdateNoteUseCase(this),
             observeNotesUseCase = ObserveNotesUseCase(this),
+            deleteNoteUseCase = DeleteNoteUseCase(this),
             savedStateHandle = savedState,
         )
     }

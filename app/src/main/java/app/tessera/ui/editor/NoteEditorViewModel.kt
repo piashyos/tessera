@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.Tag
+import app.tessera.domain.usecase.DeleteNoteUseCase
 import app.tessera.domain.usecase.GetNoteUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
@@ -26,6 +27,7 @@ class NoteEditorViewModel @Inject constructor(
     private val getNoteUseCase: GetNoteUseCase,
     private val updateNoteUseCase: UpdateNoteUseCase,
     private val observeNotesUseCase: ObserveNotesUseCase,
+    private val deleteNoteUseCase: DeleteNoteUseCase,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -121,6 +123,12 @@ class NoteEditorViewModel @Inject constructor(
         autosaveJob?.cancel()
         autosaveJob = null
         viewModelScope.launch { persist() }
+    }
+
+    fun delete() {
+        autosaveJob?.cancel()
+        autosaveJob = null
+        viewModelScope.launch { deleteNoteUseCase(noteId) }
     }
 
     private fun scheduleAutosave() {
