@@ -1417,17 +1417,183 @@ git commit -m "feat(ui): add notes list screen flow"
 
 **End of Chunk 5.** Tessera now opens into a real list experience with search, swipe actions, and navigation into the editor flow.
 
-### Chunk 6: Note editor screen
+## Chunk 6: Note editor screen
 
-Tasks:
-1. **`NoteEditorState` + `NoteEditorViewModel`** — loads note by id or creates empty draft; exposes `TextFieldState` (Compose) for title and content; debounce-500ms autosave via `UpdateNoteUseCase`; on exit, if both fields empty, delegates to repo for hard-delete.
-2. **Inline checkbox toggle** — parse `[ ]` / `[x]` lines, render as `Row { Checkbox + Text }` with the same spring scale animation on toggle. Toggling rewrites the line in source text.
-3. **`MarkdownToolbar`** — buttons that insert markdown tokens at the cursor (`**bold**`, `- `, `- [ ] `).
-4. **`TagChips`** — chips + add-tag bottom sheet picker that reads existing tags from DAO.
-5. **JVM tests** — `NoteEditorViewModel` autosave debounce; empty-on-exit hard deletes; checkbox toggle correctly rewrites text.
-6. **Compose UI tests** — type title → leave screen → reopen, see title; tap checkbox → state flips and persists.
+**Outcome:** Tapping a note (or the FAB) opens a real editor that loads the note by id, edits title/body/tags/pin, autosaves to Room with a 500ms debounce, toggles inline checklist items, and hard-deletes the note on exit when it is left completely blank.
 
-Verification: All tests pass.
+**Design decisions (locked before execution):**
+- `NoteEditorScreen` is **stateless** — it takes `NoteEditorState` + callbacks (same pattern as `NotesListScreen`), so Compose UI tests drive it directly without Hilt.
+- `NoteEditorViewModel` owns load/autosave/exit logic. It reads `noteId` from `SavedStateHandle` in production; tests construct it with a plain `SavedStateHandle` + fake use-cases + injected dispatcher (mirroring `NotesListViewModelTest`).
+- Source of truth for the body is a single `content: String`. Checklist interactivity is built on a **pure** `toggleChecklistLine(source, lineIndex)` function (unit-tested in isolation) so the rewrite logic never depends on Compose.
+- Available tags for the picker are **derived from `ObserveNotesUseCase`** (distinct tag names across notes), not a new DAO/repository surface — keeps the change minimal and reuses an existing flow.
+- Autosave delegates to `UpdateNoteUseCase`, which already stamps `updatedAt`, clears `syncedAt`, and hard-deletes blank notes. The editor never adds its own delete-on-blank branch; it just flushes a save on exit and lets the repository drop blank drafts.
+
+**Files:**
+- Create: `app/src/main/java/app/tessera/ui/editor/{NoteEditorState,NoteEditorViewModel}.kt`
+- Create: `app/src/main/java/app/tessera/ui/editor/Checklist.kt` (pure parse/toggle helpers)
+- Create: `app/src/main/java/app/tessera/ui/editor/components/{MarkdownToolbar,TagChips,ChecklistBody}.kt`
+- Rewrite: `app/src/main/java/app/tessera/ui/editor/NoteEditorScreen.kt` (placeholder → real stateless screen)
+- Update: `app/src/main/java/app/tessera/ui/navigation/NotesNavGraph.kt` (host `NoteEditorViewModel` via `hiltViewModel`, flush save on back)
+- Update: `app/src/main/java/app/tessera/core/ui/UiTestTags.kt` (editor tags)
+- Update: `app/src/main/res/values/strings.xml` + `app/src/main/res/values-ru/strings.xml` (editor strings)
+- Test: `app/src/test/java/app/tessera/ui/editor/ChecklistTest.kt`
+- Test: `app/src/test/java/app/tessera/ui/editor/NoteEditorViewModelTest.kt`
+- Test: `app/src/androidTest/java/app/tessera/ui/editor/NoteEditorScreenTest.kt`
+
+### Task 6.1: Checklist parsing/toggle helpers (pure)
+
+- [ ] **Step 1: Create `ChecklistTest.kt`**
+
+JVM tests for the pure helpers in `ui/editor/Checklist.kt`:
+- `parseChecklist(source)` returns one item per line, each flagged `isCheckbox` + `isChecked` + display `label` (text after the `- [ ] ` / `- [x] ` marker), and non-checkbox lines flagged `isCheckbox = false`.
+- a line matching `- [ ]` (any leading whitespace, case-insensitive `x`) is recognized as an unchecked / checked checkbox respectively.
+- `toggleChecklistLine(source, lineIndex)` flips only the targeted line's marker (`[ ]` ↔ `[x]`) and preserves all other lines + the line's text + leading indentation verbatim.
+- `toggleChecklistLine` on a non-checkbox line returns the source unchanged.
+- toggling preserves trailing/blank lines and does not collapse `\n` separators.
+
+- [ ] **Step 2: Implement `Checklist.kt`**
+
+Implement `parseChecklist` + `toggleChecklistLine` with a single regex (`^(\s*)- \[( |x|X)\] (.*)$`). No Compose imports. Keep it allocation-light but readable.
+
+- [ ] **Step 3: Run helper tests**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "app.tessera.ui.editor.ChecklistTest"`
+Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/src/main/java/app/tessera/ui/editor/Checklist.kt app/src/test/java/app/tessera/ui/editor/ChecklistTest.kt
+git commit -m "feat(editor): checklist parse/toggle helpers"
+```
+
+### Task 6.2: NoteEditorState + NoteEditorViewModel
+
+- [ ] **Step 1: Create `NoteEditorState.kt`**
+
+A single data class (no sealed hierarchy needed — the editor always has an open note):
+- `title: String`, `content: String`
+- `tags: List<String>`
+- `isPinned: Boolean`
+- `availableTags: List<String>` (for the picker, minus tags already on the note)
+- `isLoading: Boolean` (true until the note is loaded / draft confirmed)
+
+- [ ] **Step 2: Create `NoteEditorViewModelTest.kt`**
+
+JVM tests (mirror `NotesListViewModelTest`: `StandardTestDispatcher`, `Dispatchers.setMain`, fake `NotesRepository` recording calls). Construct the VM with a `SavedStateHandle(mapOf("noteId" to <id>))` and the real use-cases wrapping the fake repo.
+- loads the note by id into state (title/content/tags/pin populated; `isLoading` false).
+- editing title then content schedules autosave: no `updateNote` before 499ms, exactly one `updateNote` after the 500ms debounce, carrying the latest title+content.
+- rapid successive edits collapse into a single debounced `updateNote` (latest value wins).
+- `onToggleChecklist(lineIndex)` rewrites `content` via `toggleChecklistLine` and persists on the next debounce.
+- `flush()` (called on exit) cancels the pending debounce and persists immediately; when title+content are blank it still calls `updateNote` with a blank note (repository is responsible for the hard delete — assert the fake received a blank-draft note).
+- `availableTags` reflects distinct tag names from `ObserveNotesUseCase`, excluding tags already on the note.
+
+- [ ] **Step 3: Implement `NoteEditorViewModel.kt`**
+
+- `@HiltViewModel`, constructor-injects the use-cases + `SavedStateHandle`. Read `noteId` arg.
+- On init: `getNoteUseCase(NoteId(noteId))` → populate state; if null (defensive), keep `isLoading` until an empty draft baseline is set. Combine with `observeNotesUseCase()` for `availableTags`.
+- Hold the loaded `Note` baseline so saves preserve `id`, `createdAt`, `ownerId`, `deletedAt`.
+- Intents: `onTitleChange`, `onContentChange`, `onToggleChecklist(lineIndex)`, `onAddTag(name)`, `onRemoveTag(name)`, `onTogglePin`. Each updates state + calls `scheduleAutosave()`.
+- `scheduleAutosave()`: cancel previous job, launch `{ delay(500); persist() }`.
+- `persist()`: build `Note` from baseline + current state, call `updateNoteUseCase`, update baseline with the returned note.
+- `flush()`: cancel debounce job, `persist()` immediately (suspend or fire-and-forget on `viewModelScope` then let nav pop). Blank notes are dropped by the repository.
+
+- [ ] **Step 4: Run VM tests**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "app.tessera.ui.editor.NoteEditorViewModelTest"`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/src/main/java/app/tessera/ui/editor/NoteEditorState.kt \
+        app/src/main/java/app/tessera/ui/editor/NoteEditorViewModel.kt \
+        app/src/test/java/app/tessera/ui/editor/NoteEditorViewModelTest.kt
+git commit -m "feat(editor): editor state + autosave view model"
+```
+
+### Task 6.3: Editor components (toolbar, tag chips, checklist body)
+
+- [ ] **Step 1: `MarkdownToolbar.kt`**
+
+Slot of icon buttons that emit insert intents — `**bold**`, `- ` (bullet), `- [ ] ` (checklist). Each button calls a callback `(token: String) -> Unit`; the screen owns cursor/text insertion. Light/dark previews.
+
+- [ ] **Step 2: `TagChips.kt`**
+
+- A row of current tag chips, each with a remove affordance (`onRemoveTag`).
+- A "＋ tag" entry that opens a bottom-sheet picker (`ModalBottomSheet`) listing `availableTags`; selecting one calls `onAddTag`. Allow free-text add of a new tag name.
+- Pure-ish: takes `tags`, `availableTags`, `onAddTag`, `onRemoveTag`. Previews for empty + populated.
+
+- [ ] **Step 3: `ChecklistBody.kt`**
+
+Renders the body for interaction:
+- Parse `content` with `parseChecklist`. Render checkbox lines as `Row { Checkbox + Text }` (tap → `onToggleChecklist(index)`), with the spring scale 1→1.2→1 pulse on toggle.
+- Render the editable text via a `TextField`/`BasicTextField` bound to `content` (`onContentChange`). Keep the editing surface and the checklist tap targets coherent (e.g. checklist rows above the free-text editor, or a single composable that delegates — implementer's call, but tapping a checkbox must rewrite source through `onToggleChecklist`).
+- Expose test tags for checkbox rows.
+
+### Task 6.4: Rewrite NoteEditorScreen + wire navigation
+
+- [ ] **Step 1: Add editor test tags to `UiTestTags.kt`**
+
+Add `EditorRoot`, `EditorTitleField`, `EditorBodyField`, `EditorBack`, `EditorPin`, and `fun editorChecklistItem(index: Int)`. Replace the placeholder `EditorPlaceholderRoot` usage. Keep the existing visual shell (floating top capsule, edge-fade scrim, haze) from the placeholder.
+
+- [ ] **Step 2: Rewrite `NoteEditorScreen.kt` as a stateless screen**
+
+Signature: `NoteEditorScreen(state, onTitleChange, onContentChange, onToggleChecklist, onAddTag, onRemoveTag, onTogglePin, onInsertToken, onBack, modifier)`.
+- Top floating capsule: back (`onBack`), pin toggle, delete.
+- Body: title `TextField` (large) + `ChecklistBody`.
+- Bottom floating capsule: `TagChips` + `MarkdownToolbar`.
+- Reuse the existing haze/edge-fade scaffold so the editor matches the placeholder's look.
+
+- [ ] **Step 3: Update `NotesNavGraph.kt`**
+
+- Resolve `NoteEditorViewModel` via `hiltViewModel()` inside the editor `composable`.
+- Collect state, pass intents through.
+- On back: call `viewModel.flush()` then `navController.popBackStack()` (ensure the blank-draft flush runs before pop). Handle system back the same way (`BackHandler`).
+
+- [ ] **Step 4: Add editor strings**
+
+Add to both `values/strings.xml` and `values-ru/strings.xml`: editor title hint, body hint, add-tag label, toolbar content descriptions, pin/delete content descriptions.
+
+- [ ] **Step 5: Verify build**
+
+Run: `./gradlew :app:assembleDebug`
+Expected: BUILD SUCCESSFUL.
+
+### Task 6.5: Compose UI tests + chunk verification
+
+- [ ] **Step 1: Create `NoteEditorScreenTest.kt`**
+
+`createAndroidComposeRule<ComponentActivity>()`, drive the stateless screen directly (like `NotesListScreenTest`):
+- typing into the title field invokes `onTitleChange` with the typed text.
+- tapping a rendered checklist item invokes `onToggleChecklist` with the right index.
+- tapping back invokes `onBack`.
+- (optional) toolbar checklist button invokes `onInsertToken("- [ ] ")`.
+
+- [ ] **Step 2: Run Chunk 6 verification**
+
+Run:
+- `./gradlew :app:testDebugUnitTest`
+- `./gradlew :app:connectedDebugAndroidTest`
+- `./gradlew :app:assembleDebug`
+
+Expected: all JVM tests (checklist + editor VM + prior) pass; instrumented editor + list tests pass; app assembles and the editor opens from list/FAB, autosaves, toggles checklist items, and drops blank drafts on exit.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/superpowers/plans/2026-06-14-android-notes.md \
+        docs/superpowers/PROGRESS.md \
+        app/src/main/java/app/tessera/ui/editor \
+        app/src/main/java/app/tessera/ui/navigation/NotesNavGraph.kt \
+        app/src/main/java/app/tessera/core/ui/UiTestTags.kt \
+        app/src/main/res/values/strings.xml \
+        app/src/main/res/values-ru/strings.xml \
+        app/src/androidTest/java/app/tessera/ui/editor
+git commit -m "feat(editor): note editor screen with autosave, checklist, tags"
+```
+
+**End of Chunk 6.** Tessera notes can now be created and edited end-to-end with autosave, inline checklist toggling, tag editing, and automatic cleanup of blank drafts.
 
 ### Chunk 7: Firebase Auth + Settings
 
