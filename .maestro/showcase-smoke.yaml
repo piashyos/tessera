@@ -1,0 +1,13 @@
+appId: app.tessera
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Tessera"
+    timeout: 10000
+- assertVisible: "Tessera"
+- assertVisible: "UI Core Showcase"
+- assertVisible: "Create note"
+- assertVisible: "Search, filters, and bulk actions land here in Chunk 5."
+- tapOn: "Create note"
+- assertVisible: "Tessera"

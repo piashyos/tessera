@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_subtitle">Локальные заметки — готовы к поиску и быстрой записи.</string>
+    <string name="notes_empty_title">Пока нет заметок</string>
+    <string name="notes_empty_subtitle">Нажмите кнопку создания, чтобы начать писать.</string>
+    <string name="notes_search_empty_title">Нет результатов по запросу «%1$s»</string>
+    <string name="notes_search_empty_subtitle">Попробуйте другую фразу или сбросьте фильтры тегов.</string>
+    <string name="search_hint">Поиск заметок</string>
+    <string name="note_untitled">Без названия</string>
+    <string name="note_empty_preview">Новая заметка ждёт свою первую строку.</string>
+    <string name="note_pinned">Закреплено</string>
+    <string name="create_note">Создать заметку</string>
+    <string name="editor_back">Назад</string>
+    <string name="note_action_pin">Закрепить</string>
+    <string name="note_action_unpin">Открепить</string>
+    <string name="note_action_delete">Удалить</string>
+    <string name="note_deleted">Заметка удалена</string>
+    <string name="action_undo">Отменить</string>
+</resources>

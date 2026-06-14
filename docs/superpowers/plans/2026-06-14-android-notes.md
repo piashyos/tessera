@@ -940,45 +940,482 @@ git commit -m "test(data): NoteDao instrumented tests"
 
 ---
 
-## Chunks 3–8: outline (full task breakdown to be expanded after Chunks 1–2 are reviewed and accepted)
+## Chunk 3: Domain + Repository (local-only)
 
-To avoid a 3000-line plan that drifts before being implemented, the remaining chunks are scoped here at task level. Each will be expanded to TDD step granularity (same style as Chunks 1–2) **before its execution begins**, not all upfront — this keeps the plan responsive to surprises discovered during the early chunks.
+**Outcome:** Domain models, repository abstractions, local Room-backed repository implementation, mapper, and core note use-cases all compile and are covered by JVM tests.
 
-### Chunk 3: Domain + Repository (local-only)
+**Files:**
+- Create: `app/src/main/java/app/tessera/domain/model/{Note,Tag,NoteId,UserId}.kt`
+- Create: `app/src/main/java/app/tessera/domain/repository/{NotesRepository,AuthRepository,SyncRepository}.kt`
+- Create: `app/src/main/java/app/tessera/domain/usecase/{ObserveNotesUseCase,GetNoteUseCase,CreateNoteUseCase,UpdateNoteUseCase,DeleteNoteUseCase,TogglePinUseCase,SearchNotesUseCase}.kt`
+- Create: `app/src/main/java/app/tessera/data/mapper/NoteMapper.kt`
+- Create: `app/src/main/java/app/tessera/data/repository/{NotesRepositoryImpl,AuthRepositoryImpl,SyncRepositoryImpl}.kt`
+- Create: `app/src/main/java/app/tessera/core/di/RepositoryModule.kt`
+- Test: `app/src/test/java/app/tessera/data/mapper/NoteMapperTest.kt`
+- Test: `app/src/test/java/app/tessera/data/repository/NotesRepositoryImplTest.kt`
+- Test: `app/src/test/java/app/tessera/domain/usecase/NotesUseCasesTest.kt`
+- Update: `app/build.gradle.kts` (enable JUnit 5 JVM tests if still missing)
 
-Tasks:
-1. **Domain models** — `Note`, `Tag`, value classes `NoteId`, `UserId`.
-2. **Repository interfaces** — `NotesRepository`, `AuthRepository` (stub), `SyncRepository` (stub returning success).
-3. **NoteMapper** — `NoteEntity` ↔ `Note` (+ tags). Unit-test the round-trip (JVM).
-4. **NotesRepositoryImpl** — wraps `NoteDao` + `TagDao`. Inserts/updates set `updatedAt = Clock.nowMs()` and `syncedAt = null`. Empty-note hard-delete logic lives here.
-5. **Use-cases** — thin wrappers over repo (Observe, Get, Create, Update, Delete, TogglePin, Search). JVM unit tests with fake `NotesRepository`.
-6. **RepositoryModule** with `@Binds`.
+### Task 3.1: Domain models + repository interfaces
 
-Verification: All use-case JVM tests pass. App still launches (still "Hello, Notes").
-Commit cadence: one per task.
+- [ ] **Step 1: Create `NoteId.kt` and `UserId.kt`**
 
-### Chunk 4: UI core — floating capsules + theme polish
+Use `@JvmInline value class` wrappers over `String` so IDs stay type-safe in the domain layer.
 
-Tasks:
-1. **`FloatingCapsule` composable** — rounded surface, white-alpha border, alpha tint, optional blur of background via `Modifier.blur` on a captured background snapshot (API 31+, fallback simple tint). Compose preview in light/dark.
-2. **`GlassFab`** — same look, circular, with icon slot.
-3. **`MarkdownText`** composable wrapping Markwon via `AndroidView`. Unit-rendered via screenshot preview only (no logic to test).
-4. **Capsule scroll-shrink modifier** — `Modifier.capsuleScale(scrollProgress: Float)`.
+- [ ] **Step 2: Create `Tag.kt` and `Note.kt`**
 
-Verification: Compose previews render in Android Studio. Manual smoke run.
+Model a local-first note with:
+- stable `NoteId`
+- `title`, `content`
+- `tags: List<Tag>`
+- `isPinned`
+- `createdAt`, `updatedAt`
+- nullable `deletedAt`, `syncedAt`, `ownerId`
 
-### Chunk 5: Notes list screen
+Keep the domain shape aligned with the current Room schema so mapping stays mechanical in Chunk 3 and sync can be layered in later chunks.
 
-Tasks:
-1. **`NotesListState`** — sealed UI state (Loading / Empty / Content(notes, pinned, query, selection)).
-2. **`NotesListViewModel`** — combines `ObserveNotesUseCase` and `SearchNotesUseCase` via query StateFlow. JVM unit test for query debounce + state transitions.
-3. **`NoteCard`** — staggered card with title + preview + tag chips. Preview composable.
-4. **`SwipeableNoteCard`** — anchored draggable (Compose `anchoredDraggable`) with two action slots (Pin, Delete) revealed by left swipe; long swipe past threshold triggers delete with undo via shared snackbar host. Animation: spring-based reveal.
-5. **`NotesListScreen`** — `LazyVerticalStaggeredGrid` + top capsule (profile icon + title) + bottom capsule (search field + tag filter) + FAB. Pull-to-refresh wired to a no-op for now (chunk 8 plugs sync).
-6. **Animations** — `animateItemPlacement`, FAB → editor circular morph via shared element (`SharedTransitionLayout`, API 34+; fallback `slideInVertically`).
-7. **Compose UI tests** — create note (FAB tap → editor route), swipe-left reveals actions, delete shows undo snackbar that restores the note.
+- [ ] **Step 3: Create repository interfaces**
 
-Verification: All UI tests pass. Manual: create / pin / delete / undo on device.
+`NotesRepository` should expose:
+- observe active notes
+- observe/get note by id
+- create note draft
+- update note
+- delete note
+- toggle pin
+- search notes
+
+`AuthRepository` should be a stub contract that already exposes `currentUser`, ready for Chunk 7.
+
+`SyncRepository` should be a stub contract that can return a successful no-op sync result for now, ready for Chunk 8.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/src/main/java/app/tessera/domain
+git commit -m "feat(domain): add note models and repository contracts"
+```
+
+### Task 3.2: Mapper + failing JVM tests
+
+- [ ] **Step 1: Create `NoteMapperTest.kt`**
+
+Write JVM tests first for:
+- entity + tag names -> domain note
+- domain note -> entity
+- round-trip preserves IDs, timestamps, owner, and pin state
+
+Keep tags normalized in assertion order so the mapper contract is explicit before repo logic is added.
+
+- [ ] **Step 2: Create `NoteMapper.kt`**
+
+Implement:
+- `NoteEntity` -> `Note`
+- `Note` -> `NoteEntity`
+- `List<String>` / tag names -> `List<Tag>`
+
+Do not add business logic here beyond straightforward transformation and light tag normalization.
+
+- [ ] **Step 3: Run mapper JVM tests**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "app.tessera.data.mapper.NoteMapperTest"`
+
+Expected: mapper tests PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/src/main/java/app/tessera/data/mapper app/src/test/java/app/tessera/data/mapper
+git commit -m "test(data): cover note mapper round-trip"
+```
+
+### Task 3.3: NotesRepositoryImpl (local-only)
+
+- [ ] **Step 1: Create `NotesRepositoryImplTest.kt`**
+
+Write JVM tests against fake `NoteDao`, `TagDao`, and fixed `Clock` for:
+- create note draft stamps created/updated timestamps and clears `syncedAt`
+- update note persists note + tags and bumps `updatedAt`
+- blank title + blank content hard-deletes instead of keeping an empty row
+- delete note soft-deletes with current timestamp
+- toggle pin flips existing note state
+- search delegates through mapper and returns tagged notes
+
+- [ ] **Step 2: Create `NotesRepositoryImpl.kt`**
+
+Implementation rules:
+- source of truth remains Room
+- all writes use `Clock.nowMs()`
+- any write that changes note content/pin state sets `syncedAt = null`
+- blank notes (`title.isBlank() && content.isBlank()`) are hard-deleted
+- tag persistence flow:
+  1. upsert note row
+  2. ensure missing tags exist
+  3. replace note-tag cross refs
+
+- [ ] **Step 3: Add stub repository implementations**
+
+Create:
+- `AuthRepositoryImpl.kt` with inert `currentUser`
+- `SyncRepositoryImpl.kt` with successful no-op sync
+
+These only need enough behavior to satisfy DI and keep later auth/sync chunks incremental.
+
+- [ ] **Step 4: Run repository JVM tests**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "app.tessera.data.repository.NotesRepositoryImplTest"`
+
+Expected: repository tests PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/src/main/java/app/tessera/data/repository app/src/test/java/app/tessera/data/repository
+git commit -m "feat(data): add local notes repository implementation"
+```
+
+### Task 3.4: Use-cases + DI wiring
+
+- [ ] **Step 1: Create `NotesUseCasesTest.kt`**
+
+Use a fake `NotesRepository` and write JVM tests that verify each use-case is a thin wrapper around repository behavior:
+- observe notes
+- get note
+- create note
+- update note
+- delete note
+- toggle pin
+- search notes
+
+- [ ] **Step 2: Create note use-case classes**
+
+Each use-case should stay tiny: constructor-injected, one public `operator fun invoke(...)`.
+
+- [ ] **Step 3: Create `RepositoryModule.kt`**
+
+Bind:
+- `NotesRepository` -> `NotesRepositoryImpl`
+- `AuthRepository` -> `AuthRepositoryImpl`
+- `SyncRepository` -> `SyncRepositoryImpl`
+
+- [ ] **Step 4: Enable JUnit 5 if needed**
+
+If JVM tests are not yet configured, update `app/build.gradle.kts` so `testDebugUnitTest` runs on the JUnit Platform.
+
+- [ ] **Step 5: Run full Chunk 3 verification**
+
+Run:
+- `./gradlew :app:testDebugUnitTest`
+- `./gradlew :app:assembleDebug`
+
+Expected:
+- all Chunk 3 JVM tests PASS
+- app still assembles and launches to the existing hello screen
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add app/build.gradle.kts app/src/main/java/app/tessera/core/di app/src/main/java/app/tessera/domain app/src/test/java/app/tessera/domain
+git commit -m "feat(domain): wire note use cases and repository bindings"
+```
+
+**End of Chunk 3.** The app still builds, while note read/write logic is now expressed through domain contracts and a local repository implementation.
+
+---
+
+## Chunks 4–8: outline (full task breakdown to be expanded after Chunk 3 is reviewed and accepted)
+
+To avoid a 3000-line plan that drifts before being implemented, the remaining chunks are scoped here at task level. Each will be expanded to TDD step granularity (same style as Chunks 1–3) **before its execution begins**, not all upfront — this keeps the plan responsive to surprises discovered during the early chunks.
+
+## Chunk 4: UI core — floating capsules + theme polish
+
+**Outcome:** Reusable glass-style UI primitives compile, render in previews, and are wired into a lightweight runtime showcase so the app visibly moves beyond the hello screen before list/editor work begins.
+
+**Files:**
+- Update: `app/src/main/java/app/tessera/core/ui/theme/{Color,Theme}.kt`
+- Create: `app/src/main/java/app/tessera/core/ui/components/{FloatingCapsule,GlassFab,MarkdownText}.kt`
+- Update: `app/src/main/java/app/tessera/TesseraApp.kt`
+- Test: `app/src/test/java/app/tessera/core/ui/components/CapsuleScaleTest.kt`
+
+### Task 4.1: Theme polish for glass surfaces
+
+- [ ] **Step 1: Update `Color.kt` with explicit glass tokens**
+
+Keep the existing warm light / dark neutral base, but add:
+- background tints for the showcase surface
+- stronger on-surface colors for text legibility
+- optional highlight/shadow colors used by glass capsules
+
+Name tokens so later screens can reuse them mechanically instead of hardcoding alpha values.
+
+- [ ] **Step 2: Update `Theme.kt` to use a polished fallback color scheme**
+
+Rules:
+- keep Material 3 dynamic color on Android 12+ when enabled
+- provide manual light/dark schemes that map to the Tessera palette on older devices
+- ensure `surface`, `surfaceVariant`, and `background` are usable for translucent capsules and note cards in future chunks
+
+- [ ] **Step 3: Verify existing app entrypoints still compile against the updated theme**
+
+No behavior change yet beyond visuals; this step exists to catch theme-token drift before UI components are added.
+
+### Task 4.2: `FloatingCapsule` + scroll shrink helper
+
+- [ ] **Step 1: Create `CapsuleScaleTest.kt`**
+
+Write JVM tests first for the pure scale helper behind `Modifier.capsuleScale(...)`:
+- progress below `0f` clamps to resting scale
+- progress above `1f` clamps to minimum scale
+- midpoint progress interpolates between `1f` and the chosen collapsed scale
+
+This keeps at least one deterministic piece of Chunk 4 under automated test even though most of the work is visual.
+
+- [ ] **Step 2: Create `FloatingCapsule.kt`**
+
+Implement:
+- rounded capsule container (`RoundedCornerShape(28.dp)` by default)
+- white-alpha 1dp border
+- translucent tint that adapts to light/dark theme
+- soft shadow/elevation
+- API 31+ blur-enhanced backing layer, with a simple tinted fallback on lower APIs
+- `Modifier.capsuleScale(scrollProgress: Float)` using the tested helper
+
+Also include light and dark `@Preview`s so the component can be inspected in isolation.
+
+- [ ] **Step 3: Run the capsule helper JVM test**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "app.tessera.core.ui.components.CapsuleScaleTest"`
+
+Expected: tests PASS.
+
+### Task 4.3: `GlassFab` + `MarkdownText`
+
+- [ ] **Step 1: Create `GlassFab.kt`**
+
+Build it on the same visual language as `FloatingCapsule`:
+- circular shape
+- slot-based content API
+- sensible default size for future create-note FAB usage
+- light/dark previews
+
+- [ ] **Step 2: Create `MarkdownText.kt`**
+
+Wrap Markwon in `AndroidView` and keep the API intentionally small:
+- markdown string input
+- modifier passthrough
+- TextView-based rendering that respects current Material text color
+
+Add a preview for visual smoke coverage. No dedicated unit test is required here because the behavior is mostly library delegation.
+
+### Task 4.4: Runtime showcase + chunk verification
+
+- [ ] **Step 1: Update `TesseraApp.kt` to render a lightweight UI core showcase**
+
+Replace the plain hello-state with a simple composition that exercises:
+- top floating capsule
+- markdown body sample
+- bottom floating capsule
+- glass FAB
+
+Do **not** build the real notes list yet; this showcase is only to validate the reusable primitives in a running app.
+
+- [ ] **Step 2: Run Chunk 4 verification**
+
+Run:
+- `./gradlew :app:testDebugUnitTest --tests "app.tessera.core.ui.components.CapsuleScaleTest"`
+- `./gradlew :app:assembleDebug`
+
+Expected:
+- helper test passes
+- app assembles with the new UI core components
+- previews are available for manual inspection in Android Studio
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/superpowers/plans/2026-06-14-android-notes.md \
+        app/src/main/java/app/tessera/core/ui/theme \
+        app/src/main/java/app/tessera/core/ui/components \
+        app/src/main/java/app/tessera/TesseraApp.kt \
+        app/src/test/java/app/tessera/core/ui/components
+git commit -m "feat(ui): add glass capsule primitives and theme polish"
+```
+
+**End of Chunk 4.** The project has a reusable visual foundation for later list and editor screens.
+
+## Chunk 5: Notes list screen
+
+**Outcome:** The app boots into a real notes list route backed by the repository, supports debounced search, visual note cards, swipe actions, and basic navigation into the future editor route.
+
+**Files:**
+- Create: `app/src/main/java/app/tessera/ui/notes/{NotesListState,NotesListViewModel,NotesListScreen}.kt`
+- Create: `app/src/main/java/app/tessera/ui/notes/components/{NoteCard,SwipeableNoteCard,BottomSearchBar}.kt`
+- Create: `app/src/main/java/app/tessera/ui/navigation/NotesNavGraph.kt`
+- Create: `app/src/main/java/app/tessera/ui/editor/NoteEditorScreen.kt` (placeholder route shell for Chunk 6)
+- Update: `app/src/main/java/app/tessera/TesseraApp.kt`
+- Update: `app/src/main/java/app/tessera/core/ui/UiTestTags.kt`
+- Test: `app/src/test/java/app/tessera/ui/notes/NotesListViewModelTest.kt`
+- Test: `app/src/androidTest/java/app/tessera/ui/notes/NotesListScreenTest.kt`
+
+### Task 5.1: Expand app shell from showcase to list navigation
+
+- [ ] **Step 1: Create `NotesNavGraph.kt`**
+
+Start a minimal navigation graph with:
+- `notesList` start destination
+- `editor/{noteId}` destination (route placeholder for now)
+
+Keep the route naming explicit so Chunk 6 can plug in a real editor without rewriting list navigation tests.
+
+- [ ] **Step 2: Update `TesseraApp.kt` to host the nav graph**
+
+Replace the Chunk 4 showcase root with the list flow:
+- keep `TesseraTheme`
+- host shared snackbar/navigation state
+- route FAB taps from the list into the editor destination
+
+- [ ] **Step 3: Add placeholder `NoteEditorScreen.kt`**
+
+Do not build the editor feature yet. The placeholder only needs to:
+- render the note id
+- expose a back affordance
+- make FAB navigation observable in tests
+
+### Task 5.2: List state + ViewModel
+
+- [ ] **Step 1: Create `NotesListState.kt`**
+
+Define a sealed UI model with:
+- `Loading`
+- `Empty(query, availableTags, selectedTags)`
+- `Content(notes, pinnedCount, query, selection, availableTags, selectedTags)`
+
+Keep the state screen-ready so the composables stay mostly stateless.
+
+- [ ] **Step 2: Create `NotesListViewModelTest.kt`**
+
+Write JVM tests first for:
+- initial `Loading -> Content` transition when notes arrive
+- `Loading -> Empty` when repository emits no notes
+- query updates immediately in UI state but search invocation waits for debounce
+- clearing the query swaps back to `ObserveNotesUseCase` without debounce lag
+
+Use a fake `NotesRepository` behind the real use-cases so tests cover the actual flow wiring instead of a hand-waved mock.
+
+- [ ] **Step 3: Create `NotesListViewModel.kt`**
+
+Implementation requirements:
+- combine `ObserveNotesUseCase` and `SearchNotesUseCase` through a query `StateFlow`
+- blank query uses observe flow immediately
+- non-blank query debounces before switching to search flow
+- derive available tags from loaded notes
+- keep tag selection local to the list feature for now
+- expose intent handlers for query change, tag toggle, pin, delete, undo delete, and create note draft
+
+- [ ] **Step 4: Run the ViewModel JVM tests**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "app.tessera.ui.notes.NotesListViewModelTest"`
+
+Expected: debounce and state transition tests PASS.
+
+### Task 5.3: Note card visuals
+
+- [ ] **Step 1: Create `NoteCard.kt`**
+
+Build a reusable staggered card using the Chunk 4 glass primitives:
+- title with sensible untitled fallback
+- body preview trimmed to a few lines
+- pin indicator
+- tag chips
+- click callback
+
+Include light/dark previews with varied content heights so the staggered layout can be inspected in Studio.
+
+- [ ] **Step 2: Create `BottomSearchBar.kt`**
+
+Wrap the bottom controls in a floating capsule:
+- search text field
+- optional selected-tag chips
+- a horizontally scrollable or wrapping tag filter row
+
+This can stay purely visual/local; server-backed filtering is out of scope until sync lands.
+
+### Task 5.4: Swipe actions
+
+- [ ] **Step 1: Create `SwipeableNoteCard.kt`**
+
+Implement an `anchoredDraggable` card with three conceptual states:
+- resting
+- actions revealed
+- destructive overswipe
+
+Behavior:
+- swipe left reveals Pin/Delete actions
+- tapping Pin calls the provided callback and snaps closed
+- crossing the delete threshold triggers delete automatically
+- animation uses spring specs for both reveal and settle
+
+- [ ] **Step 2: Wire snackbar-driven undo**
+
+Use a shared `SnackbarHostState` from the route/screen shell:
+- deleting shows snackbar with `Undo`
+- undo restores the previously deleted note via the ViewModel
+
+### Task 5.5: Screen composition + motion
+
+- [ ] **Step 1: Create `NotesListScreen.kt`**
+
+Compose the real screen:
+- gradient/glow background consistent with Chunk 4
+- top floating capsule with title/profile affordance
+- `LazyVerticalStaggeredGrid` of note cards
+- bottom floating capsule with search/filter controls
+- glass FAB
+
+Also wire pull-to-refresh to a no-op callback so the gesture surface is already present before Chunk 8 adds sync.
+
+- [ ] **Step 2: Add list animations**
+
+Include:
+- item placement / visibility animation for note cards
+- smooth bottom/FAB presence during state changes
+- editor navigation fallback transition (`slideInVertically`) even if shared transitions are deferred on older API levels
+
+### Task 5.6: Compose UI verification
+
+- [ ] **Step 1: Create `NotesListScreenTest.kt`**
+
+Cover the highest-risk list interactions:
+- FAB tap navigates to the editor route
+- swipe-left reveals Pin/Delete actions
+- delete shows undo snackbar and undo restores the note
+
+- [ ] **Step 2: Run Chunk 5 verification**
+
+Run:
+- `./gradlew :app:testDebugUnitTest --tests "app.tessera.ui.notes.NotesListViewModelTest"`
+- `./gradlew :app:connectedDebugAndroidTest`
+- `./gradlew :app:assembleDebug`
+
+Expected:
+- list ViewModel JVM tests PASS
+- compose UI tests PASS
+- app assembles and launches into the notes list screen
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/superpowers/plans/2026-06-14-android-notes.md \
+        docs/superpowers/PROGRESS.md \
+        app/src/main/java/app/tessera/ui \
+        app/src/main/java/app/tessera/core/ui/UiTestTags.kt \
+        app/src/main/java/app/tessera/TesseraApp.kt \
+        app/src/test/java/app/tessera/ui \
+        app/src/androidTest/java/app/tessera/ui
+git commit -m "feat(ui): add notes list screen flow"
+```
+
+**End of Chunk 5.** Tessera now opens into a real list experience with search, swipe actions, and navigation into the editor flow.
 
 ### Chunk 6: Note editor screen
 

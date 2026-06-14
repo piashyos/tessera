@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_subtitle">Local-first notes, ready for search and quick capture.</string>
+    <string name="notes_empty_title">No notes yet</string>
+    <string name="notes_empty_subtitle">Tap the create button to start writing.</string>
+    <string name="notes_search_empty_title">No results for \"%1$s\"</string>
+    <string name="notes_search_empty_subtitle">Try a different phrase or clear the tag filters.</string>
+    <string name="search_hint">Search notes</string>
+    <string name="note_untitled">Untitled note</string>
+    <string name="note_empty_preview">A fresh note waiting for its first line.</string>
+    <string name="note_pinned">Pinned</string>
+    <string name="create_note">Create note</string>
+    <string name="editor_back">Back</string>
+    <string name="note_action_pin">Pin</string>
+    <string name="note_action_unpin">Unpin</string>
+    <string name="note_action_delete">Delete</string>
+    <string name="note_deleted">Note deleted</string>
+    <string name="action_undo">Undo</string>
+</resources>
