@@ -32,6 +32,7 @@ fun TesseraTextField(
 - `decorationBox` shows `placeholder` (`onSurfaceVariant`) when `value` is empty; optional `leadingIcon` rendered before the text.
 - `KeyboardOptions(imeAction = imeAction)` + `KeyboardActions` invoking `onImeAction`.
 - No border/box of its own — the container (search capsule / popup) provides the surface.
+- The `modifier` parameter is applied directly to the inner `BasicTextField`, so callers attach `Modifier.onFocusChanged { … }` and `Modifier.testTag(…)` externally via `modifier` (no dedicated focus param needed). This preserves `BottomSearchBar`'s focus-driven expand/collapse and the `SearchField` test tag.
 
 **Consumers:**
 - `BottomSearchBar` — replace its inline `BasicTextField` with `TesseraTextField`, keeping the existing `SearchField` test tag and focus handling.
@@ -61,10 +62,12 @@ fun TesseraPopup(
 - When `visible`, fills the whole screen (over status/nav bars).
 - **Backdrop:** full-screen box that (a) blurs the content behind it via `hazeEffect(hazeState)` and (b) draws a slight dim scrim on top (e.g. `Color.Black` ~0.25 alpha). Tapping the backdrop calls `onDismiss`. `BackHandler` also calls `onDismiss`.
 - **Card:** bottom-anchored, full width minus **12dp** side margins, rounded corners, surface-colored, holding `content` (a `ColumnScope`). Uses `imePadding()` plus a **12dp** bottom gap so the gap to the keyboard equals the side margins; when the keyboard is closed it sits 12dp above the bottom safe-area inset. (Confirmed positioning: option A.)
+- **Card content height:** the content column is `verticalScroll`-able and constrained with `heightIn(max = ~60% of screen height)` so a long tag list (with the keyboard open) scrolls inside the card instead of overflowing.
 - Enter/exit: fade + slide-up (spring), consistent with the app's motion.
 - Card taps do not propagate to the backdrop (no dismiss).
+- **Dismiss:** `onDismiss` (back press or backdrop tap) clears focus via `LocalFocusManager.clearFocus()` so the soft keyboard hides before the popup disappears. Only a single popup is shown at a time.
 
-**Blur wiring:** the popup blurs via the screen's `HazeState`. To cover the full background (content **and** floating capsules), the screen's root content is wrapped as a single `hazeSource` that the popup backdrop samples. The editor passes its `hazeState` into `TesseraPopup`.
+**Blur wiring (avoid breaking existing capsule blur):** `TesseraPopup` uses a **dedicated** `HazeState` (separate from the capsules' `hazeState`). The screen wraps its entire visible content — scrollable body **and** the top/bottom `FloatingCapsule`s + `EdgeFadeScrim` — in a container carrying `hazeSource(popupHazeState)`; the popup backdrop calls `hazeEffect(popupHazeState)` to blur all of it. The existing capsule/scrim blur keeps its own content-only `hazeState` untouched, so this change does not alter current behavior. (Confirm the `dev.chrisbanes.haze` version in `libs.versions.toml` supports a child `hazeEffect` sampling a parent-level `hazeSource`; if not, fall back to wrapping the screen content in a sibling layer drawn before the popup.) The editor passes `popupHazeState` into `TesseraPopup`.
 
 **Consumer:** the tag picker in `TagChips.kt` swaps `ModalBottomSheet` for `TesseraPopup`, with content = a title, a `TesseraTextField` for a new tag, and a wrapping row of existing-tag chips (`availableTags`).
 
