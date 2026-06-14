@@ -8,7 +8,6 @@ import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.Tag
 import app.tessera.domain.usecase.GetNoteUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
-import app.tessera.domain.usecase.TogglePinUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -27,7 +26,6 @@ class NoteEditorViewModel @Inject constructor(
     private val getNoteUseCase: GetNoteUseCase,
     private val updateNoteUseCase: UpdateNoteUseCase,
     private val observeNotesUseCase: ObserveNotesUseCase,
-    private val togglePinUseCase: TogglePinUseCase,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 

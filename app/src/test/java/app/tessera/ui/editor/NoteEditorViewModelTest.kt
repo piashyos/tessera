@@ -8,7 +8,6 @@ import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.usecase.GetNoteUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
-import app.tessera.domain.usecase.TogglePinUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -249,7 +248,6 @@ private class FakeEditorRepository(
             getNoteUseCase = GetNoteUseCase(this),
             updateNoteUseCase = UpdateNoteUseCase(this),
             observeNotesUseCase = ObserveNotesUseCase(this),
-            togglePinUseCase = TogglePinUseCase(this),
             savedStateHandle = savedState,
         )
     }
