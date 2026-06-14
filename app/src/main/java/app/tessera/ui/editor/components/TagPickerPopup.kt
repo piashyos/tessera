@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,14 +59,23 @@ fun TagPickerPopup(
             text = stringResource(R.string.editor_add_tag),
             style = MaterialTheme.typography.titleMedium,
         )
-        TesseraTextField(
-            value = newTag,
-            onValueChange = { newTag = it },
-            placeholder = stringResource(R.string.editor_add_tag),
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.fillMaxWidth(),
-            imeAction = ImeAction.Done,
-            onImeAction = submit,
-        )
+        ) {
+            TesseraTextField(
+                value = newTag,
+                onValueChange = { newTag = it },
+                placeholder = stringResource(R.string.editor_add_tag),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 24.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                imeAction = ImeAction.Done,
+                onImeAction = submit,
+            )
+        }
         if (availableTags.isNotEmpty()) {
             Text(
                 text = "Existing tags",
