@@ -10,6 +10,15 @@
     <string name="note_pinned">Закреплено</string>
     <string name="create_note">Создать заметку</string>
     <string name="editor_back">Назад</string>
+    <string name="editor_title_hint">Заголовок</string>
+    <string name="editor_body_hint">Начните писать…</string>
+    <string name="editor_add_tag">Добавить тег</string>
+    <string name="editor_pin">Закрепить заметку</string>
+    <string name="editor_unpin">Открепить заметку</string>
+    <string name="editor_delete">Удалить заметку</string>
+    <string name="toolbar_bold">Жирный</string>
+    <string name="toolbar_bullet">Список</string>
+    <string name="toolbar_checklist">Пункт чеклиста</string>
     <string name="note_action_pin">Закрепить</string>
     <string name="note_action_unpin">Открепить</string>
     <string name="note_action_delete">Удалить</string>

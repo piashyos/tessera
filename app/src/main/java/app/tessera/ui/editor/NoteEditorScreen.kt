@@ -1,38 +1,46 @@
 package app.tessera.ui.editor
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
@@ -41,29 +49,41 @@ import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.components.ScrimEdge
 import app.tessera.core.ui.theme.FloatingShadowAmbient
 import app.tessera.core.ui.theme.FloatingShadowSpot
+import app.tessera.core.ui.theme.TesseraTheme
+import app.tessera.ui.editor.components.ChecklistBody
+import app.tessera.ui.editor.components.MarkdownToolbar
+import app.tessera.ui.editor.components.TagChips
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NoteEditorScreen(
-    noteId: String,
-    modifier: Modifier = Modifier,
+    state: NoteEditorState,
+    onTitleChange: (String) -> Unit,
+    onContentChange: (String) -> Unit,
+    onToggleChecklist: (Int) -> Unit,
+    onAddTag: (String) -> Unit,
+    onRemoveTag: (String) -> Unit,
+    onTogglePin: () -> Unit,
+    onInsertToken: (String) -> Unit,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val pageColor =
-        if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
-            MaterialTheme.colorScheme.surface
-        } else {
-            Color.White
-        }
-    val hazeState = remember { HazeState() }
+    val pageColor = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        Color.White
+    }
+    val hazeState = androidx.compose.runtime.remember { HazeState() }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(pageColor)
-            .testTag(UiTestTags.EditorPlaceholderRoot),
+            .testTag(UiTestTags.EditorRoot),
     ) {
+        // Scrollable content surface
         Surface(
             modifier = Modifier
                 .fillMaxSize()
@@ -75,36 +95,55 @@ fun NoteEditorScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Space for top capsule + safe area
                 Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.safeDrawing))
                 Spacer(modifier = Modifier.height(86.dp))
-                Text(
-                    text = "Editor route placeholder",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "Opened note id: $noteId",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "This area is intentionally one continuous page now, so the future editor content can scroll under the header fade instead of being boxed into separate cards.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                repeat(10) { index ->
-                    Text(
-                        text = "Placeholder paragraph ${index + 1}. Markdown content, checklist items, and longer note text will live directly on this canvas and scroll under the top gradient.",
-                        style = MaterialTheme.typography.bodyLarge,
+
+                // Title field
+                BasicTextField(
+                    value = state.title,
+                    onValueChange = onTitleChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.EditorTitleField),
+                    textStyle = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Spacer(modifier = Modifier.height(120.dp))
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    decorationBox = { innerTextField ->
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            if (state.title.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.editor_title_hint),
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            innerTextField()
+                        }
+                    },
+                )
+
+                // Body / checklist
+                ChecklistBody(
+                    content = state.content,
+                    onContentChange = onContentChange,
+                    onToggleChecklist = onToggleChecklist,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                // Bottom spacing for the floating bottom capsule
+                Spacer(modifier = Modifier.height(160.dp))
+                Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
             }
         }
 
+        // Top edge fade scrim
         EdgeFadeScrim(
             hazeState = hazeState,
             scrimColor = pageColor,
@@ -115,6 +154,7 @@ fun NoteEditorScreen(
                 .height(150.dp),
         )
 
+        // Top floating capsule — back + pin
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -139,21 +179,104 @@ fun NoteEditorScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.editor_back),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clickable(onClick = onBack)
-                            .testTag("editor_back"),
-                    )
-                    Text(
-                        text = "Chunk 6 editor",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.testTag(UiTestTags.EditorBack),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.editor_back),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onTogglePin,
+                        modifier = Modifier.testTag(UiTestTags.EditorPin),
+                    ) {
+                        Icon(
+                            imageVector = if (state.isPinned) {
+                                Icons.Filled.PushPin
+                            } else {
+                                Icons.Outlined.PushPin
+                            },
+                            contentDescription = stringResource(
+                                if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
+                            ),
+                            tint = if (state.isPinned) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
                 }
             }
         }
+
+        // Bottom floating capsule — tags + markdown toolbar
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .imePadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            FloatingCapsule(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = RoundedCornerShape(28.dp),
+                        ambientColor = FloatingShadowAmbient,
+                        spotColor = FloatingShadowSpot,
+                    ),
+                blurRadius = 20.dp,
+                shadowElevation = 4.dp,
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TagChips(
+                        tags = state.tags,
+                        availableTags = state.availableTags,
+                        onAddTag = onAddTag,
+                        onRemoveTag = onRemoveTag,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    MarkdownToolbar(
+                        onInsertToken = onInsertToken,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFFFFBF4)
+@Composable
+private fun NoteEditorScreenLightPreview() {
+    TesseraTheme(darkTheme = false, dynamicColor = false) {
+        NoteEditorScreen(
+            state = NoteEditorState(
+                title = "My first note",
+                content = "- [ ] Buy groceries\n- [x] Call the dentist\n\nSome extra thoughts here.",
+                tags = listOf("work", "personal"),
+                isPinned = false,
+                availableTags = listOf("ideas", "kotlin"),
+                isLoading = false,
+            ),
+            onTitleChange = {},
+            onContentChange = {},
+            onToggleChecklist = {},
+            onAddTag = {},
+            onRemoveTag = {},
+            onTogglePin = {},
+            onInsertToken = {},
+            onBack = {},
+        )
     }
 }

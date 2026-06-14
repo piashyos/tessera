@@ -9,7 +9,15 @@ object UiTestTags {
     const val NotesListRoot = "notes_list_root"
     const val NotesGrid = "notes_grid"
     const val SearchField = "search_field"
-    const val EditorPlaceholderRoot = "editor_placeholder_root"
+
+    // Editor screen
+    const val EditorRoot = "editor_root"
+    const val EditorTitleField = "editor_title_field"
+    const val EditorBodyField = "editor_body_field"
+    const val EditorBack = "editor_back"
+    const val EditorPin = "editor_pin"
+
+    fun editorChecklistItem(index: Int): String = "editor_checklist_$index"
 
     fun noteCard(noteId: String): String = "note_card_$noteId"
 
