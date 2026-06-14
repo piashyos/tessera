@@ -7,7 +7,7 @@ Resume in a new session by reading this file + the plan, then continuing with th
 
 | # | Chunk | Status | Notes |
 |---|-------|--------|-------|
-| 1 | Project bootstrap | ⏳ in progress | — |
+| 1 | Project bootstrap | ✅ done | APK builds (`./gradlew :app:assembleDebug`). Wrapper @ Gradle 8.10.2. Commits `a47c8da`, `e54f090`. |
 | 2 | Data layer (Room) | ⬜ pending | — |
 | 3 | Domain + Repository (local-only) | ⬜ pending | TDD-step expansion deferred until start |
 | 4 | UI core: floating capsules + theme | ⬜ pending | TDD-step expansion deferred until start |
