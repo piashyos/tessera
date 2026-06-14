@@ -65,6 +65,7 @@ androidx-test-ext-junit = "androidx.test.ext:junit:1.2.1"
 androidx-test-core = "androidx.test:core:1.6.1"
 compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
