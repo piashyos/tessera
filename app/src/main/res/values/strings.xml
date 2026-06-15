@@ -5,6 +5,7 @@
     <string name="notes_search_empty_title">No results for \"%1$s\"</string>
     <string name="notes_search_empty_subtitle">Try a different phrase or clear the tag filters.</string>
     <string name="search_hint">Search notes</string>
+    <string name="search_clear">Clear search</string>
     <string name="note_untitled">Untitled note</string>
     <string name="note_empty_preview">A fresh note waiting for its first line.</string>
     <string name="note_pinned">Pinned</string>

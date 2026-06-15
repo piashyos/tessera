@@ -26,6 +26,7 @@ fun TesseraTextField(
     imeAction: ImeAction = ImeAction.Default,
     onImeAction: () -> Unit = {},
     leadingIcon: (@Composable () -> Unit)? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val action: KeyboardActions = KeyboardActions(
         onDone = { onImeAction() },
@@ -62,6 +63,10 @@ fun TesseraTextField(
                         )
                     }
                     innerTextField()
+                }
+                if (trailingIcon != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    trailingIcon()
                 }
             }
         },

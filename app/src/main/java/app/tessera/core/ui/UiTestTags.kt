@@ -9,6 +9,7 @@ object UiTestTags {
     const val NotesListRoot = "notes_list_root"
     const val NotesGrid = "notes_grid"
     const val SearchField = "search_field"
+    const val SearchClear = "search_clear"
 
     // Editor screen
     const val EditorRoot = "editor_root"

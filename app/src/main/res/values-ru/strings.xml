@@ -5,6 +5,7 @@
     <string name="notes_search_empty_title">Нет результатов по запросу «%1$s»</string>
     <string name="notes_search_empty_subtitle">Попробуйте другую фразу или сбросьте фильтры тегов.</string>
     <string name="search_hint">Поиск заметок</string>
+    <string name="search_clear">Очистить поиск</string>
     <string name="note_untitled">Без названия</string>
     <string name="note_empty_preview">Новая заметка ждёт свою первую строку.</string>
     <string name="note_pinned">Закреплено</string>
