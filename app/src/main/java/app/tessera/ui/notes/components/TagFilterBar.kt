@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,7 +24,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.components.FloatingCapsule
-import app.tessera.core.ui.theme.CapsuleTintLight
 import dev.chrisbanes.haze.HazeState
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -50,22 +50,35 @@ fun TagFilterBar(
         ) {
             availableTags.forEach { tag ->
                 val selected = tag in selectedTags
-                FloatingCapsule(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable { onTagToggle(tag) }
-                        .testTag(UiTestTags.tagFilterChip(tag)),
-                    shape = CircleShape,
-                    hazeState = hazeState,
-                    blurRadius = 18.dp,
-                    backgroundColor = if (selected) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                    } else {
-                        CapsuleTintLight
-                    },
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                ) {
+                val chipModifier = Modifier
+                    .clip(CircleShape)
+                    .clickable { onTagToggle(tag) }
+                    .testTag(UiTestTags.tagFilterChip(tag))
+                val chipContent: @Composable BoxScope.() -> Unit = {
                     Text("#$tag", style = MaterialTheme.typography.labelMedium)
+                }
+                if (selected) {
+                    // Selected chips use a theme-aware primary tint.
+                    FloatingCapsule(
+                        modifier = chipModifier,
+                        shape = CircleShape,
+                        hazeState = hazeState,
+                        blurRadius = 18.dp,
+                        backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        content = chipContent,
+                    )
+                } else {
+                    // Unselected chips omit backgroundColor so FloatingCapsule
+                    // applies its theme-aware default tint (dark vs light).
+                    FloatingCapsule(
+                        modifier = chipModifier,
+                        shape = CircleShape,
+                        hazeState = hazeState,
+                        blurRadius = 18.dp,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        content = chipContent,
+                    )
                 }
             }
         }
