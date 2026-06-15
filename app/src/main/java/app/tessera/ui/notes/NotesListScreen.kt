@@ -74,7 +74,9 @@ import app.tessera.domain.model.NoteId
 import app.tessera.ui.notes.components.BottomSearchBar
 import app.tessera.ui.notes.components.SwipeableNoteCard
 import app.tessera.ui.notes.components.TagFilterBar
+import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Rows3
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Tag
 import dev.chrisbanes.haze.HazeState
@@ -98,6 +100,7 @@ fun NotesListScreen(
     modifier: Modifier = Modifier,
     onQueryChange: (String) -> Unit,
     onTagToggle: (String) -> Unit,
+    onToggleViewMode: () -> Unit,
     onCreateNote: () -> Unit,
     onNoteClick: (NoteId) -> Unit = {},
     onTogglePin: (NoteId) -> Unit = {},
@@ -271,6 +274,37 @@ fun NotesListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    val viewMode = state.viewMode()
+                    val (toggleIcon, toggleDesc) = if (viewMode == NotesViewMode.Tiles) {
+                        Lucide.Rows3 to stringResource(R.string.notes_view_mode_list)
+                    } else {
+                        Lucide.LayoutGrid to stringResource(R.string.notes_view_mode_tiles)
+                    }
+                    GlassFab(
+                        onClick = if (isSearchFocused) null else onToggleViewMode,
+                        size = 40.dp,
+                        contentDescription = toggleDesc,
+                        modifier = Modifier
+                            .graphicsLayer {
+                                alpha = fabAlpha
+                                scaleX = fabScale
+                                scaleY = fabScale
+                            }
+                            .shadow(
+                                elevation = 12.dp,
+                                shape = CircleShape,
+                                ambientColor = FloatingShadowAmbient,
+                                spotColor = FloatingShadowSpot,
+                                clip = false,
+                            )
+                            .testTag(UiTestTags.ViewModeToggle),
+                    ) {
+                        Icon(
+                            imageVector = toggleIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                     GlassFab(
                         onClick = if (isSearchFocused) null else { { tagBarExpanded = !tagBarExpanded } },
                         size = 40.dp,
@@ -461,6 +495,7 @@ private fun NotesContent(
                             SwipeableNoteCard(
                                 note = note,
                                 modifier = Modifier.animateItem(),
+                                isTile = state.viewMode == NotesViewMode.Tiles,
                                 onClick = { onNoteClick(note.id) },
                                 onTogglePin = { onTogglePin(note.id) },
                                 onDelete = { onDeleteNote(note) },

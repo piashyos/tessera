@@ -11,6 +11,7 @@ object UiTestTags {
     const val SearchField = "search_field"
     const val SearchClear = "search_clear"
     const val TagFilterToggle = "tag_filter_toggle"
+    const val ViewModeToggle = "view_mode_toggle"
 
     fun tagFilterChip(name: String): String = "tag_filter_chip_$name"
 

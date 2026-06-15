@@ -32,6 +32,7 @@ class SearchClearTest {
                 snackbarHostState = SnackbarHostState(),
                 onQueryChange = { query = it },
                 onTagToggle = {},
+                onToggleViewMode = {},
                 onCreateNote = {},
             )
         }

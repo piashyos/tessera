@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,15 +34,23 @@ import app.tessera.ui.notes.formatNoteDate
 fun NoteCard(
     note: Note,
     modifier: Modifier = Modifier,
+    isTile: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
+    val baseModifier =
+        if (onClick == null) {
+            modifier
+        } else {
+            modifier.clickable(onClick = onClick)
+        }
+    val outerModifier =
+        if (isTile) {
+            baseModifier.padding(horizontal = 14.dp, vertical = 14.dp)
+        } else {
+            baseModifier
+        }
     Column(
-        modifier =
-            if (onClick == null) {
-                modifier
-            } else {
-                modifier.clickable(onClick = onClick)
-            },
+        modifier = outerModifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (note.isPinned) {

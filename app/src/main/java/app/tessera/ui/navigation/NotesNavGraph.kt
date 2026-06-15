@@ -111,6 +111,7 @@ private fun NavGraphBuilder.notesListDestination(
             snackbarHostState = snackbarHostState,
             onQueryChange = viewModel::onQueryChange,
             onTagToggle = viewModel::onTagToggle,
+            onToggleViewMode = viewModel::onToggleViewMode,
             onCreateNote = {
                 scope.launch {
                     onOpenEditor(viewModel.createNoteDraft().value)

@@ -31,6 +31,7 @@ class NotesListScreenTest {
                 snackbarHostState = SnackbarHostState(),
                 onQueryChange = {},
                 onTagToggle = {},
+                onToggleViewMode = {},
                 onCreateNote = { created = true },
             )
         }
@@ -49,6 +50,7 @@ class NotesListScreenTest {
                 snackbarHostState = SnackbarHostState(),
                 onQueryChange = {},
                 onTagToggle = {},
+                onToggleViewMode = {},
                 onCreateNote = {},
                 onTogglePin = { toggled = it },
             )
@@ -70,6 +72,7 @@ class NotesListScreenTest {
                 snackbarHostState = SnackbarHostState(),
                 onQueryChange = {},
                 onTagToggle = {},
+                onToggleViewMode = {},
                 onCreateNote = {},
                 onDeleteNote = { deleted = it.id },
                 onUndoDelete = { restored = it },
@@ -95,6 +98,7 @@ class NotesListScreenTest {
                 snackbarHostState = SnackbarHostState(),
                 onQueryChange = {},
                 onTagToggle = {},
+                onToggleViewMode = {},
                 onCreateNote = {},
             )
         }

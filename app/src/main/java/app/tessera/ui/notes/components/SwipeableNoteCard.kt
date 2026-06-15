@@ -52,6 +52,7 @@ private enum class SwipeAnchor { Resting, Revealed }
 fun SwipeableNoteCard(
     note: Note,
     modifier: Modifier = Modifier,
+    isTile: Boolean = false,
     onClick: () -> Unit = {},
     onTogglePin: () -> Unit = {},
     onDelete: () -> Unit = {},
@@ -129,6 +130,7 @@ fun SwipeableNoteCard(
                     .fillMaxWidth()
                     .padding(vertical = 12.dp)
                     .testTag(UiTestTags.noteCard(note.id.value)),
+                isTile = isTile,
                 onClick = onClick,
             )
         }

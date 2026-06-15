@@ -47,6 +47,7 @@ class TesseraShowcaseScreenTest {
                 snackbarHostState = SnackbarHostState(),
                 onQueryChange = {},
                 onTagToggle = {},
+                onToggleViewMode = {},
                 onCreateNote = {},
             )
         }
