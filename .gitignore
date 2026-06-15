@@ -6,3 +6,7 @@ build/
 local.properties
 google-services.json
 .DS_Store
+keystore.properties
+*.jks
+*.keystore
+keystore/
