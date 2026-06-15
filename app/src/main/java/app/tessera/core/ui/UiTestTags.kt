@@ -22,8 +22,6 @@ object UiTestTags {
     const val EditorPin = "editor_pin"
     const val EditorDelete = "editor_delete"
 
-    fun editorChecklistItem(index: Int): String = "editor_checklist_$index"
-
     // Settings screen
     const val OpenSettings = "open_settings"
     const val SettingsRoot = "settings_root"

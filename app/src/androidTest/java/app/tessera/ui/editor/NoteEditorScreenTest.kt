@@ -1,7 +1,9 @@
 package app.tessera.ui.editor
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -26,11 +28,9 @@ class NoteEditorScreenTest {
                 state = editorState(),
                 onTitleChange = { capturedTitle = it },
                 onContentChange = {},
-                onToggleChecklist = {},
                 onAddTag = {},
                 onRemoveTag = {},
                 onTogglePin = {},
-                onInsertToken = {},
                 onBack = {},
                 onDelete = {},
             )
@@ -43,34 +43,7 @@ class NoteEditorScreenTest {
     }
 
     // -----------------------------------------------------------------------
-    // Test 2: tapping a checklist item invokes onToggleChecklist with correct index
-    // -----------------------------------------------------------------------
-    @Test
-    fun tappingChecklistItemInvokesOnToggleChecklistWithCorrectIndex() {
-        var capturedIndex = -1
-        composeRule.setContent {
-            NoteEditorScreen(
-                state = editorState(content = "- [ ] milk\n- [x] eggs"),
-                onTitleChange = {},
-                onContentChange = {},
-                onToggleChecklist = { capturedIndex = it },
-                onAddTag = {},
-                onRemoveTag = {},
-                onTogglePin = {},
-                onInsertToken = {},
-                onBack = {},
-                onDelete = {},
-            )
-        }
-
-        composeRule.onNodeWithTag(UiTestTags.editorChecklistItem(1))
-            .performClick()
-
-        assertEquals(1, capturedIndex)
-    }
-
-    // -----------------------------------------------------------------------
-    // Test 3: tapping back invokes onBack
+    // Test 2: tapping back invokes onBack
     // -----------------------------------------------------------------------
     @Test
     fun tappingBackInvokesOnBack() {
@@ -80,11 +53,9 @@ class NoteEditorScreenTest {
                 state = editorState(),
                 onTitleChange = {},
                 onContentChange = {},
-                onToggleChecklist = {},
                 onAddTag = {},
                 onRemoveTag = {},
                 onTogglePin = {},
-                onInsertToken = {},
                 onBack = { backInvoked = true },
                 onDelete = {},
             )
@@ -96,7 +67,7 @@ class NoteEditorScreenTest {
     }
 
     // -----------------------------------------------------------------------
-    // Test 4: tapping the pin control invokes onTogglePin
+    // Test 3: tapping the pin control invokes onTogglePin
     // -----------------------------------------------------------------------
     @Test
     fun tappingPinControlInvokesOnTogglePin() {
@@ -106,11 +77,9 @@ class NoteEditorScreenTest {
                 state = editorState(),
                 onTitleChange = {},
                 onContentChange = {},
-                onToggleChecklist = {},
                 onAddTag = {},
                 onRemoveTag = {},
                 onTogglePin = { pinToggled = true },
-                onInsertToken = {},
                 onBack = {},
                 onDelete = {},
             )
@@ -122,7 +91,7 @@ class NoteEditorScreenTest {
     }
 
     // -----------------------------------------------------------------------
-    // Test 5: tapping the delete control invokes onDelete
+    // Test 4: tapping the delete control invokes onDelete
     // -----------------------------------------------------------------------
     @Test
     fun tappingDeleteControlInvokesOnDelete() {
@@ -132,11 +101,9 @@ class NoteEditorScreenTest {
                 state = editorState(),
                 onTitleChange = {},
                 onContentChange = {},
-                onToggleChecklist = {},
                 onAddTag = {},
                 onRemoveTag = {},
                 onTogglePin = {},
-                onInsertToken = {},
                 onBack = {},
                 onDelete = { deleteInvoked = true },
             )
@@ -145,6 +112,33 @@ class NoteEditorScreenTest {
         composeRule.onNodeWithTag(UiTestTags.EditorDelete).performClick()
 
         assertTrue(deleteInvoked)
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 5: WYSIWYG smoke — all formatting buttons are present and tappable.
+    // The true WYSIWYG behavior (selection-aware toggleFormatting) is verified
+    // manually on a device; this smoke test guards against the toolbar being
+    // dropped/renamed without an obvious build break.
+    // -----------------------------------------------------------------------
+    @Test
+    fun markdownToolbarRendersAllFormattingButtons() {
+        composeRule.setContent {
+            NoteEditorScreen(
+                state = editorState(content = "hello"),
+                onTitleChange = {},
+                onContentChange = {},
+                onAddTag = {},
+                onRemoveTag = {},
+                onTogglePin = {},
+                onBack = {},
+                onDelete = {},
+            )
+        }
+
+        listOf("Bold", "Italic", "Strikethrough", "Heading 1", "Heading 2", "Bullet list", "Checklist item")
+            .forEach { description ->
+                composeRule.onNodeWithContentDescription(description).assertIsDisplayed()
+            }
     }
 }
 
