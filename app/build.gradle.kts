@@ -109,7 +109,6 @@ dependencies {
     implementation(libs.googleid)
     implementation(libs.coroutines.play.services)
 
-    implementation(libs.markwon.core)
     implementation(libs.haze)
     implementation(libs.coil.compose)
     implementation(libs.aztec)
