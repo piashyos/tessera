@@ -42,4 +42,26 @@ class NoteGroupingTest {
     fun `empty input yields no groups`() {
         assertEquals(emptyList<NoteSection>(), groupNotesByDate(emptyList(), today, zone))
     }
+
+    @Test
+    fun `note earlier this week but before yesterday groups under ThisWeek`() {
+        val thursday = LocalDate.of(2026, 6, 18)
+        // Monday of the same week: after startOfWeek (Mon 06-15) and 3 days before today.
+        val monday = thursday.minusDays(3)
+        val groups = groupNotesByDate(listOf(note("w", monday)), thursday, zone)
+        val section = groups.single()
+        assertEquals(NoteGroup.ThisWeek, section.group)
+        assertEquals("w", section.notes.single().id.value)
+    }
+
+    @Test
+    fun `note earlier this month but before this week groups under ThisMonth`() {
+        val thursday = LocalDate.of(2026, 6, 18)
+        // Same month (startOfMonth 06-01) but before startOfWeek (Mon 06-15).
+        val earlierInMonth = LocalDate.of(2026, 6, 5)
+        val groups = groupNotesByDate(listOf(note("m", earlierInMonth)), thursday, zone)
+        val section = groups.single()
+        assertEquals(NoteGroup.ThisMonth, section.group)
+        assertEquals("m", section.notes.single().id.value)
+    }
 }
