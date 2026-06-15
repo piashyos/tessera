@@ -1,10 +1,5 @@
 package app.tessera.ui.notes
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
@@ -119,6 +114,11 @@ fun NotesListScreen(
         animationSpec = spring(dampingRatio = 0.92f, stiffness = 520f),
         label = "fabAlpha",
     )
+    val fabScale by animateFloatAsState(
+        targetValue = if (isSearchFocused) 0.6f else 1f,
+        animationSpec = spring(dampingRatio = 0.92f, stiffness = 520f),
+        label = "fabScale",
+    )
     val scrimColor = lerp(
         MaterialTheme.colorScheme.background,
         MaterialTheme.colorScheme.surfaceVariant,
@@ -217,33 +217,30 @@ fun NotesListScreen(
                     showFilters = !isSearchFocused,
                     hazeState = hazeState,
                 )
-                AnimatedVisibility(
-                    visible = !isSearchFocused,
-                    enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
-                    exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start),
-                ) {
-                    GlassFab(
-                        onClick = onCreateNote,
-                        size = 48.dp,
-                        contentDescription = stringResource(R.string.create_note),
-                        modifier = Modifier
-                            .graphicsLayer {
-                                alpha = fabAlpha
-                            }
-                            .shadow(
-                                elevation = 12.dp,
-                                shape = CircleShape,
-                                ambientColor = FloatingShadowAmbient,
-                                spotColor = FloatingShadowSpot,
-                            )
-                            .testTag(UiTestTags.CreateNoteFab),
-                    ) {
-                        Text(
-                            text = "+",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.SemiBold,
+                GlassFab(
+                    onClick = if (isSearchFocused) null else onCreateNote,
+                    size = 48.dp,
+                    contentDescription = stringResource(R.string.create_note),
+                    modifier = Modifier
+                        .graphicsLayer {
+                            alpha = fabAlpha
+                            scaleX = fabScale
+                            scaleY = fabScale
+                        }
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = CircleShape,
+                            ambientColor = FloatingShadowAmbient,
+                            spotColor = FloatingShadowSpot,
+                            clip = false,
                         )
-                    }
+                        .testTag(UiTestTags.CreateNoteFab),
+                ) {
+                    Text(
+                        text = "+",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
         }
