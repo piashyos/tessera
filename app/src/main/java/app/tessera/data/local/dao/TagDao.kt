@@ -26,7 +26,7 @@ interface TagDao {
     suspend fun clearTagsForNote(noteId: String)
 
     @Query("SELECT * FROM note_tags")
-    fun observeAllCrossRefs(): kotlinx.coroutines.flow.Flow<List<NoteTagCrossRef>>
+    fun observeAllCrossRefs(): Flow<List<NoteTagCrossRef>>
 
     @Query(
         """

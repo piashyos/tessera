@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import app.tessera.core.util.Clock
 import app.tessera.data.local.NotesDatabase
+import app.tessera.data.local.entity.NoteTagCrossRef
+import app.tessera.data.local.entity.TagEntity
 import app.tessera.data.mapper.NoteMapper
 import app.tessera.domain.model.Tag
 import kotlinx.coroutines.test.runTest
@@ -67,7 +69,13 @@ class NotesRepositoryTagSyncTest {
                 assertEquals(1, initial.size)
                 assertTrue(initial.single().tags.isEmpty())
 
-                repository.updateNote(note.copy(tags = listOf(Tag("work"))))
+                // Mutate ONLY note_tags (no notes-table write), so the second
+                // emission can arrive solely because observeAllCrossRefs re-emits.
+                val tagId = java.util.UUID.randomUUID().toString()
+                database.tagDao().insertTags(listOf(TagEntity(id = tagId, name = "work")))
+                database.tagDao().linkTagsToNote(
+                    listOf(NoteTagCrossRef(noteId = note.id.value, tagId = tagId)),
+                )
 
                 val updated = awaitItem()
                 assertEquals(listOf(Tag("work")), updated.single().tags)
