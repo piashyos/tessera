@@ -14,6 +14,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 @Singleton
@@ -24,9 +25,8 @@ class NotesRepositoryImpl @Inject constructor(
     private val clock: Clock,
 ) : NotesRepository {
     override fun observeNotes(): Flow<List<Note>> =
-        noteDao.observeActive().map { notes ->
-            notes.map { note -> toDomain(note) }.filterNot(Note::isBlankDraft)
-        }
+        combine(noteDao.observeActive(), tagDao.observeAllCrossRefs()) { notes, _ -> notes }
+            .map { notes -> notes.map { note -> toDomain(note) }.filterNot(Note::isBlankDraft) }
 
     override fun observeNote(id: NoteId): Flow<Note?> =
         noteDao.observeById(id.value).map { note ->
@@ -80,8 +80,8 @@ class NotesRepositoryImpl @Inject constructor(
                 syncedAt = null,
             )
 
-        noteDao.upsert(noteMapper.toEntity(persisted))
         replaceTags(persisted)
+        noteDao.upsert(noteMapper.toEntity(persisted))
         return persisted
     }
 

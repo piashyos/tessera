@@ -318,4 +318,6 @@ private class SyncFakeTagDao : TagDao {
         tagIdsByNote[noteId].orEmpty().mapNotNull { id -> tagsByName.values.firstOrNull { it.id == id }?.name }
 
     override fun observeTagsForNote(noteId: String): Flow<List<String>> = MutableStateFlow(emptyList())
+
+    override fun observeAllCrossRefs(): Flow<List<NoteTagCrossRef>> = MutableStateFlow(emptyList())
 }

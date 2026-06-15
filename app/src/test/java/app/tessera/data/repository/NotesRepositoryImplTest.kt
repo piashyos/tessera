@@ -408,6 +408,9 @@ private class FakeTagDao : TagDao {
     override fun observeTagsForNote(noteId: String): Flow<List<String>> =
         tagsForNoteFlows.getOrPut(noteId) { MutableStateFlow(emptyList()) }
 
+    override fun observeAllCrossRefs(): Flow<List<NoteTagCrossRef>> =
+        MutableStateFlow(emptyList())
+
     private fun emitAllTags() {
         allTagsFlow.value = tagsByName.values.sortedBy { it.name }
     }
