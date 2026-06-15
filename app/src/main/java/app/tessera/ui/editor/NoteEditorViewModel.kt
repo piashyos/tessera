@@ -88,13 +88,6 @@ class NoteEditorViewModel @Inject constructor(
         scheduleAutosave()
     }
 
-    fun onToggleChecklist(lineIndex: Int) {
-        val current = _state.value.content
-        val updated = toggleChecklistLine(current, lineIndex)
-        _state.update { it.copy(content = updated) }
-        scheduleAutosave()
-    }
-
     fun onAddTag(tag: String) {
         _state.update { current ->
             val newTags = (current.tags + tag).distinct()
