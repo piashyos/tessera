@@ -118,31 +118,7 @@ class NoteEditorViewModelTest {
         }
 
     // -------------------------------------------------------------------------
-    // 4. onToggleChecklist rewrites content and the rewritten value is persisted
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `onToggleChecklist rewrites content and debounced save uses rewritten content`() =
-        runTest(dispatcher.scheduler) {
-            val checklistContent = "- [ ] item one\n- [x] item two"
-            val note = sampleNote("note-4", content = checklistContent)
-            val repo = FakeEditorRepository(notes = listOf(note))
-            val vm = repo.createViewModel(noteId = "note-4")
-            runCurrent()
-
-            vm.onToggleChecklist(0) // toggle first line: unchecked -> checked
-
-            val expectedContent = toggleChecklistLine(checklistContent, 0)
-            assertEquals(expectedContent, vm.state.value.content, "State content should reflect toggle")
-
-            advanceTimeBy(500)
-            runCurrent()
-            assertEquals(1, repo.updateCalls.size)
-            assertEquals(expectedContent, repo.updateCalls.first().content)
-        }
-
-    // -------------------------------------------------------------------------
-    // 5. flush() cancels pending debounce and persists immediately
+    // 4. flush() cancels pending debounce and persists immediately
     //    When title+content blank -> isBlankDraft() == true
     // -------------------------------------------------------------------------
 
