@@ -178,24 +178,22 @@ fun NoteEditorScreen(
                     .padding(horizontal = 20.dp),
             ) {
                 Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.safeDrawing))
-                FloatingCapsule(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FloatingCapsule(
+                        modifier = Modifier.shadow(
                             elevation = 12.dp,
                             shape = RoundedCornerShape(28.dp),
                             ambientColor = FloatingShadowAmbient,
                             spotColor = FloatingShadowSpot,
                         ),
-                    blurRadius = 24.dp,
-                    shadowElevation = 3.dp,
-                    hazeState = hazeState,
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                        blurRadius = 24.dp,
+                        shadowElevation = 3.dp,
+                        hazeState = hazeState,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         IconButton(
                             onClick = onBack,
@@ -210,7 +208,20 @@ fun NoteEditorScreen(
                                 modifier = Modifier.size(20.dp),
                             )
                         }
+                    }
 
+                    FloatingCapsule(
+                        modifier = Modifier.shadow(
+                            elevation = 12.dp,
+                            shape = RoundedCornerShape(28.dp),
+                            ambientColor = FloatingShadowAmbient,
+                            spotColor = FloatingShadowSpot,
+                        ),
+                        blurRadius = 24.dp,
+                        shadowElevation = 3.dp,
+                        hazeState = hazeState,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(
                                 onClick = onTogglePin,
