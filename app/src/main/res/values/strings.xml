@@ -19,6 +19,12 @@
     <string name="toolbar_bold">Bold</string>
     <string name="toolbar_bullet">Bullet list</string>
     <string name="toolbar_checklist">Checklist item</string>
+    <string name="note_group_pinned">Pinned</string>
+    <string name="note_group_today">Today</string>
+    <string name="note_group_yesterday">Yesterday</string>
+    <string name="note_group_this_week">This week</string>
+    <string name="note_group_this_month">This month</string>
+    <string name="note_group_earlier">Earlier</string>
     <string name="note_action_pin">Pin</string>
     <string name="note_action_unpin">Unpin</string>
     <string name="note_action_delete">Delete</string>
