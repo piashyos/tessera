@@ -1,6 +1,5 @@
 package app.tessera.ui.editor
 
-import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,8 +55,10 @@ import app.tessera.core.ui.components.ScrimEdge
 import app.tessera.core.ui.theme.FloatingShadowAmbient
 import app.tessera.core.ui.theme.FloatingShadowSpot
 import app.tessera.core.ui.theme.TesseraTheme
-import app.tessera.ui.editor.components.ChecklistBody
+import app.tessera.core.text.MarkdownHtmlConverter
 import app.tessera.ui.editor.components.MarkdownToolbar
+import app.tessera.ui.editor.components.RichBodyActions
+import app.tessera.ui.editor.components.RichNoteBody
 import app.tessera.ui.editor.components.TagChips
 import app.tessera.ui.editor.components.TagPickerPopup
 import dev.chrisbanes.haze.HazeState
@@ -69,15 +70,17 @@ fun NoteEditorScreen(
     state: NoteEditorState,
     onTitleChange: (String) -> Unit,
     onContentChange: (String) -> Unit,
-    onToggleChecklist: (Int) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
     onTogglePin: () -> Unit,
-    onInsertToken: (String) -> Unit,
     onBack: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val converter = remember { MarkdownHtmlConverter() }
+    var actions by remember { mutableStateOf<RichBodyActions?>(null) }
+    val initialHtml = remember(state.content) { converter.markdownToHtml(state.content) }
+
     val pageColor = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
         MaterialTheme.colorScheme.surface
     } else {
@@ -145,11 +148,15 @@ fun NoteEditorScreen(
                         },
                     )
 
-                    // Body / checklist
-                    ChecklistBody(
-                        content = state.content,
-                        onContentChange = onContentChange,
-                        onToggleChecklist = onToggleChecklist,
+                    // Body — Aztec WYSIWYG editor
+                    RichNoteBody(
+                        html = initialHtml,
+                        markdownKey = state.content,
+                        onHtmlChange = { html ->
+                            val markdown = converter.htmlToMarkdown(html)
+                            if (markdown != state.content) onContentChange(markdown)
+                        },
+                        onActionsReady = { actions = it },
                         modifier = Modifier.fillMaxWidth(),
                     )
 
@@ -288,7 +295,15 @@ fun NoteEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        MarkdownToolbar(onInsertToken = onInsertToken)
+                        MarkdownToolbar(
+                            onBold = { actions?.toggleBold() },
+                            onItalic = { actions?.toggleItalic() },
+                            onStrikethrough = { actions?.toggleStrikethrough() },
+                            onHeading1 = { actions?.toggleHeading1() },
+                            onHeading2 = { actions?.toggleHeading2() },
+                            onBullet = { actions?.toggleBulletList() },
+                            onTaskList = { actions?.toggleTaskList() },
+                        )
                         TagChips(
                             tags = state.tags,
                             onRemoveTag = onRemoveTag,
@@ -327,11 +342,9 @@ private fun NoteEditorScreenLightPreview() {
             ),
             onTitleChange = {},
             onContentChange = {},
-            onToggleChecklist = {},
             onAddTag = {},
             onRemoveTag = {},
             onTogglePin = {},
-            onInsertToken = {},
             onBack = {},
             onDelete = {},
         )

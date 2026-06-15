@@ -72,6 +72,7 @@ compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 icons-lucide = { module = "com.composables:icons-lucide-android", version = "1.1.0" }
 aztec = { module = "org.wordpress:aztec", version.ref = "aztec" }
+appcompat = { module = "androidx.appcompat:appcompat", version = "1.6.1" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

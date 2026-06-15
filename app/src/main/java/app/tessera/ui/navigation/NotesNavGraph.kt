@@ -86,13 +86,9 @@ fun NotesNavGraph(
                 state = state,
                 onTitleChange = viewModel::onTitleChange,
                 onContentChange = viewModel::onContentChange,
-                onToggleChecklist = viewModel::onToggleChecklist,
                 onAddTag = viewModel::onAddTag,
                 onRemoveTag = viewModel::onRemoveTag,
                 onTogglePin = viewModel::onTogglePin,
-                onInsertToken = { token ->
-                    viewModel.onContentChange(state.content + token)
-                },
                 onBack = backAction,
                 onDelete = deleteAction,
             )

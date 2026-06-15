@@ -113,6 +113,7 @@ dependencies {
     implementation(libs.haze)
     implementation(libs.coil.compose)
     implementation(libs.aztec)
+    implementation(libs.appcompat)
 
     testImplementation(libs.junit4)
     testImplementation(libs.junit5)
