@@ -1,11 +1,13 @@
 package app.tessera.data.mapper
 
 import app.tessera.data.local.entity.NoteEntity
+import app.tessera.data.remote.RemoteNote
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.Tag
 import app.tessera.domain.model.UserId
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class NoteMapperTest {
@@ -91,5 +93,86 @@ class NoteMapperTest {
         val roundTrip = mapper.toEntity(mapper.toDomain(entity, listOf("tag-b", "tag-a")))
 
         assertEquals(entity, roundTrip)
+    }
+
+    @Test
+    fun `toRemote copies note fields and normalizes tag names without exposing local-only state`() {
+        val entity =
+            NoteEntity(
+                id = "note-4",
+                title = "Remote",
+                content = "Body",
+                isPinned = true,
+                createdAt = 1L,
+                updatedAt = 2L,
+                deletedAt = 3L,
+                syncedAt = 99L,
+                ownerId = "user-4",
+            )
+
+        val remote = mapper.toRemote(entity, listOf(" beta ", "alpha", "alpha", "  "))
+
+        assertEquals("note-4", remote.id)
+        assertEquals("Remote", remote.title)
+        assertEquals("Body", remote.content)
+        assertEquals(listOf("alpha", "beta"), remote.tags)
+        assertEquals(true, remote.isPinned)
+        assertEquals(1L, remote.createdAt)
+        assertEquals(2L, remote.updatedAt)
+        assertEquals(3L, remote.deletedAt)
+    }
+
+    @Test
+    fun `toEntity from remote applies owner and synced flag and preserves remote fields`() {
+        val remote =
+            RemoteNote(
+                id = "note-5",
+                title = "Pulled",
+                content = "Cloud body",
+                tags = listOf("a", "b"),
+                isPinned = false,
+                createdAt = 5L,
+                updatedAt = 6L,
+                deletedAt = 7L,
+            )
+
+        val entity = mapper.toEntity(remote, ownerId = "user-5", syncedAt = 50L)
+
+        assertEquals(
+            NoteEntity(
+                id = "note-5",
+                title = "Pulled",
+                content = "Cloud body",
+                isPinned = false,
+                createdAt = 5L,
+                updatedAt = 6L,
+                deletedAt = 7L,
+                syncedAt = 50L,
+                ownerId = "user-5",
+            ),
+            entity,
+        )
+    }
+
+    @Test
+    fun `entity to remote to entity round trip preserves syncable fields`() {
+        val entity =
+            NoteEntity(
+                id = "note-6",
+                title = "Round",
+                content = "Trip",
+                isPinned = true,
+                createdAt = 100L,
+                updatedAt = 200L,
+                deletedAt = 300L,
+                syncedAt = 400L,
+                ownerId = "user-6",
+            )
+
+        val remote = mapper.toRemote(entity, emptyList())
+        val rebuilt = mapper.toEntity(remote, ownerId = "user-6", syncedAt = null)
+
+        assertEquals(entity.copy(syncedAt = null), rebuilt)
+        assertNull(rebuilt.syncedAt)
     }
 }

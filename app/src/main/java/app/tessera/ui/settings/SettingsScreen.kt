@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -26,9 +27,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +42,7 @@ import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.settings.components.AccountSwitchDialog
+import coil.compose.AsyncImage
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
@@ -153,19 +157,20 @@ private fun AccountSection(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Lucide.User,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                AccountAvatar(photoUrl = state.photoUrl)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     Text(
-                        text = stringResource(R.string.settings_account),
+                        text = state.displayName?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.settings_account),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
-                        text = state.userId
+                        text = state.email
+                            ?: state.userId
                             ?: stringResource(R.string.settings_signed_out),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -222,6 +227,31 @@ private fun AccountSection(
 }
 
 @Composable
+private fun AccountAvatar(photoUrl: String?) {
+    val avatarModifier = Modifier
+        .size(48.dp)
+        .clip(CircleShape)
+        .background(MaterialTheme.colorScheme.surfaceVariant)
+
+    if (!photoUrl.isNullOrBlank()) {
+        AsyncImage(
+            model = photoUrl,
+            contentDescription = stringResource(R.string.settings_account),
+            modifier = avatarModifier,
+            contentScale = ContentScale.Crop,
+        )
+    } else {
+        Box(modifier = avatarModifier, contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Lucide.User,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 private fun SettingsRow(
     icon: ImageVector,
     title: String,
@@ -270,6 +300,13 @@ private fun SettingsSignedOutPreview() {
 @Composable
 private fun SettingsSignedInPreview() {
     TesseraTheme(darkTheme = true, dynamicColor = false) {
-        SettingsScreen(state = SettingsState(isSignedIn = true, userId = "user@example.com"))
+        SettingsScreen(
+            state = SettingsState(
+                isSignedIn = true,
+                userId = "uid-123",
+                displayName = "Jane Doe",
+                email = "jane@example.com",
+            ),
+        )
     }
 }

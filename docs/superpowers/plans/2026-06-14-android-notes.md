@@ -1666,22 +1666,95 @@ git commit -m "feat(editor): note editor screen with autosave, checklist, tags"
 
 Verification (after the deferred follow-up): Sign in manually on device with a real Google account, see the user row in Settings.
 
-### Chunk 8: Firestore sync
+## Chunk 8: Firestore sync
 
-Tasks:
-1. **`FirestoreNotesClient`** — typed CRUD for `users/{uid}/notes/{noteId}`. Snapshot listener returning Flow.
-2. **`NoteMapper` extensions** — Domain ↔ Firestore DTO (tags as `List<String>`).
-3. **`SyncRepositoryImpl`**:
-   - `initialMerge(uid)` — pulls all docs, applies LWW per-note in a transaction.
-   - `pushPending()` — reads `dao.getPendingSync()`, writes to Firestore, marks `syncedAt = Clock.nowMs()`. Empty notes (`title.isBlank() && content.isBlank()`) are skipped.
-   - `observeRemote(uid)` — Firestore listener; for each remote change, **compare `remote.updatedAt` to local `updatedAt`** before overwriting Room (race-safe).
-4. **`SyncWorker`** (Hilt-injected `CoroutineWorker`) — runs on connectivity + on app start when signed in. Idempotent.
-5. **`DeleteTombstonesWorker`** — daily PeriodicWorkRequest. Calls `dao.purgeOldTombstones(now - 30d)` and Firestore counterpart.
-6. **Wire-up** — schedule workers in `NotesApplication.onCreate()` when `currentUser != null`. Cancel on sign-out.
-7. **JVM tests** — `SyncRepositoryImpl` merge logic with fakes (LWW both directions, tombstone propagation, listener-vs-local-edit race).
-8. **Instrumented test** — `DeleteTombstonesWorker` purges at the 30-day boundary using fixed `Clock`.
+**Outcome:** Signed-in notes replicate to Firestore and back. Local edits flag `syncedAt = null` and are pushed by a `SyncWorker`; a snapshot listener merges remote changes into Room with last-write-wins (LWW) on `updatedAt`; soft-deleted tombstones are purged locally and remotely after a 30-day retention by a periodic `DeleteTombstonesWorker`. The UI never blocks on the network (Room stays the single source of truth).
 
-Verification: Sign in on device A, create note, see it on device B. Edit on B, see update on A. Sign out keeps notes locally. Re-sign-in restores from cloud (LWW correct).
+**Design decisions (locked before execution):**
+- The Firestore SDK is hidden behind a **`RemoteNotesDataSource`** interface so `SyncRepositoryImpl` is fully JVM-unit-testable with a fake. `FirestoreNotesClient` is the only Android/Firestore-touching implementation and carries no merge logic.
+- Sync operates at the **`NoteEntity` + tag-names** level (not domain `Note`), because Room is the source of truth and `NoteDao` already exposes everything needed (`getPendingSync`, `markSynced`, `getById`, `upsert`, `purgeOldTombstones`) — **no schema change, DB version stays 1, no new DAO methods.**
+- The remote document shape is a separate **`RemoteNote`** DTO (Firestore-friendly defaults, tags as `List<String>`, no `syncedAt` — that flag is local-only). `NoteMapper` gains pure `toRemote(entity, tagNames)` / `toEntity(remote, ownerId, syncedAt)` helpers covered by JVM tests.
+- **LWW rule:** on every pull/listener merge, a remote note is written to Room only when `local == null || remote.updatedAt > local.updatedAt`. Equal timestamps are a no-op (idempotent). Tombstones (`deletedAt != null`) ride the same rule, so deletes propagate both directions.
+- **Race-safety:** because a local edit stamps `updatedAt = now` and `syncedAt = null`, a stale snapshot (older `updatedAt`) is ignored on arrival and the local version is re-pushed on the next `pushPending()`.
+- Blank drafts (`title.isBlank() && content.isBlank()`) are **never pushed** to Firestore.
+- Workers are Hilt-injected (`@HiltWorker` + `HiltWorkerFactory`); `TesseraApplication` implements `Configuration.Provider` and the default `WorkManagerInitializer` is removed in the manifest. A `SyncManager` (plain `@Singleton`, own `SupervisorJob` scope) observes `AuthRepository.currentUser` and enqueues/cancels work + the remote listener on sign-in/out — keeping `TesseraApplication.onCreate()` thin.
+- Tombstone retention is `30 days` (`TOMBSTONE_RETENTION_MS`).
+
+**Files:**
+- Create: `app/src/main/java/app/tessera/data/remote/RemoteNote.kt`
+- Create: `app/src/main/java/app/tessera/data/remote/RemoteNotesDataSource.kt`
+- Create: `app/src/main/java/app/tessera/data/remote/FirestoreNotesClient.kt`
+- Update: `app/src/main/java/app/tessera/data/mapper/NoteMapper.kt` (remote ↔ entity helpers)
+- Update: `app/src/main/java/app/tessera/domain/repository/SyncRepository.kt` (real contract)
+- Rewrite: `app/src/main/java/app/tessera/data/repository/SyncRepositoryImpl.kt`
+- Create: `app/src/main/java/app/tessera/sync/{SyncWorker,DeleteTombstonesWorker,SyncManager}.kt`
+- Create: `app/src/main/java/app/tessera/core/di/WorkManagerModule.kt`
+- Update: `app/src/main/java/app/tessera/core/di/RepositoryModule.kt` (bind `RemoteNotesDataSource`)
+- Update: `app/src/main/java/app/tessera/TesseraApplication.kt` (`Configuration.Provider` + start `SyncManager`)
+- Update: `app/src/main/AndroidManifest.xml` (remove default `WorkManagerInitializer`)
+- Test: `app/src/test/java/app/tessera/data/mapper/NoteMapperTest.kt` (remote helpers)
+- Test: `app/src/test/java/app/tessera/data/repository/SyncRepositoryImplTest.kt`
+- Test: `app/src/androidTest/java/app/tessera/sync/DeleteTombstonesWorkerTest.kt`
+
+### Task 8.1: Remote DTO + mapper helpers (pure, JVM-tested)
+
+- [ ] **Step 1: Add remote mapper tests** to `NoteMapperTest.kt`:
+  - `toRemote(entity, tagNames)` copies id/title/content/pin/createdAt/updatedAt/deletedAt and normalizes tag names (trim, drop blanks, distinct, case-insensitive sort); it does **not** expose `syncedAt`/`ownerId`.
+  - `toEntity(remote, ownerId, syncedAt)` rebuilds a `NoteEntity` with the supplied `ownerId` + `syncedAt` and preserves all remote fields incl. `deletedAt`.
+  - round-trip `entity -> toRemote -> toEntity` preserves id/title/content/pin/timestamps/deletedAt.
+- [ ] **Step 2: Create `RemoteNote.kt`** — data class with no-arg defaults for Firestore deserialization; `tags: List<String>`; nullable `deletedAt`; no `syncedAt`.
+- [ ] **Step 3: Add `toRemote` / `toEntity(remote, …)` to `NoteMapper`.**
+- [ ] **Step 4: Run** `./gradlew :app:testDebugUnitTest --tests "app.tessera.data.mapper.NoteMapperTest"` → PASS.
+
+### Task 8.2: Remote data source seam
+
+- [ ] **Step 1: Create `RemoteNotesDataSource.kt`** interface:
+  - `suspend fun fetchAll(uid: String): List<RemoteNote>`
+  - `suspend fun upsertAll(uid: String, notes: List<RemoteNote>)`
+  - `fun observeNotes(uid: String): Flow<List<RemoteNote>>`
+  - `suspend fun deleteOlderTombstones(uid: String, threshold: Long): Int`
+- [ ] **Step 2: Create `FirestoreNotesClient.kt`** (`@Singleton`, injects `FirebaseFirestore`) implementing the interface against `users/{uid}/notes/{noteId}`; `observeNotes` via `callbackFlow` + snapshot listener; `deleteOlderTombstones` queries `deletedAt < threshold` and batch-deletes. No merge logic here.
+
+### Task 8.3: SyncRepository merge logic (JVM-tested)
+
+- [ ] **Step 1: Replace `SyncRepository` contract:**
+  - `suspend fun syncNow(uid: UserId): Result<Unit>` — push pending then pull+merge.
+  - `suspend fun purgeTombstones(uid: UserId): Result<Unit>` — local + remote purge older than retention.
+  - `fun observeRemote(uid: UserId): Flow<Unit>` — merges each remote snapshot, emitting after each applied batch.
+- [ ] **Step 2: Write `SyncRepositoryImplTest.kt`** (fakes for `NoteDao`, `TagDao`, `RemoteNotesDataSource`; fixed `Clock`):
+  - `pushPending` uploads unsynced, non-blank notes and marks them `syncedAt = now`; blank drafts are skipped.
+  - pull writes a brand-new remote note into Room with `syncedAt = now`.
+  - LWW: remote newer overwrites local; local newer is preserved.
+  - tombstone propagation: a remote note with `deletedAt` soft-deletes locally.
+  - race: `observeRemote` emitting a stale (older `updatedAt`) snapshot does **not** clobber a fresh local edit.
+  - pulled tags are persisted to the tag tables.
+  - `purgeTombstones` calls local `purgeOldTombstones(now - 30d)` and `remote.deleteOlderTombstones(uid, now - 30d)`.
+- [ ] **Step 3: Rewrite `SyncRepositoryImpl`** (`NoteDao`, `TagDao`, `RemoteNotesDataSource`, `NoteMapper`, `Clock`) implementing the above; expose `internal suspend fun mergeRemote(...)` so the listener and `syncNow` share one path.
+- [ ] **Step 4: Bind `RemoteNotesDataSource -> FirestoreNotesClient`** in `RepositoryModule`.
+- [ ] **Step 5: Run** `./gradlew :app:testDebugUnitTest --tests "app.tessera.data.repository.SyncRepositoryImplTest"` → PASS.
+
+### Task 8.4: Workers + wiring
+
+- [ ] **Step 1: `SyncWorker`** (`@HiltWorker` `CoroutineWorker`, injects `SyncRepository`) — reads `uid` from input data; `syncNow(uid)` → `Result.success()` / `Result.retry()` on failure.
+- [ ] **Step 2: `DeleteTombstonesWorker`** (`@HiltWorker`) — reads `uid`; `purgeTombstones(uid)` → success/retry.
+- [ ] **Step 3: `SyncManager`** (`@Singleton`) — observes `AuthRepository.currentUser`; on sign-in: enqueue one-time `SyncWorker` (`NetworkType.CONNECTED`, exponential backoff) + periodic `DeleteTombstonesWorker` (daily) + launch `observeRemote(uid)` collection; on sign-out: cancel unique work + listener job.
+- [ ] **Step 4: `WorkManagerModule`** — `@Provides @Singleton WorkManager`.
+- [ ] **Step 5: `TesseraApplication`** implements `Configuration.Provider` (inject `HiltWorkerFactory`), injects + starts `SyncManager` in `onCreate()`.
+- [ ] **Step 6: Manifest** — remove the default `androidx.work.WorkManagerInitializer` via `tools:node="remove"`.
+- [ ] **Step 7: Verify** `./gradlew :app:assembleDebug` → BUILD SUCCESSFUL.
+
+### Task 8.5: Instrumented worker test + chunk verification
+
+- [ ] **Step 1: `DeleteTombstonesWorkerTest`** — in-memory Room + fake remote + fixed `Clock`; insert tombstones older/newer than `now - 30d`; build the worker with `TestListenableWorkerBuilder` + a factory that injects a real `SyncRepositoryImpl`; assert only the old tombstone is purged and the remote purge was invoked at the right threshold.
+- [ ] **Step 2: Run**
+  - `./gradlew :app:testDebugUnitTest`
+  - `./gradlew :app:connectedDebugAndroidTest` (emulator)
+  - `./gradlew :app:assembleDebug`
+- [ ] **Step 3: Update `docs/superpowers/PROGRESS.md`** (Chunk 8 ✅) and commit.
+
+**Deferred (manual, needs a real account + 2 devices):** Sign in on device A, create note, see it on device B; edit on B, see update on A; sign out keeps notes locally; re-sign-in restores from cloud (LWW correct).
+
+**End of Chunk 8.** Tessera notes replicate through Firestore with LWW conflict resolution, background push/pull, and tombstone cleanup — completing the local-first + optional-cloud architecture.
 
 ---
 

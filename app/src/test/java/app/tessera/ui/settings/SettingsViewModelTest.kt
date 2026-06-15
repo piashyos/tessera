@@ -2,6 +2,7 @@ package app.tessera.ui.settings
 
 import app.cash.turbine.test
 import app.tessera.domain.model.UserId
+import app.tessera.domain.model.UserProfile
 import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.usecase.HandleAccountSwitchUseCase
@@ -161,16 +162,23 @@ private class FakeAuthRepository(
     private val signInResult: Result<UserId>,
 ) : AuthRepository {
     private val mutableUser = MutableStateFlow<UserId?>(null)
+    private val mutableProfile = MutableStateFlow<UserProfile?>(null)
 
     override val currentUser: StateFlow<UserId?> = mutableUser.asStateFlow()
 
+    override val currentProfile: StateFlow<UserProfile?> = mutableProfile.asStateFlow()
+
     override suspend fun signIn(): Result<UserId> {
-        signInResult.onSuccess { mutableUser.value = it }
+        signInResult.onSuccess {
+            mutableUser.value = it
+            mutableProfile.value = UserProfile(id = it, displayName = null, email = null, photoUrl = null)
+        }
         return signInResult
     }
 
     override suspend fun signOut() {
         mutableUser.value = null
+        mutableProfile.value = null
     }
 }
 

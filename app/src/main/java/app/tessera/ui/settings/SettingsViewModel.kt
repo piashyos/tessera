@@ -29,10 +29,13 @@ class SettingsViewModel @Inject constructor(
     private val uiState = MutableStateFlow(SettingsState())
 
     val state: StateFlow<SettingsState> =
-        combine(authRepository.currentUser, uiState) { user, ui ->
+        combine(authRepository.currentProfile, uiState) { profile, ui ->
             ui.copy(
-                isSignedIn = user != null,
-                userId = user?.value,
+                isSignedIn = profile != null,
+                userId = profile?.id?.value,
+                displayName = profile?.displayName,
+                email = profile?.email,
+                photoUrl = profile?.photoUrl,
             )
         }.stateIn(
             scope = viewModelScope,

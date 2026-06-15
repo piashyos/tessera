@@ -1,5 +1,7 @@
 package app.tessera.core.di
 
+import app.tessera.data.remote.FirestoreNotesClient
+import app.tessera.data.remote.RemoteNotesDataSource
 import app.tessera.data.repository.AccountRepositoryImpl
 import app.tessera.data.repository.AuthRepositoryImpl
 import app.tessera.data.repository.NotesRepositoryImpl
@@ -32,4 +34,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAccountRepository(impl: AccountRepositoryImpl): AccountRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRemoteNotesDataSource(impl: FirestoreNotesClient): RemoteNotesDataSource
 }

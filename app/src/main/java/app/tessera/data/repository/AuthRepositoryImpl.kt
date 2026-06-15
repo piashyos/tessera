@@ -10,11 +10,14 @@ import androidx.credentials.exceptions.GetCredentialException
 import app.tessera.R
 import app.tessera.core.util.CurrentActivityHolder
 import app.tessera.domain.model.UserId
-import app.tessera.domain.repository.AuthRepository
+import app.tessera.domain.model.UserProfile
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import app.tessera.domain.repository.AuthRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,17 +30,22 @@ import kotlinx.coroutines.tasks.await
 class AuthRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val firebaseAuth: FirebaseAuth,
+    private val firestore: FirebaseFirestore,
     private val activityHolder: CurrentActivityHolder,
 ) : AuthRepository {
     private val credentialManager = CredentialManager.create(context)
 
     private val mutableCurrentUser = MutableStateFlow(firebaseAuth.currentUser?.uid?.let(::UserId))
+    private val mutableCurrentProfile = MutableStateFlow(firebaseAuth.currentUser?.toProfile())
 
     override val currentUser: StateFlow<UserId?> = mutableCurrentUser.asStateFlow()
+
+    override val currentProfile: StateFlow<UserProfile?> = mutableCurrentProfile.asStateFlow()
 
     init {
         firebaseAuth.addAuthStateListener { auth ->
             mutableCurrentUser.value = auth.currentUser?.uid?.let(::UserId)
+            mutableCurrentProfile.value = auth.currentUser?.toProfile()
         }
     }
 
@@ -62,9 +70,12 @@ class AuthRepositoryImpl @Inject constructor(
                 val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
                 val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
                 val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
-                val uid = authResult.user?.uid
+                val firebaseUser = authResult.user
                     ?: return Result.failure(IllegalStateException("Firebase user missing after sign-in"))
-                Result.success(UserId(uid))
+                val profile = firebaseUser.toProfile()
+                mutableCurrentProfile.value = profile
+                saveProfile(profile)
+                Result.success(UserId(firebaseUser.uid))
             } else {
                 Result.failure(IllegalStateException("Unexpected credential type: ${credential.type}"))
             }
@@ -83,9 +94,40 @@ class AuthRepositoryImpl @Inject constructor(
             credentialManager.clearCredentialState(ClearCredentialStateRequest())
         }
         mutableCurrentUser.value = null
+        mutableCurrentProfile.value = null
     }
+
+    /** Persists the user's public profile to `users/{uid}`. Failures never block sign-in. */
+    private suspend fun saveProfile(profile: UserProfile) {
+        runCatching {
+            firestore.collection(USERS)
+                .document(profile.id.value)
+                .set(
+                    mapOf(
+                        FIELD_DISPLAY_NAME to profile.displayName,
+                        FIELD_EMAIL to profile.email,
+                        FIELD_PHOTO_URL to profile.photoUrl,
+                        FIELD_UPDATED_AT to System.currentTimeMillis(),
+                    ),
+                )
+                .await()
+        }.onFailure { Log.w(TAG, "Failed to save user profile", it) }
+    }
+
+    private fun FirebaseUser.toProfile(): UserProfile =
+        UserProfile(
+            id = UserId(uid),
+            displayName = displayName,
+            email = email,
+            photoUrl = photoUrl?.toString(),
+        )
 
     private companion object {
         const val TAG = "AuthRepository"
+        const val USERS = "users"
+        const val FIELD_DISPLAY_NAME = "displayName"
+        const val FIELD_EMAIL = "email"
+        const val FIELD_PHOTO_URL = "photoUrl"
+        const val FIELD_UPDATED_AT = "updatedAt"
     }
 }

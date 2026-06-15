@@ -19,6 +19,7 @@ robolectric = "4.13"
 roborazzi = "1.60.0"
 junit4 = "4.13.2"
 haze = "1.2.2"
+coil = "2.7.0"
 
 [libraries]
 androidx-core-ktx = "androidx.core:core-ktx:1.13.1"
@@ -40,6 +41,7 @@ room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 hilt-work = { module = "androidx.hilt:hilt-work", version = "1.2.0" }
 hilt-work-compiler = { module = "androidx.hilt:hilt-compiler", version = "1.2.0" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
@@ -50,6 +52,7 @@ credentials-play-services = { module = "androidx.credentials:credentials-play-se
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
+coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }

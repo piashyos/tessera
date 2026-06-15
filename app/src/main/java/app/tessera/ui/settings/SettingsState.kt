@@ -14,6 +14,9 @@ data class PendingAccountSwitch(
 data class SettingsState(
     val isSignedIn: Boolean = false,
     val userId: String? = null,
+    val displayName: String? = null,
+    val email: String? = null,
+    val photoUrl: String? = null,
     val isBusy: Boolean = false,
     val pendingSwitch: PendingAccountSwitch? = null,
     val errorMessage: String? = null,

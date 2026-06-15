@@ -111,6 +111,7 @@ dependencies {
 
     implementation(libs.markwon.core)
     implementation(libs.haze)
+    implementation(libs.coil.compose)
 
     testImplementation(libs.junit4)
     testImplementation(libs.junit5)
@@ -129,6 +130,7 @@ dependencies {
     androidTestImplementation(libs.hilt.android.testing)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.work.testing)
     androidTestImplementation(libs.turbine)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
