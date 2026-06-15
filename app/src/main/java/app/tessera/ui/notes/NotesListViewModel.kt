@@ -41,6 +41,7 @@ class NotesListViewModel @Inject constructor(
     private val query = MutableStateFlow("")
     private val selectedTags = MutableStateFlow<Set<String>>(emptySet())
     private val selection = MutableStateFlow<Set<NoteId>>(emptySet())
+    private val viewMode = MutableStateFlow(NotesViewMode.Tiles)
 
     private val effectiveQuery =
         query
@@ -60,6 +61,7 @@ class NotesListViewModel @Inject constructor(
             query,
             selectedTags,
             selection,
+            viewMode,
             effectiveQuery.flatMapLatest { value ->
                 if (value.isBlank()) {
                     observeNotesUseCase()
@@ -67,11 +69,12 @@ class NotesListViewModel @Inject constructor(
                     searchNotesUseCase(value)
                 }
             },
-        ) { currentQuery, activeTags, selectedNotes, notes ->
+        ) { currentQuery, activeTags, selectedNotes, currentViewMode, notes ->
             notes.toUiState(
                 query = currentQuery,
                 selectedTags = activeTags,
                 selection = selectedNotes,
+                viewMode = currentViewMode,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -107,6 +110,10 @@ class NotesListViewModel @Inject constructor(
         selection.value = emptySet()
     }
 
+    fun onToggleViewMode() {
+        viewMode.update { if (it == NotesViewMode.Tiles) NotesViewMode.List else NotesViewMode.Tiles }
+    }
+
     suspend fun createNoteDraft(): NoteId = createNoteUseCase().id
 
     fun togglePin(id: NoteId) {
@@ -133,6 +140,7 @@ private fun List<Note>.toUiState(
     query: String,
     selectedTags: Set<String>,
     selection: Set<NoteId>,
+    viewMode: NotesViewMode,
 ): NotesListState {
     val availableTags = flatMap { note -> note.tags.map { tag -> tag.name } }.distinct().sorted()
     val visibleNotes =
@@ -150,6 +158,7 @@ private fun List<Note>.toUiState(
             query = query,
             availableTags = availableTags,
             selectedTags = selectedTags,
+            viewMode = viewMode,
         )
     }
 
@@ -160,5 +169,6 @@ private fun List<Note>.toUiState(
         selection = selection,
         availableTags = availableTags,
         selectedTags = selectedTags,
+        viewMode = viewMode,
     )
 }

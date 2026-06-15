@@ -96,6 +96,7 @@ private fun contentState(notes: List<Note>) =
         selection = emptySet(),
         availableTags = emptyList(),
         selectedTags = emptySet(),
+        viewMode = NotesViewMode.Tiles,
     )
 
 private fun note(id: String): Note =

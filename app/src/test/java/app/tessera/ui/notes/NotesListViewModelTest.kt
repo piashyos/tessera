@@ -110,6 +110,23 @@ class NotesListViewModelTest {
         }
 
     @Test
+    fun `toggling view mode flips between Tiles and List`() =
+        runTest(dispatcher.scheduler) {
+            val repository = FakeNotesRepository(initialNotes = listOf(sampleNote("n1")))
+            val viewModel = repository.createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Loading
+                val content = awaitItem() as NotesListState.Content
+                assertEquals(NotesViewMode.Tiles, content.viewMode)
+
+                viewModel.onToggleViewMode()
+                val next = awaitItem() as NotesListState.Content
+                assertEquals(NotesViewMode.List, next.viewMode)
+            }
+        }
+
+    @Test
     fun `clearing query returns to observe flow without debounce`() =
         runTest(dispatcher.scheduler) {
             val repository =

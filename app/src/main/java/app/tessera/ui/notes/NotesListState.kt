@@ -10,6 +10,7 @@ sealed interface NotesListState {
         val query: String,
         val availableTags: List<String>,
         val selectedTags: Set<String>,
+        val viewMode: NotesViewMode,
     ) : NotesListState
 
     data class Content(
@@ -19,5 +20,6 @@ sealed interface NotesListState {
         val selection: Set<NoteId>,
         val availableTags: List<String>,
         val selectedTags: Set<String>,
+        val viewMode: NotesViewMode,
     ) : NotesListState
 }

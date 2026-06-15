@@ -410,3 +410,10 @@ private fun NotesListState.selectedTags(): Set<String> =
         is NotesListState.Empty -> selectedTags
         is NotesListState.Content -> selectedTags
     }
+
+private fun NotesListState.viewMode(): NotesViewMode =
+    when (this) {
+        NotesListState.Loading -> NotesViewMode.Tiles
+        is NotesListState.Empty -> viewMode
+        is NotesListState.Content -> viewMode
+    }
