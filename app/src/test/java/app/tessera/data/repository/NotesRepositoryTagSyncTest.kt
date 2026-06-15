@@ -9,6 +9,7 @@ import app.tessera.data.local.entity.NoteTagCrossRef
 import app.tessera.data.local.entity.TagEntity
 import app.tessera.data.mapper.NoteMapper
 import app.tessera.domain.model.Tag
+import app.tessera.domain.repository.SyncScheduler
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -24,6 +25,10 @@ import org.robolectric.annotation.Config
 class NotesRepositoryTagSyncTest {
     private lateinit var database: NotesDatabase
     private lateinit var repository: NotesRepositoryImpl
+
+    private class FakeSyncScheduler : SyncScheduler {
+        override fun requestSync() {}
+    }
 
     private class IncrementingClock : Clock {
         private var current = 1_000L
@@ -47,6 +52,7 @@ class NotesRepositoryTagSyncTest {
                 database.tagDao(),
                 NoteMapper(),
                 IncrementingClock(),
+                FakeSyncScheduler(),
             )
     }
 
