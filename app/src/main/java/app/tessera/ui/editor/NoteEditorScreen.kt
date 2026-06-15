@@ -96,14 +96,14 @@ fun NoteEditorScreen(
         // Inner wrapper — everything that the popup blurs over
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .hazeSource(popupHazeState),
+                .fillMaxSize(),
         ) {
             // Scrollable content surface
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(hazeState),
+                    .hazeSource(hazeState)
+                    .hazeSource(popupHazeState),
                 color = pageColor,
             ) {
                 Column(

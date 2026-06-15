@@ -54,7 +54,7 @@ fun TesseraPopup(
     val maxCardHeight = (LocalConfiguration.current.screenHeightDp * 0.6f).dp
     val frostColor = MaterialTheme.colorScheme.surface
     val keyboardVisible = WindowInsets.ime.getBottom(density) > WindowInsets.navigationBars.getBottom(density)
-    val cardBottomGap = if (keyboardVisible) 12.dp else 24.dp
+    val cardBottomGap = if (keyboardVisible) 12.dp else 16.dp
     val dismiss: () -> Unit = {
         focusManager.clearFocus(force = true)
         onDismiss()

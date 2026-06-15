@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,6 +25,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
+import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.components.TesseraPopup
 import app.tessera.core.ui.components.TesseraTextField
 import app.tessera.core.ui.theme.TesseraTheme
@@ -59,10 +60,10 @@ fun TagPickerPopup(
             text = stringResource(R.string.editor_add_tag),
             style = MaterialTheme.typography.titleMedium,
         )
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+        FloatingCapsule(
             modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         ) {
             TesseraTextField(
                 value = newTag,
@@ -70,8 +71,7 @@ fun TagPickerPopup(
                 placeholder = stringResource(R.string.editor_add_tag),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 24.dp)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .heightIn(min = 24.dp),
                 imeAction = ImeAction.Done,
                 onImeAction = submit,
             )
