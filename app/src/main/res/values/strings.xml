@@ -22,6 +22,10 @@
     <string name="toolbar_bold">Bold</string>
     <string name="toolbar_bullet">Bullet list</string>
     <string name="toolbar_checklist">Checklist item</string>
+    <string name="toolbar_italic">Italic</string>
+    <string name="toolbar_strikethrough">Strikethrough</string>
+    <string name="toolbar_h1">Heading 1</string>
+    <string name="toolbar_h2">Heading 2</string>
     <string name="note_group_pinned">Pinned</string>
     <string name="note_group_today">Today</string>
     <string name="note_group_yesterday">Yesterday</string>

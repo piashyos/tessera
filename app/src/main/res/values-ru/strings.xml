@@ -22,6 +22,10 @@
     <string name="toolbar_bold">Жирный</string>
     <string name="toolbar_bullet">Список</string>
     <string name="toolbar_checklist">Пункт чеклиста</string>
+    <string name="toolbar_italic">Курсив</string>
+    <string name="toolbar_strikethrough">Зачёркнутый</string>
+    <string name="toolbar_h1">Заголовок 1</string>
+    <string name="toolbar_h2">Заголовок 2</string>
     <string name="note_action_pin">Закрепить</string>
     <string name="note_action_unpin">Открепить</string>
     <string name="note_action_delete">Удалить</string>
