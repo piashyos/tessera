@@ -7,6 +7,7 @@ import android.text.TextWatcher
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -55,11 +56,16 @@ fun RichNoteBody(
 
     // Echo-loop guard: tracks which markdownKey was last loaded into the editor
     val lastLoadedMarkdown = remember { mutableStateOf<String?>(null) }
+    // Handler lifted to the composable so DisposableEffect can clear pending debounce
+    // runnables when the editor leaves composition (e.g. back-nav during typing).
+    val handler = remember { Handler(Looper.getMainLooper()) }
+    DisposableEffect(Unit) {
+        onDispose { handler.removeCallbacksAndMessages(null) }
+    }
 
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            val handler = Handler(Looper.getMainLooper())
             var debounceRunnable: Runnable? = null
 
             val editor = AztecText(context)

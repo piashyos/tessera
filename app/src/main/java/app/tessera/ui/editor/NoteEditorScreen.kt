@@ -166,7 +166,9 @@ fun NoteEditorScreen(
                 }
             }
 
-            // Top edge fade scrim
+            // Top edge fade scrim — gradient fade-to-pageColor at the top edge. The haze blur
+            // inside the scrim cannot blur the AztecText (AndroidView), but the scrim's own
+            // color gradient still provides the visual fade.
             EdgeFadeScrim(
                 hazeState = hazeState,
                 scrimColor = pageColor,
@@ -199,7 +201,9 @@ fun NoteEditorScreen(
                         ),
                         blurRadius = 24.dp,
                         shadowElevation = 3.dp,
-                        hazeState = hazeState,
+                        // Solid tint scrim: haze cannot blur the AztecText (AndroidView pixels live
+                        // outside the Compose graphics layer, see aztec-spike-findings.md §5).
+                        hazeState = null,
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         IconButton(
@@ -226,7 +230,7 @@ fun NoteEditorScreen(
                         ),
                         blurRadius = 24.dp,
                         shadowElevation = 3.dp,
-                        hazeState = hazeState,
+                        hazeState = null,
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -287,7 +291,7 @@ fun NoteEditorScreen(
                         ),
                     blurRadius = 20.dp,
                     shadowElevation = 4.dp,
-                    hazeState = hazeState,
+                    hazeState = null,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                 ) {
                     Row(
