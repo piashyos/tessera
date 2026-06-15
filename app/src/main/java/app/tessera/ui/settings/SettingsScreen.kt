@@ -209,6 +209,14 @@ private fun AccountSection(
                     Text(stringResource(R.string.settings_sign_in))
                 }
             }
+
+            state.errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }

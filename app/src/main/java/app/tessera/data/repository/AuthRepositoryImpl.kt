@@ -1,6 +1,7 @@
 package app.tessera.data.repository
 
 import android.content.Context
+import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -10,7 +11,7 @@ import app.tessera.R
 import app.tessera.core.util.CurrentActivityHolder
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.AuthRepository
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -45,12 +46,11 @@ class AuthRepositoryImpl @Inject constructor(
             ?: return Result.failure(IllegalStateException("No active screen to start sign-in"))
 
         return try {
-            val googleIdOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(context.getString(R.string.default_web_client_id))
-                .build()
+            val signInOption = GetSignInWithGoogleOption.Builder(
+                context.getString(R.string.default_web_client_id),
+            ).build()
             val request = GetCredentialRequest.Builder()
-                .addCredentialOption(googleIdOption)
+                .addCredentialOption(signInOption)
                 .build()
 
             val response = credentialManager.getCredential(activity, request)
@@ -66,11 +66,13 @@ class AuthRepositoryImpl @Inject constructor(
                     ?: return Result.failure(IllegalStateException("Firebase user missing after sign-in"))
                 Result.success(UserId(uid))
             } else {
-                Result.failure(IllegalStateException("Unexpected credential type"))
+                Result.failure(IllegalStateException("Unexpected credential type: ${credential.type}"))
             }
         } catch (e: GetCredentialException) {
+            Log.e(TAG, "Credential Manager sign-in failed", e)
             Result.failure(e)
         } catch (e: Exception) {
+            Log.e(TAG, "Sign-in failed", e)
             Result.failure(e)
         }
     }
@@ -81,5 +83,9 @@ class AuthRepositoryImpl @Inject constructor(
             credentialManager.clearCredentialState(ClearCredentialStateRequest())
         }
         mutableCurrentUser.value = null
+    }
+
+    private companion object {
+        const val TAG = "AuthRepository"
     }
 }
