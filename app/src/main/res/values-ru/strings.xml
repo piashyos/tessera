@@ -11,6 +11,7 @@
     <string name="note_empty_preview">Новая заметка ждёт свою первую строку.</string>
     <string name="note_pinned">Закреплено</string>
     <string name="create_note">Создать заметку</string>
+    <string name="notes_filter_tags">Фильтр по тегам</string>
     <string name="editor_back">Назад</string>
     <string name="editor_title_hint">Заголовок</string>
     <string name="editor_body_hint">Начните писать…</string>

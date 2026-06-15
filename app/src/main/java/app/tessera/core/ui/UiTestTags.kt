@@ -10,6 +10,9 @@ object UiTestTags {
     const val NotesGrid = "notes_grid"
     const val SearchField = "search_field"
     const val SearchClear = "search_clear"
+    const val TagFilterToggle = "tag_filter_toggle"
+
+    fun tagFilterChip(name: String): String = "tag_filter_chip_$name"
 
     // Editor screen
     const val EditorRoot = "editor_root"

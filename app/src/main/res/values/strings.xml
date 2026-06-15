@@ -11,6 +11,7 @@
     <string name="note_empty_preview">A fresh note waiting for its first line.</string>
     <string name="note_pinned">Pinned</string>
     <string name="create_note">Create note</string>
+    <string name="notes_filter_tags">Filter by tags</string>
     <string name="editor_back">Back</string>
     <string name="editor_title_hint">Title</string>
     <string name="editor_body_hint">Start writing…</string>

@@ -73,8 +73,10 @@ import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.ui.notes.components.BottomSearchBar
 import app.tessera.ui.notes.components.SwipeableNoteCard
+import app.tessera.ui.notes.components.TagFilterBar
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Settings
+import com.composables.icons.lucide.Tag
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
@@ -106,6 +108,7 @@ fun NotesListScreen(
     isRefreshing: Boolean = false,
 ) {
     var isSearchFocused by remember { mutableStateOf(false) }
+    var tagBarExpanded by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val deletedMessage = stringResource(R.string.note_deleted)
@@ -238,48 +241,86 @@ fun NotesListScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                BottomSearchBar(
-                    query = state.query(),
-                    availableTags = state.availableTags(),
-                    selectedTags = state.selectedTags(),
-                    modifier = Modifier
-                        .weight(1f)
-                        .shadow(
-                            elevation = 12.dp,
-                            shape = RoundedCornerShape(28.dp),
-                            ambientColor = FloatingShadowAmbient,
-                            spotColor = FloatingShadowSpot,
-                        ),
-                    onQueryChange = onQueryChange,
-                    onTagToggle = onTagToggle,
-                    onFocusChanged = { isSearchFocused = it },
-                    showFilters = !isSearchFocused,
-                    hazeState = hazeState,
-                )
-                GlassFab(
-                    onClick = if (isSearchFocused) null else onCreateNote,
-                    size = 48.dp,
-                    contentDescription = stringResource(R.string.create_note),
-                    modifier = Modifier
-                        .graphicsLayer {
-                            alpha = fabAlpha
-                            scaleX = fabScale
-                            scaleY = fabScale
-                        }
-                        .shadow(
-                            elevation = 12.dp,
-                            shape = CircleShape,
-                            ambientColor = FloatingShadowAmbient,
-                            spotColor = FloatingShadowSpot,
-                            clip = false,
-                        )
-                        .testTag(UiTestTags.CreateNoteFab),
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text(
-                        text = "+",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.SemiBold,
+                    TagFilterBar(
+                        expanded = tagBarExpanded && !isSearchFocused,
+                        availableTags = state.availableTags(),
+                        selectedTags = state.selectedTags(),
+                        onTagToggle = onTagToggle,
+                        hazeState = hazeState,
                     )
+                    BottomSearchBar(
+                        query = state.query(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(
+                                elevation = 12.dp,
+                                shape = RoundedCornerShape(28.dp),
+                                ambientColor = FloatingShadowAmbient,
+                                spotColor = FloatingShadowSpot,
+                            ),
+                        onQueryChange = onQueryChange,
+                        onFocusChanged = { isSearchFocused = it },
+                        hazeState = hazeState,
+                    )
+                }
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    GlassFab(
+                        onClick = if (isSearchFocused) null else { { tagBarExpanded = !tagBarExpanded } },
+                        size = 40.dp,
+                        contentDescription = stringResource(R.string.notes_filter_tags),
+                        modifier = Modifier
+                            .graphicsLayer {
+                                alpha = fabAlpha
+                                scaleX = fabScale
+                                scaleY = fabScale
+                            }
+                            .shadow(
+                                elevation = 12.dp,
+                                shape = CircleShape,
+                                ambientColor = FloatingShadowAmbient,
+                                spotColor = FloatingShadowSpot,
+                                clip = false,
+                            )
+                            .testTag(UiTestTags.TagFilterToggle),
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Tag,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    GlassFab(
+                        onClick = if (isSearchFocused) null else onCreateNote,
+                        size = 48.dp,
+                        contentDescription = stringResource(R.string.create_note),
+                        modifier = Modifier
+                            .graphicsLayer {
+                                alpha = fabAlpha
+                                scaleX = fabScale
+                                scaleY = fabScale
+                            }
+                            .shadow(
+                                elevation = 12.dp,
+                                shape = CircleShape,
+                                ambientColor = FloatingShadowAmbient,
+                                spotColor = FloatingShadowSpot,
+                                clip = false,
+                            )
+                            .testTag(UiTestTags.CreateNoteFab),
+                    ) {
+                        Text(
+                            text = "+",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }
