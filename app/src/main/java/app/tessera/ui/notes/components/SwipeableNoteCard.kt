@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,13 +30,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
 import app.tessera.domain.model.Note
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.PinOff
+import com.composables.icons.lucide.Trash2
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -85,7 +90,8 @@ fun SwipeableNoteCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SwipeAction(
-                label = if (note.isPinned) {
+                icon = if (note.isPinned) Lucide.PinOff else Lucide.Pin,
+                contentDescription = if (note.isPinned) {
                     stringResource(R.string.note_action_unpin)
                 } else {
                     stringResource(R.string.note_action_pin)
@@ -100,7 +106,8 @@ fun SwipeableNoteCard(
                 },
             )
             SwipeAction(
-                label = stringResource(R.string.note_action_delete),
+                icon = Lucide.Trash2,
+                contentDescription = stringResource(R.string.note_action_delete),
                 container = MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
                 content = MaterialTheme.colorScheme.error,
                 width = actionWidth,
@@ -130,10 +137,11 @@ fun SwipeableNoteCard(
 
 @Composable
 private fun SwipeAction(
-    label: String,
+    icon: ImageVector,
+    contentDescription: String,
     container: Color,
     content: Color,
-    width: androidx.compose.ui.unit.Dp,
+    width: Dp,
     testTag: String,
     onClick: () -> Unit,
 ) {
@@ -148,11 +156,6 @@ private fun SwipeAction(
             .testTag(testTag),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = content,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Icon(imageVector = icon, contentDescription = contentDescription, tint = content)
     }
 }
