@@ -50,6 +50,7 @@ Replace the editor body with a **WYSIWYG rich-text editor (Aztec, WordPress)** w
 5. **`NoteEditorViewModel`** — **contract unchanged**: still exposes `content: String` (Markdown) and `onContentChange(String)`, still autosaves with the existing 500 ms debounce. It never sees HTML.
 
 6. **Sync fix** — `SyncScheduler` abstraction (domain interface) + `WorkManagerSyncScheduler` impl that enqueues a one-time `SyncWorker` (`ExistingWorkPolicy.APPEND_OR_REPLACE`, uid from `AuthRepository.currentUser.value`). `NotesRepositoryImpl` calls `requestSync()` after every mutation (`createNote`, `updateNote` — both branches, `deleteNote`, `restoreNote`, `togglePin`). All these DAO ops already set `syncedAt = NULL`, so `pushPending` picks them up.
+   - **Work-policy consistency:** `SyncManager.onSignedIn` currently enqueues the same `SyncWorker.UNIQUE_NAME` with `ExistingWorkPolicy.REPLACE`. Since both enqueue paths share one unique work name, the plan must make them consistent — the initial sign-in enqueue should also move to `APPEND_OR_REPLACE` (or route through the same `SyncScheduler`) so a sign-in enqueue cannot cancel an in-flight on-demand sync (and vice versa).
 
 ### Removed
 
@@ -77,7 +78,13 @@ user types or taps a toolbar button → `AztecText` updates → debounced → `a
 
 ## Risks / spike
 
-**Task 1 (spike, before committing to full integration):** Embed `AztecText` in an `AndroidView` inside the editor layout under the existing haze capsules. Verify (a) the editor renders/edits correctly, (b) capture the exact HTML Aztec emits for bold/italic/strike/H1/H2/bullet/task-list (this fixes the converter's mapping), (c) whether haze blur captures the AndroidView or the scrim fallback is needed. The spike's findings feed the converter spec and the haze decision.
+**Task 1 (spike, before committing to full integration):** Embed `AztecText` in an `AndroidView` inside the editor layout under the existing haze capsules. This first requires **adding the JitPack repository** (see Dependency setup below), since the spike cannot resolve the artifact otherwise. Verify (a) the editor renders/edits correctly, (b) capture the exact HTML Aztec emits for bold/italic/strike/H1/H2/bullet/task-list (this fixes the converter's mapping), (c) whether haze blur captures the AndroidView or the scrim fallback is needed. The spike's findings feed the converter spec and the haze decision.
+
+**Acceptance bar for the haze fallback:** if blur does not capture the AndroidView, the scrim is acceptable when the floating capsules remain legible over scrolled editor text (sufficient contrast, no text bleeding through) — i.e. the capsules must not become transparent/illegible, even if the soft-blur aesthetic is lost.
+
+## Dependency setup
+
+Aztec (WordPress) is published on **JitPack**, not Maven Central or Google. The project's `settings.gradle.kts` uses `repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)` with only `google()` and `mavenCentral()`. Adding the Aztec dependency therefore also requires adding `maven { url = uri("https://jitpack.io") }` to the `dependencyResolutionManagement { repositories { ... } }` block in `settings.gradle.kts`. Without this, dependency resolution fails. This must happen as part of Task 1 (the spike must resolve the artifact to embed `AztecText`).
 
 ## Testing strategy
 
@@ -89,7 +96,7 @@ user types or taps a toolbar button → `AztecText` updates → debounced → `a
 ## Affected files (indicative)
 
 - Create: `core/text/MarkdownHtmlConverter.kt`, `ui/editor/components/RichNoteBody.kt`, `domain/repository/SyncScheduler.kt`, `sync/WorkManagerSyncScheduler.kt`, `core/text/MarkdownHtmlConverterTest.kt`.
-- Modify: `ui/editor/components/MarkdownToolbar.kt`, `ui/editor/NoteEditorScreen.kt`, `ui/navigation/NotesNavGraph.kt`, `data/repository/NotesRepositoryImpl.kt`, `core/di/RepositoryModule.kt`, `gradle/libs.versions.toml`, `app/build.gradle.kts`, `NotesRepositoryImplTest.kt`, `NotesRepositoryTagSyncTest.kt`, `NoteEditorScreenTest.kt`.
+- Modify: `ui/editor/components/MarkdownToolbar.kt`, `ui/editor/NoteEditorScreen.kt`, `ui/navigation/NotesNavGraph.kt`, `data/repository/NotesRepositoryImpl.kt`, `sync/SyncManager.kt` (work-policy consistency), `core/di/RepositoryModule.kt`, `settings.gradle.kts` (add JitPack repo), `gradle/libs.versions.toml`, `app/build.gradle.kts`, `NotesRepositoryImplTest.kt`, `NotesRepositoryTagSyncTest.kt`, `NoteEditorScreenTest.kt`.
 - Remove: `ui/editor/Checklist.kt`, `ui/editor/components/ChecklistBody.kt` (+ their tests `ChecklistTest.kt`, and checklist assertions in `NoteEditorViewModelTest.kt`).
 
 ## Open items resolved during planning
