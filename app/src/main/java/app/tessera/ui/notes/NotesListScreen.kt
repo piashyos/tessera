@@ -22,10 +22,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,10 +39,10 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalFocusManager
@@ -60,7 +63,6 @@ import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.components.EdgeFadeScrim
-import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.components.GlassFab
 import app.tessera.core.ui.components.ScrimEdge
 import app.tessera.core.ui.theme.FloatingShadowAmbient
@@ -133,6 +135,12 @@ fun NotesListScreen(
             ),
         )
     val hazeState = remember { HazeState() }
+    val gridState = rememberLazyStaggeredGridState()
+    val scrollPx by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemScrollOffset + gridState.firstVisibleItemIndex * 200
+        }
+    }
 
     Box(
         modifier = modifier
@@ -149,21 +157,16 @@ fun NotesListScreen(
         ) {
             Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.safeDrawing))
             Box(modifier = Modifier.weight(1f)) {
-                Column(
+                NotesContent(
+                    state = state,
+                    gridState = gridState,
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
-                ) {
-                    TopHeaderCapsule(onOpenSettings = onOpenSettings)
-                    NotesContent(
-                        state = state,
-                        modifier = Modifier.weight(1f),
-                        isRefreshing = isRefreshing,
-                        onRefresh = onRefresh,
-                        onNoteClick = onNoteClick,
-                        onTogglePin = onTogglePin,
-                        onDeleteNote = handleDelete,
-                    )
-                }
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh,
+                    onNoteClick = onNoteClick,
+                    onTogglePin = onTogglePin,
+                    onDeleteNote = handleDelete,
+                )
                 if (isSearchFocused) {
                     DismissFocusLayer {
                         focusManager.clearFocus(force = true)
@@ -171,6 +174,27 @@ fun NotesListScreen(
                 }
             }
         }
+
+        EdgeFadeScrim(
+            hazeState = hazeState,
+            scrimColor = scrimColor,
+            edge = ScrimEdge.Top,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(140.dp),
+        )
+
+        CollapsingHeader(
+            title = stringResource(R.string.notes_all_notes),
+            scrollPx = scrollPx,
+            onOpenSettings = onOpenSettings,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+        )
 
         EdgeFadeScrim(
             hazeState = hazeState,
@@ -270,53 +294,43 @@ private fun BoxScope.DismissFocusLayer(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun TopHeaderCapsule(onOpenSettings: () -> Unit) {
-    FloatingCapsule(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+fun CollapsingHeader(
+    scrollPx: Int,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+    title: String = stringResource(R.string.notes_all_notes),
+) {
+    val thresholdPx = 200
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.graphicsLayer {
+                val s = headerTitleScale(scrollPx, thresholdPx)
+                scaleX = s
+                scaleY = s
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            },
+        )
+        IconButton(
+            onClick = onOpenSettings,
+            modifier = Modifier
+                .size(40.dp)
+                .testTag(UiTestTags.OpenSettings),
         ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = androidx.compose.foundation.shape.CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "T",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = "Tessera",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(R.string.app_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag(UiTestTags.OpenSettings),
-            ) {
-                Icon(
-                    imageVector = Lucide.Settings,
-                    contentDescription = stringResource(R.string.settings_open),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Icon(
+                imageVector = Lucide.Settings,
+                contentDescription = stringResource(R.string.settings_open),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -325,6 +339,7 @@ private fun TopHeaderCapsule(onOpenSettings: () -> Unit) {
 @Composable
 private fun NotesContent(
     state: NotesListState,
+    gridState: LazyStaggeredGridState,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onNoteClick: (NoteId) -> Unit,
@@ -372,10 +387,11 @@ private fun NotesContent(
             ) {
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(columns),
+                    state = gridState,
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag(UiTestTags.NotesGrid),
-                    contentPadding = PaddingValues(bottom = 120.dp),
+                    contentPadding = PaddingValues(top = 64.dp, bottom = 120.dp),
                     verticalItemSpacing = 12.dp,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
