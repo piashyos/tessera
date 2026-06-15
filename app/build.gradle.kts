@@ -112,6 +112,7 @@ dependencies {
     implementation(libs.markwon.core)
     implementation(libs.haze)
     implementation(libs.coil.compose)
+    implementation(libs.aztec)
 
     testImplementation(libs.junit4)
     testImplementation(libs.junit5)
