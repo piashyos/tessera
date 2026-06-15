@@ -178,9 +178,8 @@ class MarkdownHtmlConverter {
     private inline fun consumeTag(html: String, tag: String, handler: (String) -> Unit): String {
         val openTag = "<$tag>"
         val closeTag = "</$tag>"
-        val start = html.indexOf(openTag)
-        if (start == -1) return html
-        val contentStart = start + openTag.length
+        require(html.startsWith(openTag)) { "consumeTag called on non-leading tag" }
+        val contentStart = openTag.length
         val end = html.indexOf(closeTag, contentStart)
         if (end == -1) {
             // Malformed — take everything after open tag

@@ -48,6 +48,10 @@ class MarkdownHtmlConverterTest {
     fun `bold inside heading round-trips`() = roundTrip("# A **bold** title")
 
     @Test
+    fun `inline emphasis inside list items round-trips`() =
+        roundTrip("- **bold** item\n- *italic* item")
+
+    @Test
     fun `del tag parses as strikethrough markdown`() {
         assertEquals("~~x~~", converter.htmlToMarkdown("<del>x</del>"))
     }
