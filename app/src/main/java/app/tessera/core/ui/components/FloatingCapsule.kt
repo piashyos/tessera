@@ -71,6 +71,7 @@ fun FloatingCapsule(
     blurRadius: Dp = 14.dp,
     shadowElevation: Dp = 4.dp,
     hazeState: HazeState? = null,
+    showGlassDecor: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -104,23 +105,25 @@ fun FloatingCapsule(
                         },
                 )
             }
-            Box(
-                modifier = glassLayerModifier(shape = shape, blurRadius = blurRadius)
-                    .background(capsuleHighlightBrush())
-            )
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .border(width = 1.dp, color = borderColor, shape = shape)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.08f),
-                                Color.Transparent,
+            if (showGlassDecor) {
+                Box(
+                    modifier = glassLayerModifier(shape = shape, blurRadius = blurRadius)
+                        .background(capsuleHighlightBrush())
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .border(width = 1.dp, color = borderColor, shape = shape)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.08f),
+                                    Color.Transparent,
+                                ),
                             ),
                         ),
-                    ),
-            )
+                )
+            }
             Box(modifier = Modifier.padding(contentPadding), content = content)
         }
     }

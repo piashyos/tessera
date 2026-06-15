@@ -41,6 +41,7 @@ fun GlassFab(
         shape = CircleShape,
         blurRadius = 10.dp,
         shadowElevation = 3.dp,
+        showGlassDecor = false,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
     ) {
         Box(
