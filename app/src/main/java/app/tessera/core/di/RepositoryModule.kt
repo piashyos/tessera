@@ -10,6 +10,8 @@ import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.repository.SyncRepository
+import app.tessera.domain.repository.SyncScheduler
+import app.tessera.sync.WorkManagerSyncScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -38,4 +40,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindRemoteNotesDataSource(impl: FirestoreNotesClient): RemoteNotesDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncScheduler(impl: WorkManagerSyncScheduler): SyncScheduler
 }
