@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -18,8 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.tessera.core.ui.UiTestTags
@@ -38,8 +42,12 @@ fun TagFilterBar(
 ) {
     AnimatedVisibility(
         visible = expanded && availableTags.isNotEmpty(),
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically(),
+        enter = fadeIn() +
+            expandVertically(expandFrom = Alignment.Top) +
+            scaleIn(transformOrigin = TransformOrigin(1f, 0f), initialScale = 0.85f),
+        exit = fadeOut() +
+            shrinkVertically(shrinkTowards = Alignment.Top) +
+            scaleOut(transformOrigin = TransformOrigin(1f, 0f), targetScale = 0.85f),
         modifier = modifier,
     ) {
         Row(
