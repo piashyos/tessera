@@ -24,4 +24,21 @@
     <string name="note_action_delete">Удалить</string>
     <string name="note_deleted">Заметка удалена</string>
     <string name="action_undo">Отменить</string>
+    <string name="settings_title">Настройки</string>
+    <string name="settings_open">Открыть настройки</string>
+    <string name="settings_back">Назад</string>
+    <string name="settings_account">Аккаунт</string>
+    <string name="settings_signed_out">Вход не выполнен</string>
+    <string name="settings_signed_out_subtitle">Войдите, чтобы синхронизировать заметки между устройствами.</string>
+    <string name="settings_sign_in">Войти через Google</string>
+    <string name="settings_sign_out">Выйти</string>
+    <string name="settings_sync_status">Синхронизация</string>
+    <string name="settings_sync_placeholder">Облачная синхронизация появится в следующем обновлении.</string>
+    <string name="settings_about">О приложении</string>
+    <string name="settings_version">Tessera %1$s</string>
+    <string name="account_switch_title">Другой аккаунт</string>
+    <string name="account_switch_message">Эти заметки принадлежат другому аккаунту. Перенесите их в новый аккаунт или удалите локально и начните заново.</string>
+    <string name="account_switch_move">Перенести в новый аккаунт</string>
+    <string name="account_switch_delete">Удалить локальные заметки</string>
+    <string name="account_switch_cancel">Отмена</string>
 </resources>

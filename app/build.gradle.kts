@@ -5,8 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.roborazzi)
-    // TODO(chunk 7): re-enable google-services plugin + Firebase/Credentials deps
-    // alias(libs.plugins.google.services)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -71,7 +70,13 @@ dependencies {
     implementation(libs.hilt.work)
     ksp(libs.hilt.work.compiler)
 
-    // TODO(chunk 7): firebase + credentials + googleid deps go here
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services)
+    implementation(libs.googleid)
+    implementation(libs.coroutines.play.services)
 
     implementation(libs.markwon.core)
     implementation(libs.haze)

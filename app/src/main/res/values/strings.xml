@@ -24,4 +24,21 @@
     <string name="note_action_delete">Delete</string>
     <string name="note_deleted">Note deleted</string>
     <string name="action_undo">Undo</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_open">Open settings</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_signed_out">Not signed in</string>
+    <string name="settings_signed_out_subtitle">Sign in to sync your notes across devices.</string>
+    <string name="settings_sign_in">Sign in with Google</string>
+    <string name="settings_sign_out">Sign out</string>
+    <string name="settings_sync_status">Sync</string>
+    <string name="settings_sync_placeholder">Cloud sync arrives in a later update.</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Tessera %1$s</string>
+    <string name="account_switch_title">Different account</string>
+    <string name="account_switch_message">These notes belong to another account. Move them to the new account, or delete them locally and start fresh.</string>
+    <string name="account_switch_move">Move to new account</string>
+    <string name="account_switch_delete">Delete local notes</string>
+    <string name="account_switch_cancel">Cancel</string>
 </resources>

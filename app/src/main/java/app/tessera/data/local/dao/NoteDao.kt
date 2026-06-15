@@ -64,4 +64,10 @@ interface NoteDao {
 
     @Query("UPDATE notes SET ownerId = :uid, syncedAt = NULL WHERE ownerId IS NULL")
     suspend fun adoptLocalNotes(uid: String)
+
+    @Query("UPDATE notes SET ownerId = :uid, syncedAt = NULL")
+    suspend fun reassignAllNotes(uid: String)
+
+    @Query("DELETE FROM notes WHERE ownerId = :uid")
+    suspend fun deleteByOwner(uid: String)
 }

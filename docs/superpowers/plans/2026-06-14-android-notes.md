@@ -1595,19 +1595,76 @@ git commit -m "feat(editor): note editor screen with autosave, checklist, tags"
 
 **End of Chunk 6.** Tessera notes can now be created and edited end-to-end with autosave, inline checklist toggling, tag editing, and automatic cleanup of blank drafts.
 
-### Chunk 7: Firebase Auth + Settings
+## Chunk 7: Firebase Auth + Settings
 
-Tasks:
-1. Re-enable `google-services` plugin + firebase/credentials/googleid deps (revert TODO from Chunk 1). User adds real `google-services.json` to `app/` (gitignored). Document this in `README.md`.
+**Outcome:** A Settings screen reachable from the notes list lets the user sign in / out and resolve account switches. The whole feature is wired against the existing `AuthRepository` abstraction and a new `AccountRepository`, fully unit-tested, and works offline. The **live** Google Credential Manager + Firebase wiring is deferred behind a clear seam until the user supplies `app/google-services.json` (gitignored), because the `google-services` Gradle plugin fails the build without it.
+
+**Design decisions (locked before execution):**
+- The account-ownership surface (read current owner, adopt local notes, move-all, delete-by-owner) lives in a new **`AccountRepository`** rather than being bolted onto `NotesRepository`. This keeps the many existing `NotesRepository` fakes untouched and keeps the auth feature self-contained.
+- `SettingsScreen` is **stateless** (state + callbacks), same pattern as `NotesListScreen` / `NoteEditorScreen`, so it is driven directly in Compose UI tests without Hilt.
+- `SettingsViewModel` orchestrates sign-in → `HandleAccountSwitchUseCase` → (silent adopt | no-op | account-switch dialog). The dialog's two actions map to `AccountRepository.moveAllNotesTo` / `deleteNotesOwnedBy`.
+- The real `AuthRepositoryImpl` (Credential Manager + Firebase) is **not** implemented here. The existing no-op stub stays in place so the app builds and the UI is fully exercised; only `AuthRepositoryImpl`, a new `FirebaseModule`, and `app/build.gradle.kts` change once `google-services.json` exists. A README note + `TODO(chunk 7)` markers document this seam.
+- No theme-preference store exists yet, so the Settings "theme" affordance is deferred; this chunk ships the account + sync-status + about rows.
+
+**Files:**
+- Create: `app/src/main/java/app/tessera/domain/model/AccountSwitchDecision.kt`
+- Create: `app/src/main/java/app/tessera/domain/repository/AccountRepository.kt`
+- Create: `app/src/main/java/app/tessera/domain/usecase/{HandleAccountSwitchUseCase,SignInUseCase,SignOutUseCase}.kt`
+- Create: `app/src/main/java/app/tessera/data/repository/AccountRepositoryImpl.kt`
+- Update: `app/src/main/java/app/tessera/data/local/dao/NoteDao.kt` (reassign-all + delete-by-owner queries)
+- Update: `app/src/main/java/app/tessera/core/di/RepositoryModule.kt` (bind `AccountRepository`)
+- Create: `app/src/main/java/app/tessera/ui/settings/{SettingsState,SettingsViewModel,SettingsScreen}.kt`
+- Create: `app/src/main/java/app/tessera/ui/settings/components/AccountSwitchDialog.kt`
+- Update: `app/src/main/java/app/tessera/ui/navigation/NotesNavGraph.kt` (settings route + flow)
+- Update: `app/src/main/java/app/tessera/ui/notes/NotesListScreen.kt` (settings entry point in top capsule)
+- Update: `app/src/main/java/app/tessera/core/ui/UiTestTags.kt` (settings tags)
+- Update: `app/src/main/res/values/strings.xml` + `values-ru/strings.xml` (settings strings)
+- Test: `app/src/test/java/app/tessera/domain/usecase/HandleAccountSwitchUseCaseTest.kt`
+- Test: `app/src/test/java/app/tessera/ui/settings/SettingsViewModelTest.kt`
+- Test: `app/src/androidTest/java/app/tessera/ui/settings/SettingsScreenTest.kt`
+
+### Task 7.1: Account-switch domain + use cases (pure, JVM-tested)
+
+- [ ] **Step 1: Add `AccountSwitchDecision`** — sealed interface: `None` (no prior owner), `SameAccount`, `DifferentAccount(existingUid: UserId)`.
+- [ ] **Step 2: Add `AccountRepository`** contract — `currentOwnerId(): UserId?`, `adoptLocalNotes(uid)`, `moveAllNotesTo(uid)`, `deleteNotesOwnedBy(uid)`.
+- [ ] **Step 3: Write `HandleAccountSwitchUseCaseTest`** (fake `AccountRepository`): null owner → `None`; same owner → `SameAccount`; different owner → `DifferentAccount(existing)`.
+- [ ] **Step 4: Implement `HandleAccountSwitchUseCase`** (injects `AccountRepository`), plus thin `SignInUseCase` / `SignOutUseCase` over `AuthRepository`.
+- [ ] **Step 5: Run** `./gradlew :app:testDebugUnitTest --tests "app.tessera.domain.usecase.HandleAccountSwitchUseCaseTest"` → PASS.
+
+### Task 7.2: AccountRepository impl + DAO
+
+- [ ] **Step 1: Extend `NoteDao`** — `@Query("UPDATE notes SET ownerId = :uid, syncedAt = NULL") suspend fun reassignAllNotes(uid: String)` and `@Query("DELETE FROM notes WHERE ownerId = :uid") suspend fun deleteByOwner(uid: String)`. No schema change (version stays 1).
+- [ ] **Step 2: Implement `AccountRepositoryImpl`** (`noteDao`) mapping `UserId` ↔ `String` and delegating to `getCurrentOwnerId` / `adoptLocalNotes` / `reassignAllNotes` / `deleteByOwner`.
+- [ ] **Step 3: Bind** `AccountRepository → AccountRepositoryImpl` in `RepositoryModule`. Verify `./gradlew :app:assembleDebug`.
+
+### Task 7.3: SettingsState + SettingsViewModel (JVM-tested)
+
+- [ ] **Step 1: Add `SettingsState`** — `isSignedIn`, `userId: String?`, `isBusy`, `pendingSwitch: PendingAccountSwitch?` (existing + new uid), `errorMessage: String?`.
+- [ ] **Step 2: Write `SettingsViewModelTest`** (fake `AuthRepository` with settable `signIn` result + `currentUser` flow; recording fake `AccountRepository`): sign-in with no prior owner → adopts, no dialog; sign-in with different owner → sets `pendingSwitch`, no adopt; confirm-move → `moveAllNotesTo(newUid)`; delete-local → `deleteNotesOwnedBy(existing)`; sign-out clears user.
+- [ ] **Step 3: Implement `SettingsViewModel`** orchestrating the above; expose intents `onSignIn`, `onSignOut`, `onConfirmMove`, `onDeleteLocal`, `onDismissDialog`, `onDismissError`.
+- [ ] **Step 4: Run** `./gradlew :app:testDebugUnitTest --tests "app.tessera.ui.settings.SettingsViewModelTest"` → PASS.
+
+### Task 7.4: SettingsScreen + dialog + navigation
+
+- [ ] **Step 1: Add settings test tags** to `UiTestTags` (`SettingsRoot`, `SettingsBack`, `SettingsSignIn`, `SettingsSignOut`, `AccountSwitchDialog`, `AccountSwitchMove`, `AccountSwitchDelete`) and a settings entry tag in the notes top capsule (`OpenSettings`).
+- [ ] **Step 2: Implement stateless `SettingsScreen`** (account row, sign in/out, sync-status placeholder, about row) reusing the glass shell, with light/dark previews. Implement `AccountSwitchDialog`.
+- [ ] **Step 3: Add settings strings** (en + ru).
+- [ ] **Step 4: Wire navigation** — add `settings` route hosting `SettingsViewModel` via `hiltViewModel()`; add a settings button to the notes-list top capsule that navigates there.
+- [ ] **Step 5: Verify** `./gradlew :app:assembleDebug`.
+
+### Task 7.5: Compose UI test + chunk verification
+
+- [ ] **Step 1: Create `SettingsScreenTest`** (drives the stateless screen): sign-in button invokes callback; account-switch dialog renders and Move/Delete invoke the right callbacks; back invokes `onBack`.
+- [ ] **Step 2: Run** `./gradlew :app:testDebugUnitTest` and `./gradlew :app:assembleDebug` (instrumented `SettingsScreenTest` runs on emulator with the rest of the suite).
+- [ ] **Step 3: Document the Firebase seam** — add a README note that real Google sign-in requires `app/google-services.json` and re-enabling the `google-services` plugin + Firebase/Credentials deps + `FirebaseModule` + real `AuthRepositoryImpl`.
+- [ ] **Step 4: Commit.**
+
+**Deferred to a follow-up (needs `app/google-services.json` from the user):**
+1. Re-enable `google-services` plugin + firebase/credentials/googleid deps (revert TODO from Chunk 1).
 2. **`FirebaseModule`** — `@Provides FirebaseAuth`, `@Provides FirebaseFirestore`.
-3. **`AuthRepositoryImpl`** — Credential Manager → GoogleIdOption → Firebase Auth `signInWithCredential`. Exposes `currentUser: StateFlow<UserId?>`.
-4. **`HandleAccountSwitchUseCase`** — on sign-in, compares `dao.getCurrentOwnerId()` with new uid; emits `AccountSwitchDecision.None / SameAccount / DifferentAccount(existingUid)`.
-5. **`SettingsScreen` + `SettingsViewModel`** — sign-in button, account row, theme picker, sync status row (placeholder text until Chunk 8), about row.
-6. **Account-switch dialog** — on `DifferentAccount`, show modal with "Move to new account" (updates `ownerId` to new uid + `syncedAt = null`) or "Delete local notes" (hard-deletes those rows).
-7. **JVM tests** — `HandleAccountSwitchUseCase` decision tree with fake DAO.
-8. **Compose UI tests** — sign-in stub flow (mock `AuthRepository`), account-switch dialog appears and each option performs the right DAO mutation.
+3. Replace stub **`AuthRepositoryImpl`** — Credential Manager → GoogleIdOption → Firebase Auth `signInWithCredential`; populate `currentUser` from `FirebaseAuth` state.
 
-Verification: Sign in manually on device with real Google account, see user row in Settings.
+Verification (after the deferred follow-up): Sign in manually on device with a real Google account, see the user row in Settings.
 
 ### Chunk 8: Firestore sync
 

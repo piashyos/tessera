@@ -20,6 +20,16 @@ object UiTestTags {
 
     fun editorChecklistItem(index: Int): String = "editor_checklist_$index"
 
+    // Settings screen
+    const val OpenSettings = "open_settings"
+    const val SettingsRoot = "settings_root"
+    const val SettingsBack = "settings_back"
+    const val SettingsSignIn = "settings_sign_in"
+    const val SettingsSignOut = "settings_sign_out"
+    const val AccountSwitchDialog = "account_switch_dialog"
+    const val AccountSwitchMove = "account_switch_move"
+    const val AccountSwitchDelete = "account_switch_delete"
+
     const val ReusableTextField = "reusable_text_field"
 
     const val PopupScrim = "popup_scrim"

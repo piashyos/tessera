@@ -1,8 +1,10 @@
 package app.tessera.core.di
 
+import app.tessera.data.repository.AccountRepositoryImpl
 import app.tessera.data.repository.AuthRepositoryImpl
 import app.tessera.data.repository.NotesRepositoryImpl
 import app.tessera.data.repository.SyncRepositoryImpl
+import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.repository.SyncRepository
@@ -26,4 +28,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSyncRepository(impl: SyncRepositoryImpl): SyncRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAccountRepository(impl: AccountRepositoryImpl): AccountRepository
 }

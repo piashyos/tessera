@@ -342,6 +342,19 @@ private class FakeNoteDao : NoteDao {
         emitChanges(*notes.keys.toTypedArray())
     }
 
+    override suspend fun reassignAllNotes(uid: String) {
+        notes.entries.forEach { entry ->
+            entry.setValue(entry.value.copy(ownerId = uid, syncedAt = null))
+        }
+        emitChanges(*notes.keys.toTypedArray())
+    }
+
+    override suspend fun deleteByOwner(uid: String) {
+        val toDelete = notes.values.filter { it.ownerId == uid }.map { it.id }
+        toDelete.forEach { notes.remove(it) }
+        emitChanges(*toDelete.toTypedArray())
+    }
+
     private fun emitChanges(vararg ids: String) {
         activeFlow.value =
             notes.values

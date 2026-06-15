@@ -34,6 +34,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -71,6 +73,8 @@ import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.ui.notes.components.BottomSearchBar
 import app.tessera.ui.notes.components.SwipeableNoteCard
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Settings
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
@@ -88,6 +92,7 @@ fun NotesListScreen(
     onDeleteNote: (Note) -> Unit = {},
     onUndoDelete: (NoteId) -> Unit = {},
     onRefresh: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     isRefreshing: Boolean = false,
 ) {
     var isSearchFocused by remember { mutableStateOf(false) }
@@ -147,7 +152,7 @@ fun NotesListScreen(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(18.dp),
                 ) {
-                    TopHeaderCapsule()
+                    TopHeaderCapsule(onOpenSettings = onOpenSettings)
                     NotesContent(
                         state = state,
                         modifier = Modifier.weight(1f),
@@ -267,7 +272,7 @@ private fun BoxScope.DismissFocusLayer(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun TopHeaderCapsule() {
+private fun TopHeaderCapsule(onOpenSettings: () -> Unit) {
     FloatingCapsule(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -287,7 +292,10 @@ private fun TopHeaderCapsule() {
                     )
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text(
                     text = "Tessera",
                     style = MaterialTheme.typography.titleLarge,
@@ -297,6 +305,18 @@ private fun TopHeaderCapsule() {
                     text = stringResource(R.string.app_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag(UiTestTags.OpenSettings),
+            ) {
+                Icon(
+                    imageVector = Lucide.Settings,
+                    contentDescription = stringResource(R.string.settings_open),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

@@ -19,10 +19,13 @@ import app.tessera.ui.editor.NoteEditorScreen
 import app.tessera.ui.editor.NoteEditorViewModel
 import app.tessera.ui.notes.NotesListScreen
 import app.tessera.ui.notes.NotesListViewModel
+import app.tessera.ui.settings.SettingsScreen
+import app.tessera.ui.settings.SettingsViewModel
 import kotlinx.coroutines.launch
 
 private const val NotesListRoute = "notesList"
 private const val EditorRoute = "editor"
+private const val SettingsRoute = "settings"
 private const val NoteIdArg = "noteId"
 
 @Composable
@@ -39,7 +42,24 @@ fun NotesNavGraph(
             onOpenEditor = { noteId ->
                 navController.navigate("$EditorRoute/$noteId")
             },
+            onOpenSettings = {
+                navController.navigate(SettingsRoute)
+            },
         )
+        composable(route = SettingsRoute) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsState()
+
+            SettingsScreen(
+                state = state,
+                onBack = { navController.popBackStack() },
+                onSignIn = viewModel::onSignIn,
+                onSignOut = viewModel::onSignOut,
+                onConfirmMove = viewModel::onConfirmMove,
+                onDeleteLocal = viewModel::onDeleteLocal,
+                onDismissDialog = viewModel::onDismissDialog,
+            )
+        }
         composable(
             route = "$EditorRoute/{$NoteIdArg}",
             arguments = listOf(navArgument(NoteIdArg) { type = NavType.StringType }),
@@ -80,7 +100,10 @@ fun NotesNavGraph(
     }
 }
 
-private fun NavGraphBuilder.notesListDestination(onOpenEditor: (String) -> Unit) {
+private fun NavGraphBuilder.notesListDestination(
+    onOpenEditor: (String) -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     composable(route = NotesListRoute) {
         val viewModel: NotesListViewModel = hiltViewModel()
         val state by viewModel.state.collectAsState()
@@ -103,6 +126,7 @@ private fun NavGraphBuilder.notesListDestination(onOpenEditor: (String) -> Unit)
             onTogglePin = viewModel::togglePin,
             onDeleteNote = { note -> viewModel.deleteNote(note.id) },
             onUndoDelete = viewModel::restoreNote,
+            onOpenSettings = onOpenSettings,
         )
     }
 }

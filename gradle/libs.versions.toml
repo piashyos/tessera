@@ -51,6 +51,7 @@ googleid = { module = "com.google.android.libraries.identity.googleid:googleid",
 markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 junit5 = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit5" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
