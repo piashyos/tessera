@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<org.wordpress.aztec.AztecText
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/aztec"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent"
+    android:gravity="top|start"
+    android:hint="@string/editor_body_hint"
+    android:textColor="?android:attr/textColorPrimary"
+    android:textColorHint="?android:attr/textColorHint"
+    android:textCursorDrawable="@null"
+    android:inputType="textMultiLine|textCapSentences"
+    android:imeOptions="actionDone|flagNoExtractUi"
+    app:historyEnable="true"
+    app:historySize="20" />
