@@ -19,12 +19,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.Tag
 import com.composables.icons.lucide.Trash2
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +61,7 @@ import app.tessera.core.text.MarkdownHtmlConverter
 import app.tessera.ui.editor.components.MarkdownToolbar
 import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.components.RichNoteBody
-import app.tessera.ui.editor.components.TagChips
+import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -89,6 +91,7 @@ fun NoteEditorScreen(
     val hazeState = remember { HazeState() }
     val popupHazeState = remember { HazeState() }
     var tagPickerVisible by remember { mutableStateOf(false) }
+    var tagsExpanded by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -272,14 +275,22 @@ fun NoteEditorScreen(
                 }
             }
 
-            // Bottom floating capsule — tags + markdown toolbar
+            // Bottom floating capsule — markdown toolbar + tag toggle, with chips above
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .imePadding()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                TagChipsExpandable(
+                    expanded = tagsExpanded,
+                    tags = state.tags,
+                    onRemoveTag = onRemoveTag,
+                    onAddTagClick = { tagPickerVisible = true },
+                )
+
                 FloatingCapsule(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -307,13 +318,33 @@ fun NoteEditorScreen(
                             onHeading2 = { actions?.toggleHeading2() },
                             onBullet = { actions?.toggleBulletList() },
                             onTaskList = { actions?.toggleTaskList() },
-                        )
-                        TagChips(
-                            tags = state.tags,
-                            onRemoveTag = onRemoveTag,
-                            onAddTagClick = { tagPickerVisible = true },
                             modifier = Modifier.weight(1f),
                         )
+                        Surface(
+                            onClick = { tagsExpanded = !tagsExpanded },
+                            shape = CircleShape,
+                            color = if (tagsExpanded) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                            } else {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            },
+                            modifier = Modifier
+                                .size(34.dp)
+                                .testTag(UiTestTags.EditorTagToggle),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Lucide.Tag,
+                                    contentDescription = stringResource(R.string.editor_tags_toggle),
+                                    tint = if (tagsExpanded) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    },
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
