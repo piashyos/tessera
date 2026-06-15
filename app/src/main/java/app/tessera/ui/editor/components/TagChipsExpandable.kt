@@ -44,10 +44,10 @@ fun TagChipsExpandable(
         visible = expanded,
         enter = fadeIn() +
             expandVertically(expandFrom = Alignment.Bottom) +
-            scaleIn(transformOrigin = TransformOrigin(0f, 1f), initialScale = 0.85f),
+            scaleIn(transformOrigin = TransformOrigin(1f, 1f), initialScale = 0.85f),
         exit = fadeOut() +
             shrinkVertically(shrinkTowards = Alignment.Bottom) +
-            scaleOut(transformOrigin = TransformOrigin(0f, 1f), targetScale = 0.85f),
+            scaleOut(transformOrigin = TransformOrigin(1f, 1f), targetScale = 0.85f),
         modifier = modifier,
     ) {
         Row(
