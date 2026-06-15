@@ -86,6 +86,21 @@ class NotesListScreenTest {
 
         assertEquals(NoteId("note-1"), restored)
     }
+
+    @Test
+    fun rendersTodaySectionHeaderForNoteDatedToday() {
+        composeRule.setContent {
+            NotesListScreen(
+                state = contentState(listOf(note("note-1", updatedAt = System.currentTimeMillis()))),
+                snackbarHostState = SnackbarHostState(),
+                onQueryChange = {},
+                onTagToggle = {},
+                onCreateNote = {},
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.sectionHeader(NoteGroup.Today.name)).assertIsDisplayed()
+    }
 }
 
 private fun contentState(notes: List<Note>) =
@@ -99,7 +114,7 @@ private fun contentState(notes: List<Note>) =
         viewMode = NotesViewMode.Tiles,
     )
 
-private fun note(id: String): Note =
+private fun note(id: String, updatedAt: Long = 1L): Note =
     Note(
         id = NoteId(id),
         title = "Title $id",
@@ -107,7 +122,7 @@ private fun note(id: String): Note =
         tags = listOf(Tag("demo")),
         isPinned = false,
         createdAt = 1L,
-        updatedAt = 1L,
+        updatedAt = updatedAt,
         deletedAt = null,
         syncedAt = null,
         ownerId = null,

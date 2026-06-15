@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -361,14 +362,16 @@ private fun NotesContent(
                 }
             }
 
-        is NotesListState.Content ->
+        is NotesListState.Content -> {
+            val sections = groupNotesByDate(state.notes)
+            val columns = if (state.viewMode == NotesViewMode.Tiles) 2 else 1
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = onRefresh,
                 modifier = modifier.fillMaxWidth(),
             ) {
                 LazyVerticalStaggeredGrid(
-                    columns = StaggeredGridCells.Fixed(2),
+                    columns = StaggeredGridCells.Fixed(columns),
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag(UiTestTags.NotesGrid),
@@ -376,18 +379,46 @@ private fun NotesContent(
                     verticalItemSpacing = 12.dp,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(items = state.notes, key = { note -> note.id.value }) { note ->
-                        SwipeableNoteCard(
-                            note = note,
-                            modifier = Modifier.animateItem(),
-                            onClick = { onNoteClick(note.id) },
-                            onTogglePin = { onTogglePin(note.id) },
-                            onDelete = { onDeleteNote(note) },
-                        )
+                    sections.forEach { section ->
+                        item(span = StaggeredGridItemSpan.FullLine, key = "header-${section.group}") {
+                            SectionHeader(group = section.group)
+                        }
+                        items(items = section.notes, key = { note -> note.id.value }) { note ->
+                            SwipeableNoteCard(
+                                note = note,
+                                modifier = Modifier.animateItem(),
+                                onClick = { onNoteClick(note.id) },
+                                onTogglePin = { onTogglePin(note.id) },
+                                onDelete = { onDeleteNote(note) },
+                            )
+                        }
                     }
                 }
             }
+        }
     }
+}
+
+@Composable
+private fun SectionHeader(group: NoteGroup) {
+    val labelRes = when (group) {
+        NoteGroup.Pinned -> R.string.note_group_pinned
+        NoteGroup.Today -> R.string.note_group_today
+        NoteGroup.Yesterday -> R.string.note_group_yesterday
+        NoteGroup.ThisWeek -> R.string.note_group_this_week
+        NoteGroup.ThisMonth -> R.string.note_group_this_month
+        NoteGroup.Earlier -> R.string.note_group_earlier
+    }
+    Text(
+        text = stringResource(labelRes),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp)
+            .testTag(UiTestTags.sectionHeader(group.name)),
+    )
 }
 
 private fun NotesListState.query(): String =
