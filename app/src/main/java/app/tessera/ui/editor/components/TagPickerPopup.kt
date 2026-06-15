@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,11 +21,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
+import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.components.TesseraPopup
 import app.tessera.core.ui.components.TesseraTextField
@@ -58,7 +62,8 @@ fun TagPickerPopup(
     ) {
         Text(
             text = stringResource(R.string.editor_add_tag),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
         )
         FloatingCapsule(
             modifier = Modifier.fillMaxWidth(),
@@ -71,10 +76,20 @@ fun TagPickerPopup(
                 placeholder = stringResource(R.string.editor_add_tag),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 24.dp),
+                    .heightIn(min = 24.dp)
+                    .testTag(UiTestTags.ReusableTextField),
                 imeAction = ImeAction.Done,
                 onImeAction = submit,
             )
+        }
+        Button(
+            onClick = submit,
+            enabled = newTag.isNotBlank(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(UiTestTags.AddTagConfirm),
+        ) {
+            Text(stringResource(R.string.editor_add_tag))
         }
         if (availableTags.isNotEmpty()) {
             Text(
