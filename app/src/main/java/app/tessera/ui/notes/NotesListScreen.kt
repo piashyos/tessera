@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
@@ -76,6 +78,16 @@ import com.composables.icons.lucide.Settings
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
+
+/** Height of the collapsing header Row, shared with the grid's top content padding. */
+private val HeaderHeight = 56.dp
+
+/**
+ * Approximate per-item height (px) used only to derive a monotonically growing scroll
+ * value for the decorative header scale. Intentionally a rough heuristic, not a measured
+ * height; it never needs to be exact because the scale clamps at the collapse threshold.
+ */
+private const val ApproxItemHeightPx = 200
 
 @Composable
 fun NotesListScreen(
@@ -136,9 +148,11 @@ fun NotesListScreen(
         )
     val hazeState = remember { HazeState() }
     val gridState = rememberLazyStaggeredGridState()
+    // Assumes ~ApproxItemHeightPx-tall items; this is an intentional approximation that only
+    // feeds the decorative header scale effect, so it does not need to be pixel-accurate.
     val scrollPx by remember {
         derivedStateOf {
-            gridState.firstVisibleItemScrollOffset + gridState.firstVisibleItemIndex * 200
+            gridState.firstVisibleItemScrollOffset + gridState.firstVisibleItemIndex * ApproxItemHeightPx
         }
     }
 
@@ -300,11 +314,10 @@ fun CollapsingHeader(
     modifier: Modifier = Modifier,
     title: String = stringResource(R.string.notes_all_notes),
 ) {
-    val thresholdPx = 200
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(HeaderHeight),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -314,7 +327,7 @@ fun CollapsingHeader(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.graphicsLayer {
-                val s = headerTitleScale(scrollPx, thresholdPx)
+                val s = headerTitleScale(scrollPx, HEADER_COLLAPSE_THRESHOLD_PX)
                 scaleX = s
                 scaleY = s
                 transformOrigin = TransformOrigin(0f, 0.5f)
@@ -380,6 +393,10 @@ private fun NotesContent(
         is NotesListState.Content -> {
             val sections = groupNotesByDate(state.notes)
             val columns = if (state.viewMode == NotesViewMode.Tiles) 2 else 1
+            // The header is HeaderHeight tall and offset down by the status-bar inset, so the
+            // grid must clear both to keep the first items below the header at rest.
+            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            val gridTopPadding = HeaderHeight + statusBarTop
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = onRefresh,
@@ -391,7 +408,7 @@ private fun NotesContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag(UiTestTags.NotesGrid),
-                    contentPadding = PaddingValues(top = 64.dp, bottom = 120.dp),
+                    contentPadding = PaddingValues(top = gridTopPadding, bottom = 120.dp),
                     verticalItemSpacing = 12.dp,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {

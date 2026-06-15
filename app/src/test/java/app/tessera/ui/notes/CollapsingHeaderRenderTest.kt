@@ -5,9 +5,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.theme.TesseraTheme
 import com.github.takahirom.roborazzi.captureRoboImage
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,15 +28,23 @@ class CollapsingHeaderRenderTest {
 
     @Test
     fun headerFullShowsTitleAndSettings() {
+        var settingsClicked = false
         composeRule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
-                CollapsingHeader(title = title, scrollPx = 0, onOpenSettings = {})
+                CollapsingHeader(
+                    title = title,
+                    scrollPx = 0,
+                    onOpenSettings = { settingsClicked = true },
+                )
             }
         }
 
         composeRule.onNodeWithText(title).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.OpenSettings).assertExists()
         composeRule.onRoot().captureRoboImage("ui/collapsing-header-full.png")
+
+        composeRule.onNodeWithTag(UiTestTags.OpenSettings).performClick()
+        assertTrue("settings button should be clickable", settingsClicked)
     }
 
     @Test
