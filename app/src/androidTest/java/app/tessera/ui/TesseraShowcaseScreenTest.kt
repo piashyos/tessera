@@ -51,7 +51,7 @@ class TesseraShowcaseScreenTest {
             )
         }
 
-        composeRule.onNodeWithText("Tessera").assertIsDisplayed()
+        composeRule.onNodeWithText("All Notes").assertIsDisplayed()
         composeRule.onNodeWithText("Notes list smoke test content").assertIsDisplayed()
         composeRule
             .onNodeWithTag(UiTestTags.CreateNoteFab)
