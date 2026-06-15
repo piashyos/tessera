@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
+import app.tessera.core.text.markdownToPreviewPlainText
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
@@ -107,10 +108,7 @@ private fun TagChip(name: String) {
 }
 
 private fun Note.previewText(): String? =
-    content
-        .lineSequence()
-        .map(String::trim)
-        .firstOrNull { it.isNotEmpty() }
+    markdownToPreviewPlainText(content).takeIf { it.isNotEmpty() }
 
 @Preview(showBackground = true, backgroundColor = 0xFFFFFBF4)
 @Composable
