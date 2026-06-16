@@ -187,13 +187,25 @@ fun RichNoteBody(
 
             // Expose formatting actions to the toolbar
             onActionsReady(object : RichBodyActions {
-                override fun toggleBold() = editor.toggleFormatting(AztecTextFormat.FORMAT_BOLD)
-                override fun toggleItalic() = editor.toggleFormatting(AztecTextFormat.FORMAT_ITALIC)
-                override fun toggleStrikethrough() = editor.toggleFormatting(AztecTextFormat.FORMAT_STRIKETHROUGH)
-                override fun toggleHeading1() = editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_1)
-                override fun toggleHeading2() = editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_2)
-                override fun toggleBulletList() = editor.toggleFormatting(AztecTextFormat.FORMAT_UNORDERED_LIST)
-                override fun toggleTaskList() = editor.toggleFormatting(AztecTextFormat.FORMAT_TASK_LIST)
+                private inline fun withPreservedSelection(block: () -> Unit) {
+                    val start = editor.selectionStart
+                    val end = editor.selectionEnd
+                    block()
+                    if (start in 0..editor.editableText.length &&
+                        end in 0..editor.editableText.length &&
+                        start != end
+                    ) {
+                        editor.setSelection(start, end)
+                    }
+                }
+
+                override fun toggleBold() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_BOLD) }
+                override fun toggleItalic() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_ITALIC) }
+                override fun toggleStrikethrough() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_STRIKETHROUGH) }
+                override fun toggleHeading1() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_1) }
+                override fun toggleHeading2() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_2) }
+                override fun toggleBulletList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_UNORDERED_LIST) }
+                override fun toggleTaskList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_TASK_LIST) }
             })
 
             editor
