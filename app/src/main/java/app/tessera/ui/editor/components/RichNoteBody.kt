@@ -36,10 +36,21 @@ interface RichBodyActions {
     fun toggleBold()
     fun toggleItalic()
     fun toggleStrikethrough()
+    fun toggleParagraph()
     fun toggleHeading1()
     fun toggleHeading2()
+    fun toggleHeading3()
+    fun toggleHeading4()
+    fun toggleHeading5()
+    fun toggleHeading6()
     fun toggleBulletList()
     fun toggleTaskList()
+
+    /**
+     * Formats currently applied at the editor's selection / cursor position.
+     * The toolbar dropdown reads this to highlight active entries.
+     */
+    fun activeFormats(): Set<AztecTextFormat>
 }
 
 private const val DebounceMs = 300L
@@ -202,10 +213,35 @@ fun RichNoteBody(
                 override fun toggleBold() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_BOLD) }
                 override fun toggleItalic() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_ITALIC) }
                 override fun toggleStrikethrough() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_STRIKETHROUGH) }
+                override fun toggleParagraph() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_PARAGRAPH) }
                 override fun toggleHeading1() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_1) }
                 override fun toggleHeading2() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_2) }
+                override fun toggleHeading3() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_3) }
+                override fun toggleHeading4() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_4) }
+                override fun toggleHeading5() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_5) }
+                override fun toggleHeading6() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_6) }
                 override fun toggleBulletList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_UNORDERED_LIST) }
                 override fun toggleTaskList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_TASK_LIST) }
+
+                private val queryFormats = listOf(
+                    AztecTextFormat.FORMAT_BOLD,
+                    AztecTextFormat.FORMAT_ITALIC,
+                    AztecTextFormat.FORMAT_STRIKETHROUGH,
+                    AztecTextFormat.FORMAT_PARAGRAPH,
+                    AztecTextFormat.FORMAT_HEADING_1,
+                    AztecTextFormat.FORMAT_HEADING_2,
+                    AztecTextFormat.FORMAT_HEADING_3,
+                    AztecTextFormat.FORMAT_HEADING_4,
+                    AztecTextFormat.FORMAT_HEADING_5,
+                    AztecTextFormat.FORMAT_HEADING_6,
+                    AztecTextFormat.FORMAT_UNORDERED_LIST,
+                    AztecTextFormat.FORMAT_TASK_LIST,
+                )
+
+                override fun activeFormats(): Set<AztecTextFormat> =
+                    queryFormats.filterTo(mutableSetOf()) {
+                        editor.contains(it, editor.selectionStart, editor.selectionEnd)
+                    }
             })
 
             editor
