@@ -118,11 +118,11 @@ class NotesListViewModelTest {
             viewModel.state.test {
                 awaitItem() // Loading
                 val content = awaitItem() as NotesListState.Content
-                assertEquals(NotesViewMode.Tiles, content.viewMode)
+                assertEquals(NotesViewMode.List, content.viewMode)
 
                 viewModel.onToggleViewMode()
                 val next = awaitItem() as NotesListState.Content
-                assertEquals(NotesViewMode.List, next.viewMode)
+                assertEquals(NotesViewMode.Tiles, next.viewMode)
             }
         }
 
