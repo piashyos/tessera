@@ -1,12 +1,14 @@
 package app.tessera.ui.editor.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.components.FloatingCapsule
@@ -40,21 +43,30 @@ fun TagChipsExpandable(
     onAddTagClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val springExpand = spring<IntSize>(
+        dampingRatio = 0.7f,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+    val springScale = spring<Float>(
+        dampingRatio = 0.7f,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+
     AnimatedVisibility(
         visible = expanded,
         enter = fadeIn() +
-            expandVertically(expandFrom = Alignment.Bottom) +
-            scaleIn(transformOrigin = TransformOrigin(1f, 1f), initialScale = 0.85f),
+            expandHorizontally(animationSpec = springExpand, expandFrom = Alignment.End) +
+            scaleIn(transformOrigin = TransformOrigin(1f, 0.5f), initialScale = 0.85f, animationSpec = springScale),
         exit = fadeOut() +
-            shrinkVertically(shrinkTowards = Alignment.Bottom) +
-            scaleOut(transformOrigin = TransformOrigin(1f, 1f), targetScale = 0.85f),
+            shrinkHorizontally(animationSpec = springExpand, shrinkTowards = Alignment.End) +
+            scaleOut(transformOrigin = TransformOrigin(1f, 0.5f), targetScale = 0.85f, animationSpec = springScale),
         modifier = modifier,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .horizontalScroll(rememberScrollState(), reverseScrolling = true),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tags.forEach { tag ->
