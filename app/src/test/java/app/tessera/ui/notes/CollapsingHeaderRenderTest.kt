@@ -35,6 +35,8 @@ class CollapsingHeaderRenderTest {
                     title = title,
                     scrollPx = 0,
                     onOpenSettings = { settingsClicked = true },
+                    viewMode = NotesViewMode.Tiles,
+                    onToggleViewMode = {},
                 )
             }
         }
@@ -51,7 +53,13 @@ class CollapsingHeaderRenderTest {
     fun headerCollapsedShowsTitleAndSettings() {
         composeRule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
-                CollapsingHeader(title = title, scrollPx = 400, onOpenSettings = {})
+                CollapsingHeader(
+                    title = title,
+                    scrollPx = 400,
+                    onOpenSettings = {},
+                    viewMode = NotesViewMode.Tiles,
+                    onToggleViewMode = {},
+                )
             }
         }
 
