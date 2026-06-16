@@ -239,21 +239,19 @@ class MarkdownHtmlConverter {
 
     /**
      * Parse a task-list item's inner HTML.
-     * Expected: `<input type="checkbox" ... [checked] />text`
+     * Accepts both self-closing `<input ... />` (our `markdownToHtml` output) and the
+     * non-self-closing `<input ...>` that Aztec's `toHtml()` actually emits.
      * Returns Pair(checked, remainingText).
      */
     private fun parseTaskItem(itemHtml: String): Pair<Boolean, String> {
-        // Find and consume the <input ... /> self-closing tag
-        val inputEnd = itemHtml.indexOf("/>")
-        return if (inputEnd == -1) {
-            Pair(false, itemHtml)
-        } else {
-            val inputTag = itemHtml.substring(0, inputEnd + 2)
-            val text = itemHtml.substring(inputEnd + 2)
-            // checked if the input tag contains the word "checked" (any of: checked, checked="checked", checked="")
-            val checked = Regex("""\bchecked\b""").containsMatchIn(inputTag)
-            Pair(checked, text)
-        }
+        if (!itemHtml.trimStart().startsWith("<input")) return Pair(false, itemHtml)
+        val inputEnd = itemHtml.indexOf('>')
+        if (inputEnd == -1) return Pair(false, itemHtml)
+        val inputTag = itemHtml.substring(0, inputEnd + 1)
+        val text = itemHtml.substring(inputEnd + 1)
+        // checked if the input tag contains the word "checked" (any of: checked, checked="checked", checked="")
+        val checked = Regex("""\bchecked\b""").containsMatchIn(inputTag)
+        return Pair(checked, text)
     }
 
     /**

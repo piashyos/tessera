@@ -41,7 +41,7 @@ class NotesListViewModel @Inject constructor(
     private val query = MutableStateFlow("")
     private val selectedTags = MutableStateFlow<Set<String>>(emptySet())
     private val selection = MutableStateFlow<Set<NoteId>>(emptySet())
-    private val viewMode = MutableStateFlow(NotesViewMode.Tiles)
+    private val viewMode = MutableStateFlow(NotesViewMode.List)
 
     private val effectiveQuery =
         query

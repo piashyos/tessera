@@ -197,7 +197,7 @@ fun NotesListScreen(
 
         EdgeFadeScrim(
             hazeState = hazeState,
-            scrimColor = scrimColor,
+            scrimColor = MaterialTheme.colorScheme.background,
             edge = ScrimEdge.Top,
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -208,6 +208,8 @@ fun NotesListScreen(
         CollapsingHeader(
             title = stringResource(R.string.notes_all_notes),
             scrollPx = scrollPx,
+            viewMode = state.viewMode(),
+            onToggleViewMode = onToggleViewMode,
             onOpenSettings = onOpenSettings,
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -274,37 +276,6 @@ fun NotesListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    val viewMode = state.viewMode()
-                    val (toggleIcon, toggleDesc) = if (viewMode == NotesViewMode.Tiles) {
-                        Lucide.Rows3 to stringResource(R.string.notes_view_mode_list)
-                    } else {
-                        Lucide.LayoutGrid to stringResource(R.string.notes_view_mode_tiles)
-                    }
-                    GlassFab(
-                        onClick = if (isSearchFocused) null else onToggleViewMode,
-                        size = 40.dp,
-                        contentDescription = toggleDesc,
-                        modifier = Modifier
-                            .graphicsLayer {
-                                alpha = fabAlpha
-                                scaleX = fabScale
-                                scaleY = fabScale
-                            }
-                            .shadow(
-                                elevation = 12.dp,
-                                shape = CircleShape,
-                                ambientColor = FloatingShadowAmbient,
-                                spotColor = FloatingShadowSpot,
-                                clip = false,
-                            )
-                            .testTag(UiTestTags.ViewModeToggle),
-                    ) {
-                        Icon(
-                            imageVector = toggleIcon,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
                     GlassFab(
                         onClick = if (isSearchFocused) null else { { tagBarExpanded = !tagBarExpanded } },
                         size = 40.dp,
@@ -385,6 +356,8 @@ private fun BoxScope.DismissFocusLayer(onDismiss: () -> Unit) {
 @Composable
 fun CollapsingHeader(
     scrollPx: Int,
+    viewMode: NotesViewMode,
+    onToggleViewMode: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     title: String = stringResource(R.string.notes_all_notes),
@@ -408,17 +381,36 @@ fun CollapsingHeader(
                 transformOrigin = TransformOrigin(0f, 0.5f)
             },
         )
-        IconButton(
-            onClick = onOpenSettings,
-            modifier = Modifier
-                .size(40.dp)
-                .testTag(UiTestTags.OpenSettings),
-        ) {
-            Icon(
-                imageVector = Lucide.Settings,
-                contentDescription = stringResource(R.string.settings_open),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val (toggleIcon, toggleDesc) = if (viewMode == NotesViewMode.Tiles) {
+                Lucide.Rows3 to stringResource(R.string.notes_view_mode_list)
+            } else {
+                Lucide.LayoutGrid to stringResource(R.string.notes_view_mode_tiles)
+            }
+            IconButton(
+                onClick = onToggleViewMode,
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag(UiTestTags.ViewModeToggle),
+            ) {
+                Icon(
+                    imageVector = toggleIcon,
+                    contentDescription = toggleDesc,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag(UiTestTags.OpenSettings),
+            ) {
+                Icon(
+                    imageVector = Lucide.Settings,
+                    contentDescription = stringResource(R.string.settings_open),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -477,6 +469,7 @@ private fun NotesContent(
                 onRefresh = onRefresh,
                 modifier = modifier.fillMaxWidth(),
             ) {
+                val isTilesMode = state.viewMode == NotesViewMode.Tiles
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(columns),
                     state = gridState,
@@ -484,7 +477,7 @@ private fun NotesContent(
                         .fillMaxSize()
                         .testTag(UiTestTags.NotesGrid),
                     contentPadding = PaddingValues(top = gridTopPadding, bottom = 120.dp),
-                    verticalItemSpacing = 12.dp,
+                    verticalItemSpacing = if (isTilesMode) 12.dp else 0.dp,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     sections.forEach { section ->
@@ -520,12 +513,12 @@ private fun SectionHeader(group: NoteGroup) {
     }
     Text(
         text = stringResource(labelRes),
-        style = MaterialTheme.typography.titleSmall,
+        style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp)
+            .padding(top = 28.dp, bottom = 10.dp)
             .testTag(UiTestTags.sectionHeader(group.name)),
     )
 }

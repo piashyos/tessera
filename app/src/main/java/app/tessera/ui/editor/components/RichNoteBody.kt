@@ -11,8 +11,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -25,6 +27,7 @@ import org.wordpress.aztec.AztecTextFormat
 import org.wordpress.aztec.ITextFormat
 import org.wordpress.aztec.plugins.IToolbarButton
 import org.wordpress.aztec.source.SourceViewEditText
+import org.wordpress.aztec.spans.AztecTaskListSpan
 import org.wordpress.aztec.toolbar.IAztecToolbar
 import org.wordpress.aztec.toolbar.IAztecToolbarClickListener
 
@@ -40,6 +43,20 @@ interface RichBodyActions {
 }
 
 private const val DebounceMs = 300L
+
+/**
+ * Call `refresh()` on every `AztecTaskListSpan` currently attached to the editor's
+ * editable. Aztec's stock `fromHtml` installs the task-list span but the leading
+ * `verticalPadding` from `AztecListSpan.chooseHeight` is only applied *after* the
+ * span gets replaced via `refresh()` — which normally only happens on the first
+ * checkbox tap. Triggering it once at load time stabilises line metrics so toggling
+ * later doesn't visibly resize the line.
+ */
+private fun primeTaskListSpans(editor: AztecText) {
+    val editable = editor.editableText ?: return
+    val spans = editable.getSpans(0, editable.length, AztecTaskListSpan::class.java)
+    spans.forEach { it.refresh() }
+}
 
 /**
  * No-op IAztecToolbar — Aztec.Factory.with requires a toolbar reference to install the
@@ -69,7 +86,8 @@ private object NoOpAztecToolbarClickListener : IAztecToolbarClickListener {
 fun RichNoteBody(
     html: String,
     markdownKey: String,
-    onHtmlChange: (String) -> Unit,
+    htmlToMarkdown: (String) -> String,
+    onMarkdownChange: (String) -> Unit,
     onActionsReady: (RichBodyActions) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -88,13 +106,23 @@ fun RichNoteBody(
     val textColor = MaterialTheme.colorScheme.onSurface
     val textSizeSp = MaterialTheme.typography.bodyLarge.fontSize.takeIf { it != 0.sp } ?: 16.sp
 
-    // Echo-loop guard: tracks which markdownKey was last loaded into the editor
-    val lastLoadedMarkdown = remember { mutableStateOf<String?>(null) }
     // Handler lifted to the composable so DisposableEffect can clear pending debounce
     // runnables when the editor leaves composition (e.g. back-nav during typing).
     val handler = remember { Handler(Looper.getMainLooper()) }
+    val editorRef = remember { mutableStateOf<AztecText?>(null) }
+    // Always read the latest callbacks — the factory closure captures only the first
+    // value, so the dispose-time flush would otherwise call a stale callback.
+    val currentOnMarkdownChange by rememberUpdatedState(onMarkdownChange)
+    val currentHtmlToMarkdown by rememberUpdatedState(htmlToMarkdown)
     DisposableEffect(Unit) {
-        onDispose { handler.removeCallbacksAndMessages(null) }
+        onDispose {
+            handler.removeCallbacksAndMessages(null)
+            // Flush latest content synchronously so checkbox toggles or sub-debounce edits
+            // made right before back-nav are not lost when pending runnables are cancelled.
+            editorRef.value?.let { editor ->
+                currentOnMarkdownChange(currentHtmlToMarkdown(editor.toHtml()))
+            }
+        }
     }
 
     AndroidView(
@@ -113,6 +141,7 @@ fun RichNoteBody(
             editor.setTextColor(textColor.toArgb())
             editor.textSize = textSizeSp.value
             editor.setPadding(0, 8, 0, 8)
+            editor.includeFontPadding = false
 
             // Wire History + IME callbacks via the Aztec factory (no-op toolbar/listener — the Compose
             // MarkdownToolbar drives formatting through RichBodyActions). Without this call the view
@@ -125,24 +154,36 @@ fun RichNoteBody(
 
             // Load initial HTML AFTER Aztec.with so plugins/history see it as the starting state.
             editor.fromHtml(html)
-            lastLoadedMarkdown.value = markdownKey
+            // After load, force-refresh every task-list span so its line metrics
+            // (`verticalPadding` from AztecListSpan.chooseHeight) are applied identically
+            // to the post-tap state — otherwise the first checkbox toggle causes a visible
+            // one-time line-height shift when Aztec's `refresh()` reinstalls the span.
+            primeTaskListSpans(editor)
+            editorRef.value = editor
 
             editor.isFocusable = true
             editor.isFocusableInTouchMode = true
 
-            // Debounced text change listener
+            fun scheduleHtmlFlush() {
+                debounceRunnable?.let { handler.removeCallbacks(it) }
+                val runnable = Runnable {
+                    currentOnMarkdownChange(currentHtmlToMarkdown(editor.toHtml()))
+                }
+                debounceRunnable = runnable
+                handler.postDelayed(runnable, DebounceMs)
+            }
+
             editor.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(s: Editable?) {
-                    debounceRunnable?.let { handler.removeCallbacks(it) }
-                    val runnable = Runnable {
-                        onHtmlChange(editor.toHtml())
-                    }
-                    debounceRunnable = runnable
-                    handler.postDelayed(runnable, DebounceMs)
-                }
+                override fun afterTextChanged(s: Editable?) = scheduleHtmlFlush()
             })
+
+            // Task-list checkbox toggles bypass TextWatcher (Aztec only mutates the leading
+            // `checked` attribute, no text change). FlickerlessAztecText skips the stock
+            // `setText(editable)` relayout — we hook its lightweight-refresh callback to
+            // persist the new state without triggering the relayout flicker.
+            (editor as? FlickerlessAztecText)?.onLightweightRefresh = { scheduleHtmlFlush() }
 
             // Expose formatting actions to the toolbar
             onActionsReady(object : RichBodyActions {
@@ -158,11 +199,13 @@ fun RichNoteBody(
             editor
         },
         update = { editor ->
-            // Only reload HTML when the markdown source changed externally (e.g. first load
-            // or a programmatic mutation), NOT on self-originated keystrokes.
-            if (markdownKey != lastLoadedMarkdown.value) {
+            // Reload only when the editor's actual content (as markdown) differs from what
+            // the caller wants to show. Comparing against the editor's live state — rather
+            // than a remembered "last loaded" key — avoids triggering a self-inflicted
+            // reload on every flush round-trip.
+            if (markdownKey != currentHtmlToMarkdown(editor.toHtml())) {
                 editor.fromHtml(html)
-                lastLoadedMarkdown.value = markdownKey
+                primeTaskListSpans(editor)
             }
         },
     )

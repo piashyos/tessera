@@ -43,14 +43,18 @@ fun NoteCard(
         } else {
             modifier.clickable(onClick = onClick)
         }
-    val outerModifier =
-        if (isTile) {
-            baseModifier.padding(horizontal = 14.dp, vertical = 14.dp)
-        } else {
-            baseModifier
-        }
+    if (isTile) {
+        TileNoteCard(note = note, modifier = baseModifier.padding(horizontal = 14.dp, vertical = 14.dp))
+    } else {
+        ListNoteCard(note = note, modifier = baseModifier.padding(horizontal = 4.dp, vertical = 10.dp))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TileNoteCard(note: Note, modifier: Modifier) {
     Column(
-        modifier = outerModifier,
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (note.isPinned) {
@@ -61,15 +65,14 @@ fun NoteCard(
                 fontWeight = FontWeight.SemiBold,
             )
         }
-
         Text(
             text = note.title.ifBlank { stringResource(R.string.note_untitled) },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-
         Text(
             text = note.previewText() ?: stringResource(R.string.note_empty_preview),
             style = MaterialTheme.typography.bodyMedium,
@@ -77,7 +80,6 @@ fun NoteCard(
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
         )
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -88,15 +90,59 @@ fun NoteCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                note.tags.take(4).forEach { tag ->
-                    TagChip(name = tag.name)
-                }
+                note.tags.take(4).forEach { tag -> TagChip(name = tag.name) }
             }
             Text(
                 text = formatNoteDate(note.updatedAt),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun ListNoteCard(note: Note, modifier: Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (note.isPinned) {
+            Text(
+                text = stringResource(R.string.note_pinned),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Text(
+            text = note.title.ifBlank { stringResource(R.string.note_untitled) },
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = formatNoteDate(note.updatedAt),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                maxLines = 1,
+            )
+            val preview = note.previewText()
+            if (!preview.isNullOrBlank()) {
+                Text(
+                    text = "  $preview",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

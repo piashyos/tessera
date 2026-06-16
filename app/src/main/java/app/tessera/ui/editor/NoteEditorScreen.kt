@@ -155,8 +155,8 @@ fun NoteEditorScreen(
                     RichNoteBody(
                         html = initialHtml,
                         markdownKey = state.content,
-                        onHtmlChange = { html ->
-                            val markdown = converter.htmlToMarkdown(html)
+                        htmlToMarkdown = converter::htmlToMarkdown,
+                        onMarkdownChange = { markdown ->
                             if (markdown != state.content) onContentChange(markdown)
                         },
                         onActionsReady = { actions = it },

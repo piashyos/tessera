@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<org.wordpress.aztec.AztecText
+<app.tessera.ui.editor.components.FlickerlessAztecText
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/aztec"
@@ -11,7 +11,7 @@
     android:textColor="?android:attr/textColorPrimary"
     android:textColorHint="?android:attr/textColorHint"
     android:textCursorDrawable="@null"
-    android:inputType="textMultiLine|textCapSentences"
+    android:inputType="textMultiLine|textCapSentences|textNoSuggestions"
     android:imeOptions="actionDone|flagNoExtractUi"
     app:historyEnable="true"
     app:historySize="20" />
