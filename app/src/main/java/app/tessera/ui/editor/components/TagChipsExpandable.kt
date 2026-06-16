@@ -97,13 +97,13 @@ fun TagChipsExpandable(
                 onClick = onAddTagClick,
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.secondaryContainer,
-                modifier = Modifier.size(34.dp),
+                modifier = Modifier.size(28.dp),
             ) {
                 Icon(
                     imageVector = Lucide.Plus,
                     contentDescription = stringResource(R.string.editor_add_tag),
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(14.dp),
                 )
             }
         }
