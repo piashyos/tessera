@@ -200,7 +200,7 @@ fun NoteEditorScreen(
                     FloatingCapsule(
                         modifier = Modifier.shadow(
                             elevation = 12.dp,
-                            shape = RoundedCornerShape(28.dp),
+                            shape = CircleShape,
                             ambientColor = FloatingShadowAmbient,
                             spotColor = FloatingShadowSpot,
                         ),
@@ -209,12 +209,13 @@ fun NoteEditorScreen(
                         // Solid tint scrim: haze cannot blur the AztecText (AndroidView pixels live
                         // outside the Compose graphics layer, see aztec-spike-findings.md §5).
                         hazeState = null,
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(0.dp),
                     ) {
                         IconButton(
                             onClick = onBack,
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(44.dp)
                                 .testTag(UiTestTags.EditorBack),
                         ) {
                             Icon(
