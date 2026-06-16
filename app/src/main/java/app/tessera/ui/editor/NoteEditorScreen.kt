@@ -58,6 +58,7 @@ import app.tessera.core.ui.theme.FloatingShadowAmbient
 import app.tessera.core.ui.theme.FloatingShadowSpot
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.core.text.MarkdownHtmlConverter
+import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.MarkdownToolbar
 import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.components.RichNoteBody
@@ -92,6 +93,7 @@ fun NoteEditorScreen(
     val popupHazeState = remember { HazeState() }
     var tagPickerVisible by remember { mutableStateOf(false) }
     var tagsExpanded by remember { mutableStateOf(false) }
+    var formatMenuVisible by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -311,13 +313,7 @@ fun NoteEditorScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         MarkdownToolbar(
-                            onBold = { actions?.toggleBold() },
-                            onItalic = { actions?.toggleItalic() },
-                            onStrikethrough = { actions?.toggleStrikethrough() },
-                            onHeading1 = { actions?.toggleHeading1() },
-                            onHeading2 = { actions?.toggleHeading2() },
-                            onBullet = { actions?.toggleBulletList() },
-                            onTaskList = { actions?.toggleTaskList() },
+                            onOpenMenu = { formatMenuVisible = true },
                             modifier = Modifier.weight(1f),
                         )
                         Surface(
@@ -348,6 +344,19 @@ fun NoteEditorScreen(
                     }
                 }
                 Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
+
+                val currentActions = actions
+                if (currentActions != null) {
+                    MarkdownFormatMenu(
+                        visible = formatMenuVisible,
+                        activeFormats = remember(formatMenuVisible) {
+                            if (formatMenuVisible) currentActions.activeFormats() else emptySet()
+                        },
+                        actions = currentActions,
+                        onDismiss = { formatMenuVisible = false },
+                        hazeState = hazeState,
+                    )
+                }
             }
         }
 

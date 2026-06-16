@@ -23,6 +23,7 @@ object UiTestTags {
     const val EditorPin = "editor_pin"
     const val EditorDelete = "editor_delete"
     const val EditorTagToggle = "editor_tag_toggle"
+    const val EditorFormatMenuTrigger = "editor_format_menu_trigger"
 
     // Settings screen
     const val OpenSettings = "open_settings"
