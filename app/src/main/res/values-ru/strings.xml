@@ -29,6 +29,12 @@
     <string name="toolbar_strikethrough">Зачёркнутый</string>
     <string name="toolbar_h1">Заголовок 1</string>
     <string name="toolbar_h2">Заголовок 2</string>
+    <string name="toolbar_format">Формат</string>
+    <string name="toolbar_paragraph">Абзац</string>
+    <string name="toolbar_h3">Заголовок 3</string>
+    <string name="toolbar_h4">Заголовок 4</string>
+    <string name="toolbar_h5">Заголовок 5</string>
+    <string name="toolbar_h6">Заголовок 6</string>
     <string name="note_action_pin">Закрепить</string>
     <string name="note_action_unpin">Открепить</string>
     <string name="note_action_delete">Удалить</string>

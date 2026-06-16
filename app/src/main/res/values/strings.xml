@@ -29,6 +29,12 @@
     <string name="toolbar_strikethrough">Strikethrough</string>
     <string name="toolbar_h1">Heading 1</string>
     <string name="toolbar_h2">Heading 2</string>
+    <string name="toolbar_format">Format</string>
+    <string name="toolbar_paragraph">Paragraph</string>
+    <string name="toolbar_h3">Heading 3</string>
+    <string name="toolbar_h4">Heading 4</string>
+    <string name="toolbar_h5">Heading 5</string>
+    <string name="toolbar_h6">Heading 6</string>
     <string name="note_group_pinned">Pinned</string>
     <string name="note_group_today">Today</string>
     <string name="note_group_yesterday">Yesterday</string>
