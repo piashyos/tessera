@@ -63,12 +63,16 @@ import app.tessera.core.ui.theme.FloatingShadowSpot
 import app.tessera.core.ui.theme.Motion
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.core.text.MarkdownHtmlConverter
+import app.tessera.core.text.markdownblocks.Block
+import app.tessera.core.text.markdownblocks.joinBlocksIntoMarkdown
+import app.tessera.core.text.markdownblocks.splitMarkdownIntoBlocks
 import app.tessera.ui.navigation.LocalAnimatedVisibilityScope
 import app.tessera.ui.navigation.LocalSharedTransitionScope
 import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.MarkdownToolbar
 import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.components.RichNoteBody
+import app.tessera.ui.editor.components.TableBlockEditor
 import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
 import dev.chrisbanes.haze.HazeState
@@ -90,6 +94,8 @@ fun NoteEditorScreen(
     val converter = remember { MarkdownHtmlConverter() }
     var actions by remember { mutableStateOf<RichBodyActions?>(null) }
     val initialHtml = remember(state.content) { converter.markdownToHtml(state.content) }
+    val blocks = remember(state.content) { splitMarkdownIntoBlocks(state.content) }
+    val hasTable = blocks.any { it is Block.Table }
 
     val pageColor = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
         MaterialTheme.colorScheme.surface
@@ -154,16 +160,61 @@ fun NoteEditorScreen(
 
                     // Body — Aztec WYSIWYG editor (the first non-empty line becomes the
                     // note's title automatically — Apple Notes–style).
-                    RichNoteBody(
-                        html = initialHtml,
-                        markdownKey = state.content,
-                        htmlToMarkdown = converter::htmlToMarkdown,
-                        onMarkdownChange = { markdown ->
-                            if (markdown != state.content) onContentChange(markdown)
-                        },
-                        onActionsReady = { actions = it },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    if (!hasTable) {
+                        // FAST PATH — identical to today. Preserves behavior for notes
+                        // without tables (the overwhelming majority).
+                        RichNoteBody(
+                            html = initialHtml,
+                            markdownKey = state.content,
+                            htmlToMarkdown = converter::htmlToMarkdown,
+                            onMarkdownChange = { markdown ->
+                                if (markdown != state.content) onContentChange(markdown)
+                            },
+                            onActionsReady = { actions = it },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        // BLOCK STACK — render text and table blocks in order. Only
+                        // engaged when the note actually contains a table.
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            blocks.forEachIndexed { idx, block ->
+                                when (block) {
+                                    is Block.Text -> {
+                                        val blockHtml = remember(block.markdown) {
+                                            converter.markdownToHtml(block.markdown)
+                                        }
+                                        RichNoteBody(
+                                            html = blockHtml,
+                                            markdownKey = "${state.content.hashCode()}-$idx-${block.markdown}",
+                                            htmlToMarkdown = converter::htmlToMarkdown,
+                                            onMarkdownChange = { newMd ->
+                                                val updated = blocks.toMutableList()
+                                                updated[idx] = Block.Text(newMd)
+                                                val joined = joinBlocksIntoMarkdown(updated)
+                                                if (joined != state.content) onContentChange(joined)
+                                            },
+                                            onActionsReady = { actions = it },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
+                                    is Block.Table -> {
+                                        TableBlockEditor(
+                                            grid = block.grid,
+                                            onGridChange = { newGrid ->
+                                                val updated = blocks.toMutableList()
+                                                updated[idx] = Block.Table(newGrid)
+                                                val joined = joinBlocksIntoMarkdown(updated)
+                                                if (joined != state.content) onContentChange(joined)
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Bottom spacing for the floating bottom capsule. Tapping in this
                     // empty area forwards focus to the Aztec body and opens the IME so
