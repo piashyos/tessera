@@ -57,6 +57,10 @@
     <string name="settings_theme_light_static">Светлая · Классика</string>
     <string name="settings_theme_dark_static">Тёмная · Классика</string>
     <string name="settings_theme_static_hint">Классика — фиксированные цвета (без Material You)</string>
+    <string name="settings_section_language">Язык</string>
+    <string name="settings_language_system">Системный</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_ru">Русский</string>
     <string name="settings_about">О приложении</string>
     <string name="settings_version">Tessera %1$s</string>
     <string name="account_switch_title">Другой аккаунт</string>

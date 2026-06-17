@@ -43,6 +43,7 @@ import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.settings.components.AccountSwitchDialog
+import app.tessera.ui.settings.components.LanguagePicker
 import app.tessera.ui.settings.components.ThemePicker
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.ArrowLeft
@@ -125,6 +126,17 @@ fun SettingsScreen(
             ThemePicker(
                 selected = state.themeMode,
                 onSelect = onSelectThemeMode,
+            )
+
+            Text(
+                text = stringResource(R.string.settings_section_language),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+            )
+            LanguagePicker(
+                selectedTag = state.languageTag,
+                onSelect = onSelectLanguage,
             )
 
             AccountSection(
