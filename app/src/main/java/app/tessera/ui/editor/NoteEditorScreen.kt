@@ -1,6 +1,10 @@
 package app.tessera.ui.editor
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,8 +60,11 @@ import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.components.ScrimEdge
 import app.tessera.core.ui.theme.FloatingShadowAmbient
 import app.tessera.core.ui.theme.FloatingShadowSpot
+import app.tessera.core.ui.theme.Motion
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.core.text.MarkdownHtmlConverter
+import app.tessera.ui.navigation.LocalAnimatedVisibilityScope
+import app.tessera.ui.navigation.LocalSharedTransitionScope
 import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.MarkdownToolbar
 import app.tessera.ui.editor.components.RichBodyActions
@@ -67,11 +74,10 @@ import app.tessera.ui.editor.components.TagPickerPopup
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun NoteEditorScreen(
     state: NoteEditorState,
-    onTitleChange: (String) -> Unit,
     onContentChange: (String) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
@@ -95,11 +101,27 @@ fun NoteEditorScreen(
     var tagsExpanded by remember { mutableStateOf(false) }
     var formatMenuVisible by remember { mutableStateOf(false) }
 
+    val sharedScope = LocalSharedTransitionScope.current
+    val visibilityScope = LocalAnimatedVisibilityScope.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(pageColor)
-            .testTag(UiTestTags.EditorRoot),
+            .testTag(UiTestTags.EditorRoot)
+            .then(
+                if (sharedScope != null && visibilityScope != null && state.noteId.isNotEmpty()) {
+                    with(sharedScope) {
+                        Modifier.sharedElement(
+                            state = rememberSharedContentState(key = "note-card-${state.noteId}"),
+                            animatedVisibilityScope = visibilityScope,
+                            boundsTransform = { _, _ -> tween(Motion.SharedElementDurationMs) },
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         // Inner wrapper — everything that the popup blurs over
         Box(
@@ -125,35 +147,8 @@ fun NoteEditorScreen(
                     Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.safeDrawing))
                     Spacer(modifier = Modifier.height(86.dp))
 
-                    // Title field
-                    BasicTextField(
-                        value = state.title,
-                        onValueChange = onTitleChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag(UiTestTags.EditorTitleField),
-                        textStyle = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        decorationBox = { innerTextField ->
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                if (state.title.isEmpty()) {
-                                    Text(
-                                        text = stringResource(R.string.editor_title_hint),
-                                        style = MaterialTheme.typography.headlineMedium.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        },
-                    )
-
-                    // Body — Aztec WYSIWYG editor
+                    // Body — Aztec WYSIWYG editor (the first non-empty line becomes the
+                    // note's title automatically — Apple Notes–style).
                     RichNoteBody(
                         html = initialHtml,
                         markdownKey = state.content,
@@ -165,8 +160,19 @@ fun NoteEditorScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
 
-                    // Bottom spacing for the floating bottom capsule
-                    Spacer(modifier = Modifier.height(160.dp))
+                    // Bottom spacing for the floating bottom capsule. Tapping in this
+                    // empty area forwards focus to the Aztec body and opens the IME so
+                    // users can resume typing past the visible content.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { actions?.focusBody() },
+                            ),
+                    )
                     Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
                 }
             }
@@ -292,6 +298,7 @@ fun NoteEditorScreen(
                     tags = state.tags,
                     onRemoveTag = onRemoveTag,
                     onAddTagClick = { tagPickerVisible = true },
+                    modifier = Modifier.align(Alignment.End),
                 )
 
                 FloatingCapsule(
@@ -313,10 +320,28 @@ fun NoteEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        MarkdownToolbar(
-                            onOpenMenu = { formatMenuVisible = true },
-                            modifier = Modifier.weight(1f),
-                        )
+                        // Box wraps toolbar + popup so the Popup composable shares the
+                        // toolbar's layout slot — anchors the dropdown above the T
+                        // trigger without participating in the Row's `spacedBy` gap.
+                        Box(modifier = Modifier.weight(1f)) {
+                            MarkdownToolbar(
+                                onOpenMenu = { formatMenuVisible = true },
+                                actions = actions,
+                                activeFormats = actions?.activeFormats() ?: emptySet(),
+                            )
+                            val currentActions = actions
+                            if (currentActions != null) {
+                                MarkdownFormatMenu(
+                                    visible = formatMenuVisible,
+                                    activeFormats = remember(formatMenuVisible) {
+                                        if (formatMenuVisible) currentActions.activeFormats() else emptySet()
+                                    },
+                                    actions = currentActions,
+                                    onDismiss = { formatMenuVisible = false },
+                                    hazeState = hazeState,
+                                )
+                            }
+                        }
                         Surface(
                             onClick = { tagsExpanded = !tagsExpanded },
                             shape = CircleShape,
@@ -345,19 +370,6 @@ fun NoteEditorScreen(
                     }
                 }
                 Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
-
-                val currentActions = actions
-                if (currentActions != null) {
-                    MarkdownFormatMenu(
-                        visible = formatMenuVisible,
-                        activeFormats = remember(formatMenuVisible) {
-                            if (formatMenuVisible) currentActions.activeFormats() else emptySet()
-                        },
-                        actions = currentActions,
-                        onDismiss = { formatMenuVisible = false },
-                        hazeState = hazeState,
-                    )
-                }
             }
         }
 
@@ -378,14 +390,12 @@ private fun NoteEditorScreenLightPreview() {
     TesseraTheme(darkTheme = false, dynamicColor = false) {
         NoteEditorScreen(
             state = NoteEditorState(
-                title = "My first note",
-                content = "- [ ] Buy groceries\n- [x] Call the dentist\n\nSome extra thoughts here.",
+                content = "My first note\n\n- [ ] Buy groceries\n- [x] Call the dentist",
                 tags = listOf("work", "personal"),
                 isPinned = false,
                 availableTags = listOf("ideas", "kotlin"),
                 isLoading = false,
             ),
-            onTitleChange = {},
             onContentChange = {},
             onAddTag = {},
             onRemoveTag = {},

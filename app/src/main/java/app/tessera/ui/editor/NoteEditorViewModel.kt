@@ -36,7 +36,7 @@ class NoteEditorViewModel @Inject constructor(
             ?: error("NoteEditorViewModel requires 'noteId' in SavedStateHandle"),
     )
 
-    private val _state = MutableStateFlow(NoteEditorState())
+    private val _state = MutableStateFlow(NoteEditorState(noteId = noteId.value))
     val state: StateFlow<NoteEditorState> = _state.asStateFlow()
 
     // The baseline Note preserves immutable fields (id, createdAt, ownerId, deletedAt, syncedAt)
@@ -52,7 +52,6 @@ class NoteEditorViewModel @Inject constructor(
                 baselineNote = note
                 _state.update { current ->
                     current.copy(
-                        title = note.title,
                         content = note.content,
                         tags = note.tags.map { it.name },
                         isPinned = note.isPinned,
@@ -76,11 +75,6 @@ class NoteEditorViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    fun onTitleChange(title: String) {
-        _state.update { it.copy(title = title) }
-        scheduleAutosave()
     }
 
     fun onContentChange(content: String) {
@@ -135,8 +129,16 @@ class NoteEditorViewModel @Inject constructor(
     private suspend fun persist() {
         val current = _state.value
         val baseline = baselineNote ?: return
+        // Skip the save entirely when nothing the user can edit has actually changed —
+        // otherwise opening a note bumps `updatedAt` and shuffles it to the top of the
+        // list without any real edit having happened.
+        val contentUnchanged = current.content == baseline.content
+        val pinUnchanged = current.isPinned == baseline.isPinned
+        val baselineTags = baseline.tags.map { it.name }
+        val tagsUnchanged = current.tags == baselineTags
+        if (contentUnchanged && pinUnchanged && tagsUnchanged) return
+
         val updated = baseline.copy(
-            title = current.title,
             content = current.content,
             tags = current.tags.map { Tag(it) },
             isPinned = current.isPinned,

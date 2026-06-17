@@ -1,7 +1,7 @@
 package app.tessera.ui.editor
 
 data class NoteEditorState(
-    val title: String = "",
+    val noteId: String = "",
     val content: String = "",
     val tags: List<String> = emptyList(),
     val isPinned: Boolean = false,
