@@ -56,6 +56,13 @@
     <string name="settings_sign_out">Sign out</string>
     <string name="settings_sync_status">Sync</string>
     <string name="settings_sync_placeholder">Cloud sync arrives in a later update.</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_theme_auto">Auto</string>
+    <string name="settings_theme_light_dynamic">Light</string>
+    <string name="settings_theme_dark_dynamic">Dark</string>
+    <string name="settings_theme_light_static">Light · Classic</string>
+    <string name="settings_theme_dark_static">Dark · Classic</string>
+    <string name="settings_theme_static_hint">Classic uses fixed colors (no Material You)</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Tessera %1$s</string>
     <string name="account_switch_title">Different account</string>
@@ -63,4 +70,15 @@
     <string name="account_switch_move">Move to new account</string>
     <string name="account_switch_delete">Delete local notes</string>
     <string name="account_switch_cancel">Cancel</string>
+    <string name="folders_title">Folders</string>
+    <string name="folders_all_notes">All Notes</string>
+    <string name="folders_new">New folder</string>
+    <string name="folders_new_hint">Folder name</string>
+    <string name="folders_save">Save</string>
+    <string name="folders_cancel">Cancel</string>
+    <string name="folders_rename">Rename</string>
+    <string name="folders_delete">Delete</string>
+    <string name="folders_open_drawer">Folders</string>
+    <string name="note_action_move">Move to folder</string>
+    <string name="folder_picker_none">No folder</string>
 </resources>

@@ -50,6 +50,13 @@
     <string name="settings_sign_out">Выйти</string>
     <string name="settings_sync_status">Синхронизация</string>
     <string name="settings_sync_placeholder">Облачная синхронизация появится в следующем обновлении.</string>
+    <string name="settings_section_appearance">Внешний вид</string>
+    <string name="settings_theme_auto">Авто</string>
+    <string name="settings_theme_light_dynamic">Светлая</string>
+    <string name="settings_theme_dark_dynamic">Тёмная</string>
+    <string name="settings_theme_light_static">Светлая · Классика</string>
+    <string name="settings_theme_dark_static">Тёмная · Классика</string>
+    <string name="settings_theme_static_hint">Классика — фиксированные цвета (без Material You)</string>
     <string name="settings_about">О приложении</string>
     <string name="settings_version">Tessera %1$s</string>
     <string name="account_switch_title">Другой аккаунт</string>
@@ -57,4 +64,15 @@
     <string name="account_switch_move">Перенести в новый аккаунт</string>
     <string name="account_switch_delete">Удалить локальные заметки</string>
     <string name="account_switch_cancel">Отмена</string>
+    <string name="folders_title">Папки</string>
+    <string name="folders_all_notes">Все заметки</string>
+    <string name="folders_new">Новая папка</string>
+    <string name="folders_new_hint">Название папки</string>
+    <string name="folders_save">Сохранить</string>
+    <string name="folders_cancel">Отмена</string>
+    <string name="folders_rename">Переименовать</string>
+    <string name="folders_delete">Удалить</string>
+    <string name="folders_open_drawer">Папки</string>
+    <string name="note_action_move">В папку</string>
+    <string name="folder_picker_none">Без папки</string>
 </resources>
