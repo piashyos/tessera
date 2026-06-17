@@ -208,7 +208,11 @@ fun NoteEditorScreen(
                                         }
                                         RichNoteBody(
                                             html = blockHtml,
-                                            markdownKey = "${state.content.hashCode()}-$idx-${block.markdown}",
+                                            // Use the block's local markdown directly as the
+                                            // echo-loop key — it matches what RichNoteBody's
+                                            // internal flush writes back, so a self-originated
+                                            // change doesn't fire a self-inflicted reload.
+                                            markdownKey = block.markdown,
                                             htmlToMarkdown = converter::htmlToMarkdown,
                                             onMarkdownChange = { newMd ->
                                                 val updated = blocks.toMutableList()

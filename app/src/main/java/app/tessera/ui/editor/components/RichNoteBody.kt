@@ -162,10 +162,11 @@ fun RichNoteBody(
     val handler = remember { Handler(Looper.getMainLooper()) }
     val editorRef = remember { mutableStateOf<AztecText?>(null) }
     // Tracks the markdown most recently *loaded into* the editor (initial load + each
-    // post-debounce flush). The `update` block compares against this so a mid-typing
-    // recomposition does not race the editor's in-flight (unflushed) state and clobber
-    // the user's keystrokes.
-    val lastLoadedMarkdown = remember { mutableStateOf(markdownKey) }
+    // post-debounce flush). MUST NOT be a Compose State — writing to it would trigger an
+    // additional recomposition that races the slower collectAsState→state.content path,
+    // letting `update` see (new lastLoaded, old markdownKey) and clobber the editor.
+    // Plain array container = mutable storage without snapshot tracking.
+    val lastLoadedMarkdownRef = remember { arrayOf(markdownKey) }
     // Always read the latest callbacks — the factory closure captures only the first
     // value, so the dispose-time flush would otherwise call a stale callback.
     val currentOnMarkdownChange by rememberUpdatedState(onMarkdownChange)
@@ -177,7 +178,7 @@ fun RichNoteBody(
             // made right before back-nav are not lost when pending runnables are cancelled.
             editorRef.value?.let { editor ->
                 val md = currentHtmlToMarkdown(editor.toHtml())
-                lastLoadedMarkdown.value = md
+                lastLoadedMarkdownRef[0] = md
                 currentOnMarkdownChange(md)
             }
         }
@@ -233,8 +234,10 @@ fun RichNoteBody(
                     val md = currentHtmlToMarkdown(editor.toHtml())
                     // Mark the just-flushed markdown as already loaded so the next
                     // recomposition (markdownKey will now equal this) doesn't trigger
-                    // a self-inflicted fromHtml round-trip.
-                    lastLoadedMarkdown.value = md
+                    // a self-inflicted fromHtml round-trip. Non-state write — no extra
+                    // recomposition is triggered, which keeps lastLoaded and
+                    // markdownKey (via state.content) updating in the same Compose frame.
+                    lastLoadedMarkdownRef[0] = md
                     currentOnMarkdownChange(md)
                 }
                 debounceRunnable = runnable
@@ -321,11 +324,11 @@ fun RichNoteBody(
             // it. Comparing against `lastLoadedMarkdown` (updated on initial load + every
             // flush) — NOT against `editor.toHtml()` — means a mid-typing recomposition
             // can't race the unflushed Aztec state and wipe the user's keystrokes.
-            if (markdownKey != lastLoadedMarkdown.value) {
+            if (markdownKey != lastLoadedMarkdownRef[0]) {
                 editor.fromHtml(html)
                 primeTaskListSpans(editor)
                 replaceBulletSpans(editor, bulletRadiusPx)
-                lastLoadedMarkdown.value = markdownKey
+                lastLoadedMarkdownRef[0] = markdownKey
             }
         },
     )
