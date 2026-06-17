@@ -32,9 +32,9 @@ For each plan, in order:
 - [x] Plan A — Editor UX polish
 - [x] Plan D — Settings: themes + i18n
 - [x] Plan B — Shared-element transitions
-- [~] Plan C — Tables in editor (foundation done; integration deferred)
+- [x] Plan C — Tables in editor (Task 7 column-resize deferred)
 
-> **Plan C status (2026-06-17):** Tasks 1–4 committed (`d356f8e` TableGrid, `0845076` GFM parser, `b2b982b` block split/join, `8df7d37` TableBlockEditor). Pure new files in `core/text/markdownblocks/` + `ui/editor/components/TableBlockEditor.kt`, plus JVM/Compose tests — all green, isolated from rest of codebase. Tasks 5–7 (block-stack rendering in `NoteEditorScreen`, insert-table action via `MarkdownFormatMenu`, column drag-resize) were skipped because the worktree carries uncommitted WIP in `NoteEditorScreen.kt`, `RichNoteBody.kt`, `MarkdownFormatMenu.kt` (looks like the folders/editor-polish plan in flight). Resume Plan C from Task 5 after that WIP is committed or stashed — see plan file Chunk 3 onward.
+> **Plan C status (2026-06-17):** Tasks 1–6 + 8 done. WIP snapshot committed first (`0695dcc`), then Task 5 conservative block-stack (`be3b720`: notes without tables hit verbatim-equivalent fast-path; only table-bearing notes render the stack) + Task 6 insert-table action (`7e0680d`: `RichBodyActions.insertTable()` with default no-op, `MarkdownFormatMenu` gains a nullable-format `FormatEntry`, append-at-end semantics). **Task 7 (column drag-resize + HTML-comment width persistence) intentionally skipped** — adds visible complexity, side-channels widths into markdown for external tools, and is non-essential for v1; revisit if user demand surfaces. All existing notes (zero tables) behave identically to before; new tables render with equal-width columns.
 
 ## Cross-plan notes
 
