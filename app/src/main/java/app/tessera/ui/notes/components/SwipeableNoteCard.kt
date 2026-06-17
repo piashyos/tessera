@@ -1,7 +1,9 @@
 package app.tessera.ui.notes.components
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,7 +42,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
+import app.tessera.core.ui.theme.Motion
 import app.tessera.domain.model.Note
+import app.tessera.ui.navigation.LocalAnimatedVisibilityScope
+import app.tessera.ui.navigation.LocalSharedTransitionScope
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.PinOff
@@ -50,7 +55,7 @@ import kotlinx.coroutines.launch
 
 private enum class SwipeAnchor { Resting, Revealed }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SwipeableNoteCard(
     note: Note,
@@ -59,7 +64,10 @@ fun SwipeableNoteCard(
     onClick: () -> Unit = {},
     onTogglePin: () -> Unit = {},
     onDelete: () -> Unit = {},
+    onLongClick: (androidx.compose.ui.unit.IntOffset) -> Unit = {},
 ) {
+    val sharedScope = LocalSharedTransitionScope.current
+    val visibilityScope = LocalAnimatedVisibilityScope.current
     val density = LocalDensity.current
     val actionWidth = 72.dp
     val actionsPx = with(density) { (actionWidth * 2).toPx() }
@@ -150,6 +158,19 @@ fun SwipeableNoteCard(
                     } else {
                         Modifier
                     },
+                )
+                .then(
+                    if (sharedScope != null && visibilityScope != null) {
+                        with(sharedScope) {
+                            Modifier.sharedElement(
+                                state = rememberSharedContentState(key = "note-card-${note.id.value}"),
+                                animatedVisibilityScope = visibilityScope,
+                                boundsTransform = { _, _ -> tween(Motion.SharedElementDurationMs) },
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
                 ),
         ) {
             NoteCard(
@@ -160,6 +181,7 @@ fun SwipeableNoteCard(
                     .testTag(UiTestTags.noteCard(note.id.value)),
                 isTile = isTile,
                 onClick = onClick,
+                onLongClick = onLongClick,
             )
             if (!isTile) {
                 HorizontalDivider(
