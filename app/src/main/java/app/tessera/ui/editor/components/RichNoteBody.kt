@@ -161,6 +161,11 @@ fun RichNoteBody(
     // runnables when the editor leaves composition (e.g. back-nav during typing).
     val handler = remember { Handler(Looper.getMainLooper()) }
     val editorRef = remember { mutableStateOf<AztecText?>(null) }
+    // Tracks the markdown most recently *loaded into* the editor (initial load + each
+    // post-debounce flush). The `update` block compares against this so a mid-typing
+    // recomposition does not race the editor's in-flight (unflushed) state and clobber
+    // the user's keystrokes.
+    val lastLoadedMarkdown = remember { mutableStateOf(markdownKey) }
     // Always read the latest callbacks — the factory closure captures only the first
     // value, so the dispose-time flush would otherwise call a stale callback.
     val currentOnMarkdownChange by rememberUpdatedState(onMarkdownChange)
@@ -171,7 +176,9 @@ fun RichNoteBody(
             // Flush latest content synchronously so checkbox toggles or sub-debounce edits
             // made right before back-nav are not lost when pending runnables are cancelled.
             editorRef.value?.let { editor ->
-                currentOnMarkdownChange(currentHtmlToMarkdown(editor.toHtml()))
+                val md = currentHtmlToMarkdown(editor.toHtml())
+                lastLoadedMarkdown.value = md
+                currentOnMarkdownChange(md)
             }
         }
     }
@@ -223,7 +230,12 @@ fun RichNoteBody(
             fun scheduleHtmlFlush() {
                 debounceRunnable?.let { handler.removeCallbacks(it) }
                 val runnable = Runnable {
-                    currentOnMarkdownChange(currentHtmlToMarkdown(editor.toHtml()))
+                    val md = currentHtmlToMarkdown(editor.toHtml())
+                    // Mark the just-flushed markdown as already loaded so the next
+                    // recomposition (markdownKey will now equal this) doesn't trigger
+                    // a self-inflicted fromHtml round-trip.
+                    lastLoadedMarkdown.value = md
+                    currentOnMarkdownChange(md)
                 }
                 debounceRunnable = runnable
                 handler.postDelayed(runnable, DebounceMs)
@@ -305,14 +317,15 @@ fun RichNoteBody(
             editor
         },
         update = { editor ->
-            // Reload only when the editor's actual content (as markdown) differs from what
-            // the caller wants to show. Comparing against the editor's live state — rather
-            // than a remembered "last loaded" key — avoids triggering a self-inflicted
-            // reload on every flush round-trip.
-            if (markdownKey != currentHtmlToMarkdown(editor.toHtml())) {
+            // Reload only when the markdown source actually changed since we last loaded
+            // it. Comparing against `lastLoadedMarkdown` (updated on initial load + every
+            // flush) — NOT against `editor.toHtml()` — means a mid-typing recomposition
+            // can't race the unflushed Aztec state and wipe the user's keystrokes.
+            if (markdownKey != lastLoadedMarkdown.value) {
                 editor.fromHtml(html)
                 primeTaskListSpans(editor)
                 replaceBulletSpans(editor, bulletRadiusPx)
+                lastLoadedMarkdown.value = markdownKey
             }
         },
     )
