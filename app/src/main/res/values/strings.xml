@@ -35,6 +35,7 @@
     <string name="toolbar_h4">Heading 4</string>
     <string name="toolbar_h5">Heading 5</string>
     <string name="toolbar_h6">Heading 6</string>
+    <string name="toolbar_insert_table">Insert table</string>
     <string name="note_group_pinned">Pinned</string>
     <string name="note_group_today">Today</string>
     <string name="note_group_yesterday">Yesterday</string>

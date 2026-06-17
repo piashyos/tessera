@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,7 @@ import app.tessera.core.ui.theme.Motion
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.core.text.MarkdownHtmlConverter
 import app.tessera.core.text.markdownblocks.Block
+import app.tessera.core.text.markdownblocks.TableGrid
 import app.tessera.core.text.markdownblocks.joinBlocksIntoMarkdown
 import app.tessera.core.text.markdownblocks.splitMarkdownIntoBlocks
 import app.tessera.ui.navigation.LocalAnimatedVisibilityScope
@@ -96,6 +98,27 @@ fun NoteEditorScreen(
     val initialHtml = remember(state.content) { converter.markdownToHtml(state.content) }
     val blocks = remember(state.content) { splitMarkdownIntoBlocks(state.content) }
     val hasTable = blocks.any { it is Block.Table }
+
+    // Keep insertTable's closure pointing at the latest content/callback so that
+    // the action captured into `actions` (set once when the editor reports ready)
+    // doesn't observe stale state across recompositions.
+    val currentContent by rememberUpdatedState(state.content)
+    val currentOnContentChange by rememberUpdatedState(onContentChange)
+    val wrapActions: (RichBodyActions) -> RichBodyActions = { base ->
+        object : RichBodyActions by base {
+            override fun insertTable() {
+                val existing = splitMarkdownIntoBlocks(currentContent).toMutableList()
+                // Insert at the end: append a new table block, followed by an empty
+                // text block so the user can continue typing prose past the grid.
+                // (Per-block focus tracking is deferred; "append at end" is the
+                // natural default for v1.)
+                existing.add(Block.Table(TableGrid.empty(columns = 2, rows = 2)))
+                existing.add(Block.Text(""))
+                val joined = joinBlocksIntoMarkdown(existing)
+                if (joined != currentContent) currentOnContentChange(joined)
+            }
+        }
+    }
 
     val pageColor = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
         MaterialTheme.colorScheme.surface
@@ -170,7 +193,7 @@ fun NoteEditorScreen(
                             onMarkdownChange = { markdown ->
                                 if (markdown != state.content) onContentChange(markdown)
                             },
-                            onActionsReady = { actions = it },
+                            onActionsReady = { actions = wrapActions(it) },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
@@ -193,7 +216,7 @@ fun NoteEditorScreen(
                                                 val joined = joinBlocksIntoMarkdown(updated)
                                                 if (joined != state.content) onContentChange(joined)
                                             },
-                                            onActionsReady = { actions = it },
+                                            onActionsReady = { actions = wrapActions(it) },
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }

@@ -52,6 +52,13 @@ interface RichBodyActions {
     fun focusBody()
 
     /**
+     * Insert a new empty 2x2 table after the currently-focused text block.
+     * Implemented at the screen level — this default is a no-op so previews / tests
+     * that mock RichBodyActions without a screen still compile.
+     */
+    fun insertTable() {}
+
+    /**
      * Formats currently applied at the editor's selection / cursor position.
      * The toolbar dropdown reads this to highlight active entries.
      */

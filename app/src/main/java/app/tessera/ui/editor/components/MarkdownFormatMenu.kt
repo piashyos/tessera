@@ -38,12 +38,18 @@ import com.composables.icons.lucide.Heading5
 import com.composables.icons.lucide.Heading6
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pilcrow
+import com.composables.icons.lucide.Table
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import org.wordpress.aztec.AztecTextFormat
 
 data class FormatEntry(
-    val format: AztecTextFormat,
+    /**
+     * Aztec format this entry corresponds to. Used to highlight the row when
+     * the cursor's active formats include it. May be `null` for entries that
+     * are not toggles (e.g. "Insert table"), which never appear active.
+     */
+    val format: AztecTextFormat?,
     val icon: ImageVector,
     val labelRes: Int,
     val onClick: () -> Unit,
@@ -68,6 +74,7 @@ fun MarkdownFormatMenu(
         FormatEntry(AztecTextFormat.FORMAT_HEADING_4, Lucide.Heading4, R.string.toolbar_h4, actions::toggleHeading4),
         FormatEntry(AztecTextFormat.FORMAT_HEADING_5, Lucide.Heading5, R.string.toolbar_h5, actions::toggleHeading5),
         FormatEntry(AztecTextFormat.FORMAT_HEADING_6, Lucide.Heading6, R.string.toolbar_h6, actions::toggleHeading6),
+        FormatEntry(null, Lucide.Table, R.string.toolbar_insert_table, actions::insertTable),
     )
 
     Popup(
@@ -96,7 +103,7 @@ fun MarkdownFormatMenu(
             ) {
                 Column(modifier = Modifier.padding(vertical = 6.dp)) {
                     entries.forEach { entry ->
-                        FormatRow(entry = entry, active = entry.format in activeFormats) {
+                        FormatRow(entry = entry, active = entry.format != null && entry.format in activeFormats) {
                             entry.onClick()
                             onDismiss()
                         }
