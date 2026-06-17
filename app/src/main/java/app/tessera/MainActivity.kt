@@ -6,13 +6,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.core.os.LocaleListCompat
 import app.tessera.core.preferences.ThemeMode
-import app.tessera.core.preferences.UserPreferencesRepository
-import app.tessera.core.ui.theme.TesseraTheme
+import app.tessera.core.preferences.UserPreferences
 import app.tessera.core.util.CurrentActivityHolder
+import app.tessera.core.ui.theme.TesseraTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -22,25 +22,42 @@ class MainActivity : ComponentActivity() {
     lateinit var currentActivityHolder: CurrentActivityHolder
 
     @Inject
-    lateinit var userPreferencesRepository: UserPreferencesRepository
+    lateinit var userPreferences: UserPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            val themeMode by userPreferencesRepository.themeMode.collectAsState(initial = ThemeMode.AUTO)
-            val languageTag by userPreferencesRepository.languageTag.collectAsState(initial = "")
-
-            LaunchedEffect(languageTag) {
-                val locales = if (languageTag.isEmpty()) {
-                    LocaleListCompat.getEmptyLocaleList()
-                } else {
-                    LocaleListCompat.forLanguageTags(languageTag)
-                }
-                AppCompatDelegate.setApplicationLocales(locales)
+            // Use null-initial produceState so we can distinguish "DataStore hasn't
+            // emitted yet" from "user wants system default ("")". Without this, the
+            // initial-value placeholder ("" / AUTO) races the real value through the
+            // flow → MainActivity briefly applies (empty locale, AUTO theme) after
+            // every restart, which causes AppCompatDelegate.setApplicationLocales to
+            // ricochet between "ru" (persisted) and empty, restarting the activity in
+            // a loop and freezing the theme on its initial AUTO state.
+            val languageTag by produceState<String?>(initialValue = null, userPreferences) {
+                userPreferences.languageTag.collect { value = it }
+            }
+            val themeMode by produceState<ThemeMode?>(initialValue = null, userPreferences) {
+                userPreferences.themeMode.collect { value = it }
             }
 
-            TesseraTheme(themeMode = themeMode) {
+            LaunchedEffect(languageTag) {
+                val tag = languageTag ?: return@LaunchedEffect
+                val target = if (tag.isEmpty()) {
+                    LocaleListCompat.getEmptyLocaleList()
+                } else {
+                    LocaleListCompat.forLanguageTags(tag)
+                }
+                // Skip if already applied — avoids triggering a system Activity restart
+                // for a no-op call.
+                if (AppCompatDelegate.getApplicationLocales().toLanguageTags() == target.toLanguageTags()) {
+                    return@LaunchedEffect
+                }
+                AppCompatDelegate.setApplicationLocales(target)
+            }
+
+            TesseraTheme(themeMode = themeMode ?: ThemeMode.AUTO) {
                 TesseraApp()
             }
         }
