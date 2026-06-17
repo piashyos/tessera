@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -19,17 +20,25 @@ import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.theme.TesseraTheme
+import com.composables.icons.lucide.Bold
+import com.composables.icons.lucide.Italic
+import com.composables.icons.lucide.List
+import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Strikethrough
 import com.composables.icons.lucide.Type
+import org.wordpress.aztec.AztecTextFormat
 
 @Composable
 fun MarkdownToolbar(
     onOpenMenu: () -> Unit,
+    actions: RichBodyActions?,
+    activeFormats: Set<AztecTextFormat>,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.Start,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(
@@ -45,6 +54,60 @@ fun MarkdownToolbar(
                 modifier = Modifier.size(18.dp),
             )
         }
+        FormatToggle(
+            icon = Lucide.Bold,
+            contentDescriptionRes = R.string.toolbar_bold,
+            active = AztecTextFormat.FORMAT_BOLD in activeFormats,
+            onClick = { actions?.toggleBold() },
+        )
+        FormatToggle(
+            icon = Lucide.Italic,
+            contentDescriptionRes = R.string.toolbar_italic,
+            active = AztecTextFormat.FORMAT_ITALIC in activeFormats,
+            onClick = { actions?.toggleItalic() },
+        )
+        FormatToggle(
+            icon = Lucide.Strikethrough,
+            contentDescriptionRes = R.string.toolbar_strikethrough,
+            active = AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats,
+            onClick = { actions?.toggleStrikethrough() },
+        )
+        FormatToggle(
+            icon = Lucide.List,
+            contentDescriptionRes = R.string.toolbar_bullet,
+            active = AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats,
+            onClick = { actions?.toggleBulletList() },
+        )
+        FormatToggle(
+            icon = Lucide.ListChecks,
+            contentDescriptionRes = R.string.toolbar_checklist,
+            active = AztecTextFormat.FORMAT_TASK_LIST in activeFormats,
+            onClick = { actions?.toggleTaskList() },
+        )
+    }
+}
+
+@Composable
+private fun FormatToggle(
+    icon: ImageVector,
+    contentDescriptionRes: Int,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(34.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = stringResource(contentDescriptionRes),
+            tint = if (active) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
@@ -53,7 +116,7 @@ fun MarkdownToolbar(
 private fun MarkdownToolbarLightPreview() {
     TesseraTheme(darkTheme = false, dynamicColor = false) {
         Box(modifier = Modifier.padding(16.dp)) {
-            MarkdownToolbar(onOpenMenu = {})
+            MarkdownToolbar(onOpenMenu = {}, actions = null, activeFormats = emptySet())
         }
     }
 }
@@ -67,7 +130,7 @@ private fun MarkdownToolbarLightPreview() {
 private fun MarkdownToolbarDarkPreview() {
     TesseraTheme(darkTheme = true, dynamicColor = false) {
         Box(modifier = Modifier.padding(16.dp)) {
-            MarkdownToolbar(onOpenMenu = {})
+            MarkdownToolbar(onOpenMenu = {}, actions = null, activeFormats = emptySet())
         }
     }
 }

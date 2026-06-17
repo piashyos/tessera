@@ -17,6 +17,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.tessera.core.ui.theme.TesseraTheme
+import dev.chrisbanes.haze.HazeState
 
 @Composable
 fun GlassFab(
@@ -24,6 +25,7 @@ fun GlassFab(
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
     contentDescription: String? = null,
+    hazeState: HazeState? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val semanticsModifier =
@@ -42,6 +44,7 @@ fun GlassFab(
         blurRadius = 10.dp,
         shadowElevation = 3.dp,
         showGlassDecor = false,
+        hazeState = hazeState,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
     ) {
         Box(

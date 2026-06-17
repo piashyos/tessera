@@ -2,11 +2,19 @@ package app.tessera.ui.notes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.tessera.domain.model.Folder
+import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.usecase.CreateFolderUseCase
 import app.tessera.domain.usecase.CreateNoteUseCase
+import app.tessera.domain.usecase.DeleteFolderUseCase
 import app.tessera.domain.usecase.DeleteNoteUseCase
+import app.tessera.domain.usecase.MoveNoteToFolderUseCase
+import app.tessera.domain.usecase.ObserveFoldersUseCase
+import app.tessera.domain.usecase.ObserveNotesInFolderUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
+import app.tessera.domain.usecase.RenameFolderUseCase
 import app.tessera.domain.usecase.RestoreNoteUseCase
 import app.tessera.domain.usecase.SearchNotesUseCase
 import app.tessera.domain.usecase.TogglePinUseCase
@@ -37,11 +45,18 @@ class NotesListViewModel @Inject constructor(
     private val deleteNoteUseCase: DeleteNoteUseCase,
     private val restoreNoteUseCase: RestoreNoteUseCase,
     private val togglePinUseCase: TogglePinUseCase,
+    private val observeFoldersUseCase: ObserveFoldersUseCase,
+    private val observeNotesInFolderUseCase: ObserveNotesInFolderUseCase,
+    private val createFolderUseCase: CreateFolderUseCase,
+    private val renameFolderUseCase: RenameFolderUseCase,
+    private val deleteFolderUseCase: DeleteFolderUseCase,
+    private val moveNoteToFolderUseCase: MoveNoteToFolderUseCase,
 ) : ViewModel() {
     private val query = MutableStateFlow("")
     private val selectedTags = MutableStateFlow<Set<String>>(emptySet())
     private val selection = MutableStateFlow<Set<NoteId>>(emptySet())
     private val viewMode = MutableStateFlow(NotesViewMode.List)
+    private val selectedFolderId = MutableStateFlow<FolderId?>(null)
 
     private val effectiveQuery =
         query
@@ -56,25 +71,30 @@ class NotesListViewModel @Inject constructor(
                 }
             }
 
+    private val notesFlow =
+        combine(effectiveQuery, selectedFolderId) { value, folderId -> value to folderId }
+            .flatMapLatest { (value, folderId) ->
+                when {
+                    value.isNotBlank() -> searchNotesUseCase(value)
+                    folderId != null -> observeNotesInFolderUseCase(folderId)
+                    else -> observeNotesUseCase()
+                }
+            }
+
     val state: StateFlow<NotesListState> =
         combine(
-            query,
-            selectedTags,
-            selection,
-            viewMode,
-            effectiveQuery.flatMapLatest { value ->
-                if (value.isBlank()) {
-                    observeNotesUseCase()
-                } else {
-                    searchNotesUseCase(value)
-                }
-            },
-        ) { currentQuery, activeTags, selectedNotes, currentViewMode, notes ->
+            combine(query, selectedTags, selection, viewMode) { q, t, sel, vm -> StateInputs(q, t, sel, vm) },
+            notesFlow,
+            observeFoldersUseCase(),
+            selectedFolderId,
+        ) { inputs, notes, folders, folderId ->
             notes.toUiState(
-                query = currentQuery,
-                selectedTags = activeTags,
-                selection = selectedNotes,
-                viewMode = currentViewMode,
+                query = inputs.query,
+                selectedTags = inputs.tags,
+                selection = inputs.selection,
+                viewMode = inputs.viewMode,
+                folders = folders,
+                selectedFolderId = folderId,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -114,7 +134,15 @@ class NotesListViewModel @Inject constructor(
         viewMode.update { if (it == NotesViewMode.Tiles) NotesViewMode.List else NotesViewMode.Tiles }
     }
 
-    suspend fun createNoteDraft(): NoteId = createNoteUseCase().id
+    suspend fun createNoteDraft(): NoteId {
+        val note = createNoteUseCase()
+        // If a folder is the active filter, the new draft must land there — otherwise
+        // it would silently appear in "All Notes" and surprise the user.
+        selectedFolderId.value?.let { folderId ->
+            moveNoteToFolderUseCase(note.id, folderId)
+        }
+        return note.id
+    }
 
     fun togglePin(id: NoteId) {
         viewModelScope.launch {
@@ -134,13 +162,45 @@ class NotesListViewModel @Inject constructor(
             restoreNoteUseCase(id)
         }
     }
+
+    fun selectFolder(folderId: FolderId?) {
+        selectedFolderId.value = folderId
+    }
+
+    fun createFolder(name: String) {
+        viewModelScope.launch { createFolderUseCase(name) }
+    }
+
+    fun renameFolder(id: FolderId, name: String) {
+        viewModelScope.launch { renameFolderUseCase(id, name) }
+    }
+
+    fun deleteFolder(id: FolderId) {
+        viewModelScope.launch {
+            if (selectedFolderId.value == id) selectedFolderId.value = null
+            deleteFolderUseCase(id)
+        }
+    }
+
+    fun moveNoteToFolder(noteId: NoteId, folderId: FolderId?) {
+        viewModelScope.launch { moveNoteToFolderUseCase(noteId, folderId) }
+    }
 }
+
+private data class StateInputs(
+    val query: String,
+    val tags: Set<String>,
+    val selection: Set<NoteId>,
+    val viewMode: NotesViewMode,
+)
 
 private fun List<Note>.toUiState(
     query: String,
     selectedTags: Set<String>,
     selection: Set<NoteId>,
     viewMode: NotesViewMode,
+    folders: List<Folder>,
+    selectedFolderId: FolderId?,
 ): NotesListState {
     val availableTags = flatMap { note -> note.tags.map { tag -> tag.name } }.distinct().sorted()
     val visibleNotes =
@@ -159,6 +219,8 @@ private fun List<Note>.toUiState(
             availableTags = availableTags,
             selectedTags = selectedTags,
             viewMode = viewMode,
+            folders = folders,
+            selectedFolderId = selectedFolderId,
         )
     }
 
@@ -170,5 +232,7 @@ private fun List<Note>.toUiState(
         availableTags = availableTags,
         selectedTags = selectedTags,
         viewMode = viewMode,
+        folders = folders,
+        selectedFolderId = selectedFolderId,
     )
 }

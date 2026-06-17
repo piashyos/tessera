@@ -194,15 +194,23 @@ private class FakeNotesRepository(
 
     override suspend fun togglePin(id: NoteId) {}
 
-    fun createViewModel(): NotesListViewModel =
-        NotesListViewModel(
+    fun createViewModel(): NotesListViewModel {
+        val folderRepo = app.tessera.test.fakes.FakeFolderRepository()
+        return NotesListViewModel(
             observeNotesUseCase = ObserveNotesUseCase(this),
             searchNotesUseCase = SearchNotesUseCase(this),
             createNoteUseCase = CreateNoteUseCase(this),
             deleteNoteUseCase = DeleteNoteUseCase(this),
             restoreNoteUseCase = RestoreNoteUseCase(this),
             togglePinUseCase = TogglePinUseCase(this),
+            observeFoldersUseCase = app.tessera.domain.usecase.ObserveFoldersUseCase(folderRepo),
+            observeNotesInFolderUseCase = app.tessera.domain.usecase.ObserveNotesInFolderUseCase(folderRepo),
+            createFolderUseCase = app.tessera.domain.usecase.CreateFolderUseCase(folderRepo),
+            renameFolderUseCase = app.tessera.domain.usecase.RenameFolderUseCase(folderRepo),
+            deleteFolderUseCase = app.tessera.domain.usecase.DeleteFolderUseCase(folderRepo),
+            moveNoteToFolderUseCase = app.tessera.domain.usecase.MoveNoteToFolderUseCase(folderRepo),
         )
+    }
 }
 
 private fun sampleNote(

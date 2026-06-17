@@ -1,5 +1,6 @@
 package app.tessera.ui.editor.components
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,19 +30,14 @@ import androidx.compose.ui.window.PopupProperties
 import app.tessera.R
 import app.tessera.core.ui.theme.FloatingShadowAmbient
 import app.tessera.core.ui.theme.FloatingShadowSpot
-import com.composables.icons.lucide.Bold
 import com.composables.icons.lucide.Heading1
 import com.composables.icons.lucide.Heading2
 import com.composables.icons.lucide.Heading3
 import com.composables.icons.lucide.Heading4
 import com.composables.icons.lucide.Heading5
 import com.composables.icons.lucide.Heading6
-import com.composables.icons.lucide.Italic
-import com.composables.icons.lucide.List
-import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pilcrow
-import com.composables.icons.lucide.Strikethrough
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import org.wordpress.aztec.AztecTextFormat
@@ -72,11 +68,6 @@ fun MarkdownFormatMenu(
         FormatEntry(AztecTextFormat.FORMAT_HEADING_4, Lucide.Heading4, R.string.toolbar_h4, actions::toggleHeading4),
         FormatEntry(AztecTextFormat.FORMAT_HEADING_5, Lucide.Heading5, R.string.toolbar_h5, actions::toggleHeading5),
         FormatEntry(AztecTextFormat.FORMAT_HEADING_6, Lucide.Heading6, R.string.toolbar_h6, actions::toggleHeading6),
-        FormatEntry(AztecTextFormat.FORMAT_BOLD, Lucide.Bold, R.string.toolbar_bold, actions::toggleBold),
-        FormatEntry(AztecTextFormat.FORMAT_ITALIC, Lucide.Italic, R.string.toolbar_italic, actions::toggleItalic),
-        FormatEntry(AztecTextFormat.FORMAT_STRIKETHROUGH, Lucide.Strikethrough, R.string.toolbar_strikethrough, actions::toggleStrikethrough),
-        FormatEntry(AztecTextFormat.FORMAT_UNORDERED_LIST, Lucide.List, R.string.toolbar_bullet, actions::toggleBulletList),
-        FormatEntry(AztecTextFormat.FORMAT_TASK_LIST, Lucide.ListChecks, R.string.toolbar_checklist, actions::toggleTaskList),
     )
 
     Popup(
@@ -84,32 +75,39 @@ fun MarkdownFormatMenu(
         properties = PopupProperties(focusable = false),
         popupPositionProvider = aboveAnchorPositionProvider(),
     ) {
-        Surface(
-            modifier = Modifier
-                .shadow(
-                    elevation = 12.dp,
-                    shape = RoundedCornerShape(20.dp),
-                    ambientColor = FloatingShadowAmbient,
-                    spotColor = FloatingShadowSpot,
-                )
-                .clip(RoundedCornerShape(20.dp))
-                .hazeEffect(state = hazeState) {
-                    backgroundColor = surfaceColor.copy(alpha = 0.82f)
-                    blurRadius = 24.dp
-                },
-            color = surfaceColor.copy(alpha = 0.0f),
-        ) {
-            Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                entries.forEach { entry ->
-                    FormatRow(entry = entry, active = entry.format in activeFormats) {
-                        entry.onClick()
-                        onDismiss()
+        // Outer Box reserves space around the surface so the elevation shadow has
+        // room to render inside the popup window instead of being painted directly
+        // on top of the toolbar capsule below.
+        Box(modifier = Modifier.padding(SHADOW_PADDING)) {
+            Surface(
+                modifier = Modifier
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        ambientColor = FloatingShadowAmbient,
+                        spotColor = FloatingShadowSpot,
+                    )
+                    .clip(RoundedCornerShape(20.dp))
+                    .hazeEffect(state = hazeState) {
+                        backgroundColor = surfaceColor.copy(alpha = 0.82f)
+                        blurRadius = 24.dp
+                    },
+                color = surfaceColor.copy(alpha = 0.0f),
+            ) {
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    entries.forEach { entry ->
+                        FormatRow(entry = entry, active = entry.format in activeFormats) {
+                            entry.onClick()
+                            onDismiss()
+                        }
                     }
                 }
             }
         }
     }
 }
+
+private val SHADOW_PADDING = 16.dp
 
 @Composable
 private fun FormatRow(entry: FormatEntry, active: Boolean, onClick: () -> Unit) {
@@ -156,9 +154,9 @@ private fun aboveAnchorPositionProvider() = object : PopupPositionProvider {
         layoutDirection: LayoutDirection,
         popupContentSize: IntSize,
     ): IntOffset {
-        // Anchor to the trigger button: bottom-left of the popup sits 8dp above the
-        // top of the anchor, horizontally aligned to the anchor's left edge.
-        val gapPx = 24 // ~8dp on mdpi; tighten if needed
+        // popupContentSize already accounts for the SHADOW_PADDING wrapper, so the
+        // gap below is purely between the visible surface and the anchor.
+        val gapPx = 8
         val x = anchorBounds.left.coerceAtMost(windowSize.width - popupContentSize.width)
         val y = (anchorBounds.top - popupContentSize.height - gapPx).coerceAtLeast(0)
         return IntOffset(x, y)

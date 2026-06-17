@@ -17,7 +17,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.tessera.R
@@ -28,6 +30,7 @@ import org.wordpress.aztec.ITextFormat
 import org.wordpress.aztec.plugins.IToolbarButton
 import org.wordpress.aztec.source.SourceViewEditText
 import org.wordpress.aztec.spans.AztecTaskListSpan
+import org.wordpress.aztec.spans.AztecUnorderedListSpan
 import org.wordpress.aztec.toolbar.IAztecToolbar
 import org.wordpress.aztec.toolbar.IAztecToolbarClickListener
 
@@ -45,6 +48,8 @@ interface RichBodyActions {
     fun toggleHeading6()
     fun toggleBulletList()
     fun toggleTaskList()
+    /** Programmatically focus the editor and surface the IME, placing the cursor at end of text. */
+    fun focusBody()
 
     /**
      * Formats currently applied at the editor's selection / cursor position.
@@ -67,6 +72,32 @@ private fun primeTaskListSpans(editor: AztecText) {
     val editable = editor.editableText ?: return
     val spans = editable.getSpans(0, editable.length, AztecTaskListSpan::class.java)
     spans.forEach { it.refresh() }
+}
+
+/**
+ * Replace Aztec's default unordered-list spans (which draw the bullet as a hardcoded
+ * "•" glyph at the editor's font size) with our [TesseraBulletListSpan] that paints a
+ * filled circle of the requested radius — lets us size the dot independently of the
+ * surrounding text.
+ */
+private fun replaceBulletSpans(editor: AztecText, bulletRadiusPx: Float) {
+    val editable = editor.editableText ?: return
+    val spans = editable.getSpans(0, editable.length, AztecUnorderedListSpan::class.java)
+    spans.forEach { span ->
+        if (span is TesseraBulletListSpan) return@forEach
+        val start = editable.getSpanStart(span)
+        val end = editable.getSpanEnd(span)
+        val flags = editable.getSpanFlags(span)
+        if (start < 0 || end < 0) return@forEach
+        editable.removeSpan(span)
+        val replacement = TesseraBulletListSpan(
+            nestingLevel = span.nestingLevel,
+            attributes = span.attributes,
+            listStyle = span.listStyle,
+            bulletRadiusPx = bulletRadiusPx,
+        )
+        editable.setSpan(replacement, start, end, flags)
+    }
 }
 
 /**
@@ -116,6 +147,8 @@ fun RichNoteBody(
     // Capture theme values before entering the AndroidView lambda (Compose context required)
     val textColor = MaterialTheme.colorScheme.onSurface
     val textSizeSp = MaterialTheme.typography.bodyLarge.fontSize.takeIf { it != 0.sp } ?: 16.sp
+    val density = LocalDensity.current
+    val bulletRadiusPx = with(density) { 5.dp.toPx() }
 
     // Handler lifted to the composable so DisposableEffect can clear pending debounce
     // runnables when the editor leaves composition (e.g. back-nav during typing).
@@ -153,6 +186,10 @@ fun RichNoteBody(
             editor.textSize = textSizeSp.value
             editor.setPadding(0, 8, 0, 8)
             editor.includeFontPadding = false
+            // Pull wrapped lines closer to the previous line. Aztec inherits Android's
+            // default line spacing which leaves a noticeable gap when text wraps; trim
+            // it by reducing the multiplier and zeroing extra.
+            editor.setLineSpacing(0f, 1.05f)
 
             // Wire History + IME callbacks via the Aztec factory (no-op toolbar/listener — the Compose
             // MarkdownToolbar drives formatting through RichBodyActions). Without this call the view
@@ -170,6 +207,7 @@ fun RichNoteBody(
             // to the post-tap state — otherwise the first checkbox toggle causes a visible
             // one-time line-height shift when Aztec's `refresh()` reinstalls the span.
             primeTaskListSpans(editor)
+            replaceBulletSpans(editor, bulletRadiusPx)
             editorRef.value = editor
 
             editor.isFocusable = true
@@ -220,8 +258,21 @@ fun RichNoteBody(
                 override fun toggleHeading4() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_4) }
                 override fun toggleHeading5() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_5) }
                 override fun toggleHeading6() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_6) }
-                override fun toggleBulletList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_UNORDERED_LIST) }
+                override fun toggleBulletList() = withPreservedSelection {
+                    editor.toggleFormatting(AztecTextFormat.FORMAT_UNORDERED_LIST)
+                    // Aztec creates a fresh AztecUnorderedListSpan when toggling — swap it
+                    // for our custom span so the larger circle bullet keeps rendering.
+                    replaceBulletSpans(editor, bulletRadiusPx)
+                }
                 override fun toggleTaskList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_TASK_LIST) }
+
+                override fun focusBody() {
+                    editor.requestFocus()
+                    editor.setSelection(editor.length())
+                    val imm = editor.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                        as android.view.inputmethod.InputMethodManager
+                    imm.showSoftInput(editor, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                }
 
                 private val queryFormats = listOf(
                     AztecTextFormat.FORMAT_BOLD,
@@ -254,6 +305,7 @@ fun RichNoteBody(
             if (markdownKey != currentHtmlToMarkdown(editor.toHtml())) {
                 editor.fromHtml(html)
                 primeTaskListSpans(editor)
+                replaceBulletSpans(editor, bulletRadiusPx)
             }
         },
     )

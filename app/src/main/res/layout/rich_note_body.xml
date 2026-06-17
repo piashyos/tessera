@@ -14,4 +14,7 @@
     android:inputType="textMultiLine|textCapSentences|textNoSuggestions"
     android:imeOptions="actionDone|flagNoExtractUi"
     app:historyEnable="true"
-    app:historySize="20" />
+    app:historySize="20"
+    app:bulletColor="@color/aztec_bullet"
+    app:bulletWidth="6dp"
+    app:bulletPadding="6dp" />

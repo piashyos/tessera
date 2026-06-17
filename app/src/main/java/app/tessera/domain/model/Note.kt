@@ -12,5 +12,5 @@ data class Note(
     val syncedAt: Long?,
     val ownerId: UserId?,
 ) {
-    fun isBlankDraft(): Boolean = title.isBlank() && content.isBlank()
+    fun isBlankDraft(): Boolean = content.isBlank()
 }

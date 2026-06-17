@@ -1,5 +1,6 @@
 package app.tessera.data.repository
 
+import app.tessera.core.text.deriveTitleFromContent
 import app.tessera.core.util.Clock
 import app.tessera.data.local.dao.NoteDao
 import app.tessera.data.local.dao.TagDao
@@ -79,6 +80,7 @@ class NotesRepositoryImpl @Inject constructor(
 
         val persisted =
             note.copy(
+                title = deriveTitleFromContent(note.content),
                 tags = noteMapper.normalizeTags(note.tags),
                 updatedAt = clock.nowMs(),
                 syncedAt = null,

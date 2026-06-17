@@ -161,7 +161,7 @@ class NotesRepositoryImplTest {
                 ),
             )
 
-            val results = repository.searchNotes("kotlin").first()
+            val results = repository.searchNotes("flow").first()
 
             assertEquals(1, results.size)
             assertEquals(NoteId(first.id.value), results.single().id)
@@ -362,6 +362,12 @@ private class FakeNoteDao : NoteDao {
     override suspend fun markSynced(id: String, ts: Long) {
         val current = notes[id] ?: return
         notes[id] = current.copy(syncedAt = ts)
+        emitChanges(id)
+    }
+
+    override suspend fun markPendingSync(id: String, ts: Long) {
+        val current = notes[id] ?: return
+        notes[id] = current.copy(syncedAt = null, updatedAt = ts)
         emitChanges(id)
     }
 

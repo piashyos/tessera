@@ -47,9 +47,19 @@ class SyncRepositoryImplTest {
     private fun create(
         noteDao: NoteDao = SyncFakeNoteDao(),
         tagDao: TagDao = SyncFakeTagDao(),
+        folderDao: SyncFakeFolderDao = SyncFakeFolderDao(),
         remote: FakeRemoteNotesDataSource = FakeRemoteNotesDataSource(),
+        remoteFolders: SyncFakeRemoteFoldersDataSource = SyncFakeRemoteFoldersDataSource(),
         clock: Clock = SyncTestClock(1000L),
-    ) = SyncRepositoryImpl(noteDao, tagDao, remote, NoteMapper(), clock)
+    ) = SyncRepositoryImpl(
+        noteDao,
+        tagDao,
+        folderDao,
+        remote,
+        remoteFolders,
+        NoteMapper(),
+        clock,
+    )
 
     @Test
     fun `pushPending uploads unsynced non-blank notes and marks them synced`() =
@@ -149,6 +159,52 @@ class SyncRepositoryImplTest {
             repo.syncNow(uid)
 
             assertEquals(listOf("alpha", "beta"), tagDao.tagsForNote("tagged").sorted())
+        }
+
+    @Test
+    fun `pull writes a remote folder into Room and reattaches assigned notes`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val folderDao = SyncFakeFolderDao()
+            val remote = FakeRemoteNotesDataSource()
+            val remoteFolders = SyncFakeRemoteFoldersDataSource()
+            val clock = SyncTestClock(700L)
+            val repo = create(
+                noteDao = noteDao,
+                folderDao = folderDao,
+                remote = remote,
+                remoteFolders = remoteFolders,
+                clock = clock,
+            )
+            remoteFolders.store(
+                app.tessera.data.remote.RemoteFolder(
+                    id = "folder-1",
+                    name = "Work",
+                    createdAt = 5L,
+                    updatedAt = 10L,
+                ),
+            )
+            remote.store(
+                RemoteNote(
+                    id = "note-1",
+                    title = "Hello",
+                    content = "Body",
+                    updatedAt = 20L,
+                    folderId = "folder-1",
+                ),
+            )
+
+            repo.syncNow(uid)
+
+            val pulledFolder = folderDao.getById("folder-1")
+            assertNotNull(pulledFolder)
+            assertEquals("Work", pulledFolder?.name)
+            assertEquals(700L, pulledFolder?.syncedAt)
+
+            val pulledNote = noteDao.getById("note-1")
+            assertNotNull(pulledNote)
+            assertEquals("Hello", pulledNote?.title)
+            assertEquals("folder-1", folderDao.folderIdForNote("note-1"))
         }
 
     @Test
@@ -266,6 +322,11 @@ private class SyncFakeNoteDao : NoteDao {
         notes[id]?.let { notes[id] = it.copy(syncedAt = ts) }
     }
 
+    override suspend fun markPendingSync(id: String, ts: Long) {
+        notes[id]?.let { notes[id] = it.copy(syncedAt = null, updatedAt = ts) }
+        emitActive()
+    }
+
     override suspend fun getCurrentOwnerId(): String? = notes.values.firstOrNull { it.ownerId != null }?.ownerId
 
     override suspend fun adoptLocalNotes(uid: String) {
@@ -320,4 +381,75 @@ private class SyncFakeTagDao : TagDao {
     override fun observeTagsForNote(noteId: String): Flow<List<String>> = MutableStateFlow(emptyList())
 
     override fun observeAllCrossRefs(): Flow<List<NoteTagCrossRef>> = MutableStateFlow(emptyList())
+}
+
+private class SyncFakeFolderDao : app.tessera.data.local.dao.FolderDao {
+    private val folders = linkedMapOf<String, app.tessera.data.local.entity.FolderEntity>()
+    private val assignments = mutableMapOf<String, String>()
+
+    override fun observeAll(): Flow<List<app.tessera.data.local.entity.FolderEntity>> =
+        MutableStateFlow(folders.values.filter { it.deletedAt == null })
+
+    override suspend fun getById(id: String) = folders[id]
+
+    override suspend fun upsert(folder: app.tessera.data.local.entity.FolderEntity) {
+        folders[folder.id] = folder
+    }
+
+    override suspend fun softDelete(id: String, ts: Long) {
+        folders[id]?.let { folders[id] = it.copy(deletedAt = ts, updatedAt = ts, syncedAt = null) }
+    }
+
+    override suspend fun hardDelete(id: String) {
+        folders.remove(id)
+    }
+
+    override suspend fun rename(id: String, name: String, ts: Long) {
+        folders[id]?.let { folders[id] = it.copy(name = name, updatedAt = ts, syncedAt = null) }
+    }
+
+    override suspend fun getPendingSync() = folders.values.filter { it.syncedAt == null }
+    override suspend fun markSynced(id: String, ts: Long) {
+        folders[id]?.let { folders[id] = it.copy(syncedAt = ts) }
+    }
+
+    override suspend fun purgeOldTombstones(threshold: Long): Int {
+        val gone = folders.values.filter { it.deletedAt != null && it.deletedAt < threshold }
+        gone.forEach { folders.remove(it.id) }
+        return gone.size
+    }
+
+    override suspend fun assignNote(ref: app.tessera.data.local.entity.NoteFolderCrossRef) {
+        assignments[ref.noteId] = ref.folderId
+    }
+
+    override suspend fun clearAssignment(noteId: String) {
+        assignments.remove(noteId)
+    }
+
+    override fun observeFolderForNote(noteId: String): Flow<String?> =
+        MutableStateFlow(assignments[noteId])
+
+    override suspend fun folderIdForNote(noteId: String): String? = assignments[noteId]
+
+    override fun observeNotesInFolder(folderId: String): Flow<List<NoteEntity>> =
+        MutableStateFlow(emptyList())
+}
+
+private class SyncFakeRemoteFoldersDataSource : app.tessera.data.remote.RemoteFoldersDataSource {
+    private val folders = linkedMapOf<String, app.tessera.data.remote.RemoteFolder>()
+    val uploaded = linkedMapOf<String, app.tessera.data.remote.RemoteFolder>()
+
+    fun store(folder: app.tessera.data.remote.RemoteFolder) {
+        folders[folder.id] = folder
+    }
+
+    override suspend fun fetchAll(uid: String) = folders.values.toList()
+    override suspend fun upsertAll(uid: String, folders: List<app.tessera.data.remote.RemoteFolder>) {
+        folders.forEach { uploaded[it.id] = it; this.folders[it.id] = it }
+    }
+    override fun observeFolders(uid: String) =
+        MutableStateFlow(folders.values.toList())
+
+    override suspend fun deleteOlderTombstones(uid: String, threshold: Long) = 0
 }

@@ -35,16 +35,17 @@ class MarkdownFormatMenuTest {
         override fun toggleHeading6() { recordedToggles += AztecTextFormat.FORMAT_HEADING_6 }
         override fun toggleBulletList() { recordedToggles += AztecTextFormat.FORMAT_UNORDERED_LIST }
         override fun toggleTaskList() { recordedToggles += AztecTextFormat.FORMAT_TASK_LIST }
+        override fun focusBody() = Unit
         override fun activeFormats(): Set<AztecTextFormat> = setOf(AztecTextFormat.FORMAT_BOLD)
     }
 
-    @Test fun `menu shows every format and dispatches the right callback`() {
+    @Test fun `menu shows only paragraph and heading entries and dispatches the right callback`() {
         var dismissed = false
         composeRule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
                 MarkdownFormatMenu(
                     visible = true,
-                    activeFormats = setOf(AztecTextFormat.FORMAT_BOLD),
+                    activeFormats = setOf(AztecTextFormat.FORMAT_HEADING_1),
                     actions = fakeActions,
                     onDismiss = { dismissed = true },
                     hazeState = HazeState(),
@@ -52,11 +53,12 @@ class MarkdownFormatMenuTest {
             }
         }
 
-        composeRule.onNodeWithText("Bold").assertIsDisplayed()
-        composeRule.onNodeWithText("Heading 3").assertIsDisplayed()
+        composeRule.onNodeWithText("Paragraph").assertIsDisplayed()
+        composeRule.onNodeWithText("Heading 1").assertIsDisplayed()
+        composeRule.onNodeWithText("Heading 6").assertIsDisplayed()
 
-        composeRule.onNodeWithText("Italic").performClick()
-        assert(AztecTextFormat.FORMAT_ITALIC in recordedToggles)
+        composeRule.onNodeWithText("Heading 3").performClick()
+        assert(AztecTextFormat.FORMAT_HEADING_3 in recordedToggles)
         assert(dismissed)
     }
 }

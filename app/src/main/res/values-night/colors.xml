@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bullet marker color for Aztec lists — dark theme: warm cream (PrimaryDark). -->
+    <color name="aztec_bullet">#F0C48A</color>
+</resources>
