@@ -2,6 +2,8 @@ package app.tessera.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.tessera.core.preferences.ThemeMode
+import app.tessera.core.preferences.UserPreferences
 import app.tessera.domain.model.AccountSwitchDecision
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.AccountRepository
@@ -25,23 +27,39 @@ class SettingsViewModel @Inject constructor(
     private val signInUseCase: SignInUseCase,
     private val signOutUseCase: SignOutUseCase,
     private val handleAccountSwitchUseCase: HandleAccountSwitchUseCase,
+    private val userPreferences: UserPreferences,
 ) : ViewModel() {
     private val uiState = MutableStateFlow(SettingsState())
 
     val state: StateFlow<SettingsState> =
-        combine(authRepository.currentProfile, uiState) { profile, ui ->
+        combine(
+            authRepository.currentProfile,
+            uiState,
+            userPreferences.themeMode,
+            userPreferences.languageTag,
+        ) { profile, ui, theme, lang ->
             ui.copy(
                 isSignedIn = profile != null,
                 userId = profile?.id?.value,
                 displayName = profile?.displayName,
                 email = profile?.email,
                 photoUrl = profile?.photoUrl,
+                themeMode = theme,
+                languageTag = lang,
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
             initialValue = SettingsState(),
         )
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { userPreferences.setThemeMode(mode) }
+    }
+
+    fun setLanguage(tag: String) {
+        viewModelScope.launch { userPreferences.setLanguageTag(tag) }
+    }
 
     fun onSignIn() {
         if (uiState.value.isBusy) return

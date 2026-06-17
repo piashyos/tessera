@@ -38,10 +38,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
+import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.settings.components.AccountSwitchDialog
+import app.tessera.ui.settings.components.ThemePicker
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Info
@@ -61,6 +63,8 @@ fun SettingsScreen(
     onConfirmMove: () -> Unit = {},
     onDeleteLocal: () -> Unit = {},
     onDismissDialog: () -> Unit = {},
+    onSelectThemeMode: (ThemeMode) -> Unit = {},
+    onSelectLanguage: (String) -> Unit = {},
 ) {
     val scrimColor = lerp(
         MaterialTheme.colorScheme.background,
@@ -111,6 +115,17 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            Text(
+                text = stringResource(R.string.settings_section_appearance),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+            )
+            ThemePicker(
+                selected = state.themeMode,
+                onSelect = onSelectThemeMode,
+            )
 
             AccountSection(
                 state = state,

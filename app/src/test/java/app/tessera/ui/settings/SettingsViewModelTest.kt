@@ -1,6 +1,8 @@
 package app.tessera.ui.settings
 
 import app.cash.turbine.test
+import app.tessera.core.preferences.ThemeMode
+import app.tessera.core.preferences.UserPreferences
 import app.tessera.domain.model.UserId
 import app.tessera.domain.model.UserProfile
 import app.tessera.domain.repository.AccountRepository
@@ -10,6 +12,7 @@ import app.tessera.domain.usecase.SignInUseCase
 import app.tessera.domain.usecase.SignOutUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -148,6 +151,7 @@ class SettingsViewModelTest {
     private fun createViewModel(
         auth: AuthRepository,
         account: AccountRepository,
+        userPreferences: UserPreferences = FakeUserPreferences(),
     ): SettingsViewModel =
         SettingsViewModel(
             authRepository = auth,
@@ -155,7 +159,22 @@ class SettingsViewModelTest {
             signInUseCase = SignInUseCase(auth),
             signOutUseCase = SignOutUseCase(auth),
             handleAccountSwitchUseCase = HandleAccountSwitchUseCase(account),
+            userPreferences = userPreferences,
         )
+}
+
+private class FakeUserPreferences : UserPreferences {
+    private val theme = MutableStateFlow(ThemeMode.AUTO)
+    private val lang = MutableStateFlow("")
+    override val themeMode: Flow<ThemeMode> get() = theme
+    override val languageTag: Flow<String> get() = lang
+    override suspend fun setThemeMode(mode: ThemeMode) {
+        theme.value = mode
+    }
+
+    override suspend fun setLanguageTag(tag: String) {
+        lang.value = tag
+    }
 }
 
 private class FakeAuthRepository(

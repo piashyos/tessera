@@ -1,5 +1,6 @@
 package app.tessera.ui.settings
 
+import app.tessera.core.preferences.ThemeMode
 import app.tessera.domain.model.UserId
 
 /**
@@ -20,4 +21,6 @@ data class SettingsState(
     val isBusy: Boolean = false,
     val pendingSwitch: PendingAccountSwitch? = null,
     val errorMessage: String? = null,
+    val themeMode: ThemeMode = ThemeMode.AUTO,
+    val languageTag: String = "",
 )

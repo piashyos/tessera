@@ -20,21 +20,21 @@ private val KEY_LANG = stringPreferencesKey("language_tag")
 @Singleton
 class UserPreferencesRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : UserPreferences {
     private val store: DataStore<Preferences> = context.userPrefsDataStore
 
-    val themeMode: Flow<ThemeMode> = store.data.map { p ->
+    override val themeMode: Flow<ThemeMode> = store.data.map { p ->
         p[KEY_THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.AUTO
     }
 
     /** Empty string = follow system default. */
-    val languageTag: Flow<String> = store.data.map { it[KEY_LANG] ?: "" }
+    override val languageTag: Flow<String> = store.data.map { it[KEY_LANG] ?: "" }
 
-    suspend fun setThemeMode(mode: ThemeMode) {
+    override suspend fun setThemeMode(mode: ThemeMode) {
         store.edit { it[KEY_THEME] = mode.name }
     }
 
-    suspend fun setLanguageTag(tag: String) {
+    override suspend fun setLanguageTag(tag: String) {
         store.edit { it[KEY_LANG] = tag }
     }
 }

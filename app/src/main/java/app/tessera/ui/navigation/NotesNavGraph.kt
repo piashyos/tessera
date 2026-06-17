@@ -58,6 +58,8 @@ fun NotesNavGraph(
                 onConfirmMove = viewModel::onConfirmMove,
                 onDeleteLocal = viewModel::onDeleteLocal,
                 onDismissDialog = viewModel::onDismissDialog,
+                onSelectThemeMode = viewModel::setThemeMode,
+                onSelectLanguage = viewModel::setLanguage,
             )
         }
         composable(
@@ -66,15 +68,26 @@ fun NotesNavGraph(
         ) {
             val viewModel: NoteEditorViewModel = hiltViewModel()
             val state by viewModel.state.collectAsState()
+            val view = androidx.compose.ui.platform.LocalView.current
+            // Always clear focus and dismiss the IME before popping back — otherwise
+            // the keyboard outlives the destination and stays open over the list.
+            val hideKeyboard: () -> Unit = {
+                val imm = view.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                    as android.view.inputmethod.InputMethodManager
+                imm.hideSoftInputFromWindow(view.windowToken, 0)
+                view.clearFocus()
+            }
 
-            val backAction: () -> Unit = remember(viewModel, navController) {
+            val backAction: () -> Unit = remember(viewModel, navController, view) {
                 {
+                    hideKeyboard()
                     viewModel.flush()
                     navController.popBackStack()
                 }
             }
-            val deleteAction: () -> Unit = remember(viewModel, navController) {
+            val deleteAction: () -> Unit = remember(viewModel, navController, view) {
                 {
+                    hideKeyboard()
                     viewModel.delete()
                     navController.popBackStack()
                 }
@@ -84,7 +97,6 @@ fun NotesNavGraph(
 
             NoteEditorScreen(
                 state = state,
-                onTitleChange = viewModel::onTitleChange,
                 onContentChange = viewModel::onContentChange,
                 onAddTag = viewModel::onAddTag,
                 onRemoveTag = viewModel::onRemoveTag,
@@ -124,6 +136,11 @@ private fun NavGraphBuilder.notesListDestination(
             onDeleteNote = { note -> viewModel.deleteNote(note.id) },
             onUndoDelete = viewModel::restoreNote,
             onOpenSettings = onOpenSettings,
+            onSelectFolder = viewModel::selectFolder,
+            onCreateFolder = viewModel::createFolder,
+            onRenameFolder = viewModel::renameFolder,
+            onDeleteFolder = viewModel::deleteFolder,
+            onMoveNoteToFolder = viewModel::moveNoteToFolder,
         )
     }
 }
