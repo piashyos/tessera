@@ -117,6 +117,12 @@ fun SettingsScreen(
                 }
             }
 
+            AccountSection(
+                state = state,
+                onSignIn = onSignIn,
+                onSignOut = onSignOut,
+            )
+
             Text(
                 text = stringResource(R.string.settings_section_appearance),
                 style = MaterialTheme.typography.titleSmall,
@@ -137,12 +143,6 @@ fun SettingsScreen(
             LanguagePicker(
                 selectedTag = state.languageTag,
                 onSelect = onSelectLanguage,
-            )
-
-            AccountSection(
-                state = state,
-                onSignIn = onSignIn,
-                onSignOut = onSignOut,
             )
 
             SettingsRow(
