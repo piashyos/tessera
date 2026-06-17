@@ -78,6 +78,7 @@ import dev.chrisbanes.haze.hazeSource
 @Composable
 fun NoteEditorScreen(
     state: NoteEditorState,
+    isDraftEntry: Boolean = false,
     onContentChange: (String) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
@@ -110,10 +111,14 @@ fun NoteEditorScreen(
             .background(pageColor)
             .testTag(UiTestTags.EditorRoot)
             .then(
-                if (sharedScope != null && visibilityScope != null && state.noteId.isNotEmpty()) {
+                if (sharedScope != null && visibilityScope != null &&
+                    (isDraftEntry || state.noteId.isNotEmpty())
+                ) {
                     with(sharedScope) {
                         Modifier.sharedElement(
-                            state = rememberSharedContentState(key = "note-card-${state.noteId}"),
+                            state = rememberSharedContentState(
+                                key = if (isDraftEntry) "note-card-draft" else "note-card-${state.noteId}",
+                            ),
                             animatedVisibilityScope = visibilityScope,
                             boundsTransform = { _, _ -> tween(Motion.SharedElementDurationMs) },
                         )

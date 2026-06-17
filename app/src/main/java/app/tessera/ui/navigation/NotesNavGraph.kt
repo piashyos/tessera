@@ -38,6 +38,7 @@ private const val NotesListRoute = "notesList"
 private const val EditorRoute = "editor"
 private const val SettingsRoute = "settings"
 private const val NoteIdArg = "noteId"
+private const val FromDraftArg = "fromDraft"
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -54,8 +55,8 @@ fun NotesNavGraph(
                 exitTransition = { fadeOut(animationSpec = tween(180)) },
             ) {
                 notesListDestination(
-                    onOpenEditor = { noteId ->
-                        navController.navigate("$EditorRoute/$noteId")
+                    onOpenEditor = { noteId, fromDraft ->
+                        navController.navigate("$EditorRoute/$noteId?$FromDraftArg=$fromDraft")
                     },
                     onOpenSettings = {
                         navController.navigate(SettingsRoute)
@@ -69,7 +70,7 @@ fun NotesNavGraph(
 }
 
 private fun NavGraphBuilder.notesListDestination(
-    onOpenEditor: (String) -> Unit,
+    onOpenEditor: (String, Boolean) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     composable(route = NotesListRoute) {
@@ -87,11 +88,11 @@ private fun NavGraphBuilder.notesListDestination(
                 onToggleViewMode = viewModel::onToggleViewMode,
                 onCreateNote = {
                     scope.launch {
-                        onOpenEditor(viewModel.createNoteDraft().value)
+                        onOpenEditor(viewModel.createNoteDraft().value, true)
                     }
                 },
                 onNoteClick = { noteId ->
-                    onOpenEditor(noteId.value)
+                    onOpenEditor(noteId.value, false)
                 },
                 onTogglePin = viewModel::togglePin,
                 onDeleteNote = { note -> viewModel.deleteNote(note.id) },
@@ -142,8 +143,14 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
 @OptIn(ExperimentalSharedTransitionApi::class)
 private fun NavGraphBuilder.editorDestination(navController: NavHostController) {
     composable(
-        route = "$EditorRoute/{$NoteIdArg}",
-        arguments = listOf(navArgument(NoteIdArg) { type = NavType.StringType }),
+        route = "$EditorRoute/{$NoteIdArg}?$FromDraftArg={$FromDraftArg}",
+        arguments = listOf(
+            navArgument(NoteIdArg) { type = NavType.StringType },
+            navArgument(FromDraftArg) {
+                type = NavType.BoolType
+                defaultValue = false
+            },
+        ),
         enterTransition = {
             scaleIn(initialScale = 0.92f, animationSpec = tween(Motion.SharedElementDurationMs)) +
                 fadeIn(tween(Motion.SharedElementDurationMs))
@@ -151,10 +158,11 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
         exitTransition = {
             scaleOut(targetScale = 0.92f, animationSpec = tween(220)) + fadeOut(tween(220))
         },
-    ) {
+    ) { backStackEntry ->
         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
             val viewModel: NoteEditorViewModel = hiltViewModel()
             val state by viewModel.state.collectAsState()
+            val fromDraft = backStackEntry.arguments?.getBoolean(FromDraftArg) ?: false
             val view = androidx.compose.ui.platform.LocalView.current
             // Always clear focus and dismiss the IME before popping back — otherwise
             // the keyboard outlives the destination and stays open over the list.
@@ -184,6 +192,7 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
 
             NoteEditorScreen(
                 state = state,
+                isDraftEntry = fromDraft,
                 onContentChange = viewModel::onContentChange,
                 onAddTag = viewModel::onAddTag,
                 onRemoveTag = viewModel::onRemoveTag,

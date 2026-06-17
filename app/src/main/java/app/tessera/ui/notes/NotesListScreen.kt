@@ -1,9 +1,16 @@
 package app.tessera.ui.notes
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -69,13 +77,21 @@ import app.tessera.core.ui.components.GlassFab
 import app.tessera.core.ui.components.ScrimEdge
 import app.tessera.core.ui.theme.FloatingShadowAmbient
 import app.tessera.core.ui.theme.FloatingShadowSpot
+import app.tessera.core.ui.theme.Motion
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.ui.navigation.LocalAnimatedVisibilityScope
+import app.tessera.ui.navigation.LocalSharedTransitionScope
 import app.tessera.ui.notes.components.BottomSearchBar
+import app.tessera.ui.notes.components.FolderNamePopup
+import app.tessera.ui.notes.components.FolderPickerPopup
+import app.tessera.ui.notes.components.FoldersDrawer
+import app.tessera.ui.notes.components.NoteContextMenu
 import app.tessera.ui.notes.components.SwipeableNoteCard
 import app.tessera.ui.notes.components.TagFilterBar
 import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Menu
 import com.composables.icons.lucide.Rows3
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Tag
@@ -84,7 +100,13 @@ import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 /** Height of the collapsing header Row, shared with the grid's top content padding. */
-private val HeaderHeight = 56.dp
+/**
+ * Total header height: top icon row (~56.dp) plus the title's resting band below it.
+ * The grid's top content padding tracks this so the first card never starts under the header.
+ */
+private val HeaderTopRow = 56.dp
+private val HeaderTitleRow = 56.dp
+private val HeaderHeight = HeaderTopRow + HeaderTitleRow
 
 /**
  * Approximate per-item height (px) used only to derive a monotonically growing scroll
@@ -93,6 +115,7 @@ private val HeaderHeight = 56.dp
  */
 private const val ApproxItemHeightPx = 200
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun NotesListScreen(
     state: NotesListState,
@@ -108,8 +131,41 @@ fun NotesListScreen(
     onUndoDelete: (NoteId) -> Unit = {},
     onRefresh: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onSelectFolder: (app.tessera.domain.model.FolderId?) -> Unit = {},
+    onCreateFolder: (String) -> Unit = {},
+    onRenameFolder: (app.tessera.domain.model.FolderId, String) -> Unit = { _, _ -> },
+    onDeleteFolder: (app.tessera.domain.model.FolderId) -> Unit = {},
+    onMoveNoteToFolder: (NoteId, app.tessera.domain.model.FolderId?) -> Unit = { _, _ -> },
     isRefreshing: Boolean = false,
 ) {
+    val sharedScope = LocalSharedTransitionScope.current
+    val visibilityScope = LocalAnimatedVisibilityScope.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val drawerWidthDp = 300.dp
+    val drawerWidthPx = with(density) { drawerWidthDp.toPx() }
+    // Single source of truth for the drawer's horizontal position. -drawerWidthPx is
+    // fully closed (off-screen left); 0f is fully open. Driving the drawer through an
+    // Animatable lets swipe gestures and button taps share the same animation.
+    val drawerOffset = remember { androidx.compose.animation.core.Animatable(-drawerWidthPx) }
+    val drawerOpen by remember { androidx.compose.runtime.derivedStateOf { drawerOffset.value > -drawerWidthPx * 0.5f } }
+    val drawerScope = rememberCoroutineScope()
+    val drawerSpring = remember {
+        androidx.compose.animation.core.spring<Float>(
+            dampingRatio = 0.85f,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+        )
+    }
+    val openDrawer: () -> Unit = {
+        drawerScope.launch { drawerOffset.animateTo(0f, drawerSpring) }
+    }
+    val closeDrawer: () -> Unit = {
+        drawerScope.launch { drawerOffset.animateTo(-drawerWidthPx, drawerSpring) }
+    }
+    var folderEditorTarget by remember { mutableStateOf<app.tessera.domain.model.Folder?>(null) }
+    var folderCreatorVisible by remember { mutableStateOf(false) }
+    var contextMenuNote by remember { mutableStateOf<Note?>(null) }
+    var contextMenuAnchor by remember { mutableStateOf<androidx.compose.ui.unit.IntOffset?>(null) }
+    var folderPickerNote by remember { mutableStateOf<Note?>(null) }
     var isSearchFocused by remember { mutableStateOf(false) }
     var tagBarExpanded by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -186,6 +242,10 @@ fun NotesListScreen(
                     onNoteClick = onNoteClick,
                     onTogglePin = onTogglePin,
                     onDeleteNote = handleDelete,
+                    onLongClickNote = { note, offset ->
+                        contextMenuNote = note
+                        contextMenuAnchor = offset
+                    },
                 )
                 if (isSearchFocused) {
                     DismissFocusLayer {
@@ -205,12 +265,16 @@ fun NotesListScreen(
                 .height(140.dp),
         )
 
+        val currentFolderName = state.selectedFolderId?.let { id ->
+            state.folders.firstOrNull { it.id == id }?.name
+        } ?: stringResource(R.string.notes_all_notes)
         CollapsingHeader(
-            title = stringResource(R.string.notes_all_notes),
+            title = currentFolderName,
             scrollPx = scrollPx,
             viewMode = state.viewMode(),
             onToggleViewMode = onToggleViewMode,
             onOpenSettings = onOpenSettings,
+            onOpenDrawer = openDrawer,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -241,45 +305,37 @@ fun NotesListScreen(
                 }
             }
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Bottom,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                // Row 1 — tag filter bar paired with its toggle. CenterVertically keeps
+                // the chips visually centered on the tag toggle FAB.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, alignment = Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TagFilterBar(
-                        expanded = tagBarExpanded && !isSearchFocused,
-                        availableTags = state.availableTags(),
-                        selectedTags = state.selectedTags(),
-                        onTagToggle = onTagToggle,
-                        hazeState = hazeState,
-                    )
-                    BottomSearchBar(
-                        query = state.query(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .shadow(
-                                elevation = 12.dp,
-                                shape = RoundedCornerShape(28.dp),
-                                ambientColor = FloatingShadowAmbient,
-                                spotColor = FloatingShadowSpot,
-                            ),
-                        onQueryChange = onQueryChange,
-                        onFocusChanged = { isSearchFocused = it },
-                        hazeState = hazeState,
-                    )
-                }
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
+                    // Box pins TagFilterBar to the End so the GlassFab below it stays
+                    // anchored to the right edge even when the chips bar is collapsed
+                    // (AnimatedVisibility reports 0 width when hidden).
+                    Box(
+                        modifier = Modifier.weight(1f, fill = true),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        TagFilterBar(
+                            expanded = tagBarExpanded && !isSearchFocused,
+                            availableTags = state.availableTags(),
+                            selectedTags = state.selectedTags(),
+                            onTagToggle = onTagToggle,
+                            hazeState = hazeState,
+                        )
+                    }
                     GlassFab(
                         onClick = if (isSearchFocused) null else { { tagBarExpanded = !tagBarExpanded } },
                         size = 40.dp,
                         contentDescription = stringResource(R.string.notes_filter_tags),
+                        hazeState = hazeState,
                         modifier = Modifier
                             .graphicsLayer {
                                 alpha = fabAlpha
@@ -301,6 +357,27 @@ fun NotesListScreen(
                             modifier = Modifier.size(18.dp),
                         )
                     }
+                }
+                // Row 2 — search bar paired with the create FAB.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BottomSearchBar(
+                        query = state.query(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .shadow(
+                                elevation = 12.dp,
+                                shape = RoundedCornerShape(28.dp),
+                                ambientColor = FloatingShadowAmbient,
+                                spotColor = FloatingShadowSpot,
+                            ),
+                        onQueryChange = onQueryChange,
+                        onFocusChanged = { isSearchFocused = it },
+                        hazeState = hazeState,
+                    )
                     GlassFab(
                         onClick = if (isSearchFocused) null else onCreateNote,
                         size = 48.dp,
@@ -318,7 +395,20 @@ fun NotesListScreen(
                                 spotColor = FloatingShadowSpot,
                                 clip = false,
                             )
-                            .testTag(UiTestTags.CreateNoteFab),
+                            .testTag(UiTestTags.CreateNoteFab)
+                            .then(
+                                if (sharedScope != null && visibilityScope != null) {
+                                    with(sharedScope) {
+                                        Modifier.sharedElement(
+                                            state = rememberSharedContentState(key = "note-card-draft"),
+                                            animatedVisibilityScope = visibilityScope,
+                                            boundsTransform = { _, _ -> tween(Motion.SharedElementDurationMs) },
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     ) {
                         Text(
                             text = "+",
@@ -336,6 +426,155 @@ fun NotesListScreen(
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(horizontal = 24.dp, vertical = 86.dp),
+        )
+
+        // Edge-swipe zone — captures a horizontal drag that originates within ~24dp
+        // of the leading edge while the drawer is closed, opening it as the user pulls
+        // right. Stays at the closed state's offset, so it never blocks taps once the
+        // drawer is open (the scrim takes over then).
+        if (!drawerOpen) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .width(24.dp)
+                    .pointerInput(drawerWidthPx) {
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { _, delta ->
+                                drawerScope.launch {
+                                    drawerOffset.snapTo(
+                                        (drawerOffset.value + delta).coerceIn(-drawerWidthPx, 0f),
+                                    )
+                                }
+                            },
+                            onDragEnd = {
+                                drawerScope.launch {
+                                    val target = if (drawerOffset.value > -drawerWidthPx * 0.5f) 0f else -drawerWidthPx
+                                    drawerOffset.animateTo(target, drawerSpring)
+                                }
+                            },
+                            onDragCancel = {
+                                drawerScope.launch {
+                                    drawerOffset.animateTo(-drawerWidthPx, drawerSpring)
+                                }
+                            },
+                        )
+                    },
+            )
+        }
+
+        // Scrim — alpha tracks the drawer's open progress, taps dismiss.
+        val drawerProgress = ((drawerOffset.value + drawerWidthPx) / drawerWidthPx).coerceIn(0f, 1f)
+        if (drawerProgress > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.32f * drawerProgress))
+                    .then(
+                        if (drawerOpen) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = closeDrawer,
+                            )
+                        } else Modifier,
+                    ),
+            )
+        }
+
+        // Drawer panel — positioned by drawerOffset and draggable in both directions
+        // so the user can swipe it closed.
+        FoldersDrawer(
+            folders = state.folders,
+            selectedFolderId = state.selectedFolderId,
+            hazeState = hazeState,
+            onSelectAll = { onSelectFolder(null); closeDrawer() },
+            onSelectFolder = { id -> onSelectFolder(id); closeDrawer() },
+            onCreateFolder = { folderCreatorVisible = true },
+            onRenameFolder = { folder -> folderEditorTarget = folder },
+            onDeleteFolder = { folder -> onDeleteFolder(folder.id) },
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset { androidx.compose.ui.unit.IntOffset(drawerOffset.value.toInt(), 0) }
+                .pointerInput(drawerWidthPx) {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { _, delta ->
+                            drawerScope.launch {
+                                drawerOffset.snapTo(
+                                    (drawerOffset.value + delta).coerceIn(-drawerWidthPx, 0f),
+                                )
+                            }
+                        },
+                        onDragEnd = {
+                            drawerScope.launch {
+                                val target = if (drawerOffset.value > -drawerWidthPx * 0.5f) 0f else -drawerWidthPx
+                                drawerOffset.animateTo(target, drawerSpring)
+                            }
+                        },
+                        onDragCancel = {
+                            drawerScope.launch {
+                                val target = if (drawerOffset.value > -drawerWidthPx * 0.5f) 0f else -drawerWidthPx
+                                drawerOffset.animateTo(target, drawerSpring)
+                            }
+                        },
+                    )
+                },
+        )
+
+        // Create folder popup
+        FolderNamePopup(
+            visible = folderCreatorVisible,
+            initialName = "",
+            onSubmit = { name ->
+                onCreateFolder(name)
+                folderCreatorVisible = false
+            },
+            onDismiss = { folderCreatorVisible = false },
+            hazeState = hazeState,
+        )
+
+        // Rename folder popup
+        val renameTarget = folderEditorTarget
+        FolderNamePopup(
+            visible = renameTarget != null,
+            initialName = renameTarget?.name.orEmpty(),
+            onSubmit = { name ->
+                if (renameTarget != null) onRenameFolder(renameTarget.id, name)
+                folderEditorTarget = null
+            },
+            onDismiss = { folderEditorTarget = null },
+            hazeState = hazeState,
+        )
+
+        // Long-press context menu
+        val ctxNote = contextMenuNote
+        NoteContextMenu(
+            visible = ctxNote != null,
+            anchor = contextMenuAnchor,
+            isPinned = ctxNote?.isPinned == true,
+            onDismiss = {
+                contextMenuNote = null
+                contextMenuAnchor = null
+            },
+            onTogglePin = { ctxNote?.let { onTogglePin(it.id) } },
+            onMove = {
+                folderPickerNote = ctxNote
+                contextMenuNote = null
+            },
+            onDelete = { ctxNote?.let { handleDelete(it) } },
+            hazeState = hazeState,
+        )
+
+        // Folder picker (Move-to)
+        val pickerNote = folderPickerNote
+        FolderPickerPopup(
+            visible = pickerNote != null,
+            folders = state.folders,
+            onPick = { folderId ->
+                if (pickerNote != null) onMoveNoteToFolder(pickerNote.id, folderId)
+            },
+            onDismiss = { folderPickerNote = null },
+            hazeState = hazeState,
         )
     }
 }
@@ -361,56 +600,95 @@ fun CollapsingHeader(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     title: String = stringResource(R.string.notes_all_notes),
+    onOpenDrawer: () -> Unit = {},
 ) {
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .height(HeaderHeight),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.graphicsLayer {
-                val s = headerTitleScale(scrollPx, HEADER_COLLAPSE_THRESHOLD_PX)
-                scaleX = s
-                scaleY = s
-                transformOrigin = TransformOrigin(0f, 0.5f)
-            },
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val (toggleIcon, toggleDesc) = if (viewMode == NotesViewMode.Tiles) {
-                Lucide.Rows3 to stringResource(R.string.notes_view_mode_list)
-            } else {
-                Lucide.LayoutGrid to stringResource(R.string.notes_view_mode_tiles)
-            }
+        // Top row: burger (leading) + view-mode + settings (trailing).
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(HeaderTopRow),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             IconButton(
-                onClick = onToggleViewMode,
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag(UiTestTags.ViewModeToggle),
+                onClick = onOpenDrawer,
+                modifier = Modifier.size(40.dp),
             ) {
                 Icon(
-                    imageVector = toggleIcon,
-                    contentDescription = toggleDesc,
+                    imageVector = Lucide.Menu,
+                    contentDescription = stringResource(R.string.folders_open_drawer),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag(UiTestTags.OpenSettings),
-            ) {
-                Icon(
-                    imageVector = Lucide.Settings,
-                    contentDescription = stringResource(R.string.settings_open),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val (toggleIcon, toggleDesc) = if (viewMode == NotesViewMode.Tiles) {
+                    Lucide.Rows3 to stringResource(R.string.notes_view_mode_list)
+                } else {
+                    Lucide.LayoutGrid to stringResource(R.string.notes_view_mode_tiles)
+                }
+                IconButton(
+                    onClick = onToggleViewMode,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag(UiTestTags.ViewModeToggle),
+                ) {
+                    Icon(
+                        imageVector = toggleIcon,
+                        contentDescription = toggleDesc,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag(UiTestTags.OpenSettings),
+                ) {
+                    Icon(
+                        imageVector = Lucide.Settings,
+                        contentDescription = stringResource(R.string.settings_open),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+        }
+
+        // Title row beneath the burger. At rest the title sits in this second band
+        // (visually directly under the burger). On scroll it animates upward and
+        // shrinks until it lines up horizontally with the icons in the top row.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(HeaderTitleRow),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val topRowPx = with(density) { HeaderTopRow.toPx() }
+            // Slide the title past the burger icon (40dp button + 8dp gap) when
+            // collapsed so the two don't overlap horizontally.
+            val burgerOffsetPx = with(density) { 48.dp.toPx() }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier
+                    .padding(start = 4.dp)
+                    .graphicsLayer {
+                        val progress = (scrollPx.toFloat() / HEADER_COLLAPSE_THRESHOLD_PX).coerceIn(0f, 1f)
+                        val s = 1f - ((1f - HEADER_COLLAPSED_SCALE) * progress)
+                        scaleX = s
+                        scaleY = s
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        translationY = -topRowPx * progress
+                        translationX = burgerOffsetPx * progress
+                    },
+            )
         }
     }
 }
@@ -425,6 +703,7 @@ private fun NotesContent(
     onNoteClick: (NoteId) -> Unit,
     onTogglePin: (NoteId) -> Unit,
     onDeleteNote: (Note) -> Unit,
+    onLongClickNote: (Note, androidx.compose.ui.unit.IntOffset) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (state) {
@@ -492,6 +771,7 @@ private fun NotesContent(
                                 onClick = { onNoteClick(note.id) },
                                 onTogglePin = { onTogglePin(note.id) },
                                 onDelete = { onDeleteNote(note) },
+                                onLongClick = { offset -> onLongClickNote(note, offset) },
                             )
                         }
                     }
