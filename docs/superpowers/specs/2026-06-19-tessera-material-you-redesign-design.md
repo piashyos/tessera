@@ -107,6 +107,8 @@ val brandRipple = RippleConfiguration(
 )
 ```
 
+Brand ripple оборачивает **только** конкретный composable (FAB, Chip, primary Button), не родительский subtree — иначе соседние нейтральные IconButton'ы тоже получат брендовый ripple. Pattern: `CompositionLocalProvider(LocalRippleConfiguration provides brandRipple) { FloatingActionButton(...) { ... } }`.
+
 Существующий `NoIndication`/`LocalRippleConfiguration provides null` из `Theme.kt` — **удаляется**.
 
 ### 4.4 XML mirror (для Aztec)
@@ -142,7 +144,20 @@ val InstrumentSerif = FontFamily(
 - body{Large,Medium,Small} — Inter 15/13/11
 - label{Large,Medium,Small} — Inter W500 13/11 / W600 10 letterSpacing 0.8
 
-**Where each role goes:** см. mapping table в discussion (settings header → headlineLarge serif, drawer header → headlineMedium serif, top-bar title → titleMedium 16sp W600 override, note card title → bodyMedium W600 override, chip → labelMedium, section labels → labelSmall uppercase, editor H1 inline → кастомный Aztec span Instrument Serif 26sp, body paragraph → bodyLarge, editor H2 → titleLarge).
+**Role placement:**
+- Settings large header → `headlineLarge` (Instrument Serif 28)
+- Drawer header «Tessera» → `headlineMedium` (Instrument Serif 24)
+- Dialog title → `headlineSmall` со шрифт-override Instrument Serif 20 (см. `TesseraDialog`)
+- TopAppBar title → `titleMedium` override `fontSize=16.sp, fontWeight=W600`
+- Note card title → `bodyMedium` override W600 14sp
+- Note card preview / meta → `bodySmall` 11/12sp
+- Chip → `labelMedium` W500 12sp
+- Section labels («ALL NOTES», «FOLDERS») → `labelSmall` W600 10sp uppercase
+- Editor inline H1 → кастомный Aztec span (Instrument Serif 26sp), не из Typography (см. §6)
+- Editor body paragraph → `bodyLarge` 15sp/24
+- Editor H2 → `titleLarge` Inter W600 18sp/24
+
+`FontVariation.weight(n)` — из `androidx.compose.ui.text.font.FontVariation`.
 
 **`letterSpacing = 0sp`** override на body/title (M3 default 0.25-0.5 размазан).
 
@@ -188,7 +203,7 @@ enum class TesseraElevation(val dp: Dp) {
 }
 ```
 
-Цвета теней warm-tinted (light) / pure black (dark) — см. shadowWarm/shadowFloating токены.
+**Реализация:** `Modifier.shadow(elevation.dp, shape, ambientColor = warmShadowAmbient, spotColor = warmShadowSpot)` (API 28+, у нас minSdk=26 → на API 26-27 `ambientColor`/`spotColor` игнорируются и тень рисуется system-default чёрной; это приемлемо для двух старых API levels). Цвета теней warm-tinted (light) / pure black (dark) — см. shadowWarm/shadowFloating токены.
 
 ### 4.9 Motion
 
@@ -269,7 +284,7 @@ EditorFormatBar (48dp, floating над клавиатурой):
 - `components/EditorFormatBar.kt` — новый, заменяет inline `MarkdownToolbar`. Scrollable Row 36dp button cells, group separators (`1dp × 24dp outlineVariant`), active=`secondaryContainer` 8dp radius. Эмитит те же команды что `MarkdownFormatMenu` (последний остаётся как overflow `⋯` меню — clear formatting / indent / find&replace).
 - `components/RichNoteBody.kt` — `setTypeface(ResourcesCompat.getFont(ctx, R.font.inter_variable))`. После Aztec parsing — `applyFirstLineSerifH1(spannable)` накладывает `TypefaceSpan(InstrumentSerif) + AbsoluteSizeSpan(26.sp)` на первый `<h1>`.
 - `res/layout/rich_note_body.xml` — background `?attr/colorBackground`, AztecText `textColor=?attr/colorOnSurface`, `textColorHint=?attr/colorOnSurfaceVariant`, `textSize=15sp`, `lineSpacingExtra=4dp`.
-- `core/text/MarkdownHtmlConverter.kt` — добавляется `applyFirstLineSerifH1` helper. Если первая строка не H1 — no-op.
+- `core/text/MarkdownHtmlConverter.kt` — добавляется `applyFirstLineSerifH1` helper. Если первая строка не H1 — no-op. **Re-application:** spans теряются при Aztec re-parse (HTML round-trip). Вызов helper'а делается в двух точках: (a) `RichNoteBody.setMarkdownInternal()` после initial load; (b) `TextWatcher.afterTextChanged()` для re-apply на первый `<h1>` block если он сместился из-за edit. Взаимодействие с `FlickerlessAztecText` anti-flicker logic и логикой «preserve typed content across mid-stroke recompositions» (commits `8ed0ca7`, `53728a1`, `baae2d4`) — в plan-phase отдельная задача со своим test case.
 - `components/TableBlockEditor.kt` — заменить hardcoded colors на `MaterialTheme.colorScheme.{surfaceContainer, outlineVariant}`. Behavior не трогаем.
 - Quote span: новый `TesseraQuoteSpan` (left bar 3dp `primary`, padding-start 12dp, italic InstrumentSerif).
 - Checklist: checked-fill = `primary`, через `colors.xml`.
@@ -334,7 +349,7 @@ LargeTopAppBar (collapsible)
     data class Error(val message: String, val onRetry: () -> Unit) : SyncIndicator()
   }
   ```
-  State из нового `SyncManager.syncStatusFlow: Flow<SyncIndicator>`.
+  State из нового `SyncManager.syncStatusFlow: Flow<SyncIndicator>`. Источники сигналов: (a) WorkManager `WorkInfo` observer для активной `SyncWorker` job → `Syncing`; (b) `NetworkCallback`/`ConnectivityManager` → `Offline` при отсутствии сети; (c) последний успешный `SyncWorker.Result.success()` timestamp из `SyncRepository` → `Ok(lastSync)`; (d) последняя `SyncWorker.Result.failure()` с error message → `Error`. Маппер живёт в `sync/SyncManager` (combine этих flows), UI слой только читает.
 - `components/ThemePickerSheet.kt` — `ModalBottomSheet`: System/Light/Dark radio rows + «Use dynamic color» switch (SDK gated) + preview card.
 
 ### Switch
