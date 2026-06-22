@@ -19,6 +19,7 @@
     <string name="editor_title_hint">Title</string>
     <string name="editor_body_hint">Start writing…</string>
     <string name="editor_add_tag">Add tag</string>
+    <string name="editor_remove_tag">Remove tag %1$s</string>
     <string name="editor_tags_toggle">Toggle tags</string>
     <string name="editor_pin">Pin note</string>
     <string name="editor_unpin">Unpin note</string>

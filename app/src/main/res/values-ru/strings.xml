@@ -19,6 +19,7 @@
     <string name="editor_title_hint">Заголовок</string>
     <string name="editor_body_hint">Начните писать…</string>
     <string name="editor_add_tag">Добавить тег</string>
+    <string name="editor_remove_tag">Удалить тег %1$s</string>
     <string name="editor_tags_toggle">Показать теги</string>
     <string name="editor_pin">Закрепить заметку</string>
     <string name="editor_unpin">Открепить заметку</string>

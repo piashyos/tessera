@@ -87,7 +87,7 @@ fun TagChipsExpandable(
                         ) {
                             Icon(
                                 imageVector = Lucide.X,
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.editor_remove_tag, tag),
                                 modifier = Modifier.size(12.dp),
                             )
                         }
