@@ -26,4 +26,5 @@
     app:codeColor="@color/brand_on_surface"
     app:codeBackgroundColor="@color/brand_surface_container"
     app:taskListCheckedTextColor="@color/brand_on_surface_variant"
-    app:paragraphVerticalMargin="0dp" />
+    app:paragraphVerticalMargin="0dp"
+    app:blockVerticalPadding="0dp" />

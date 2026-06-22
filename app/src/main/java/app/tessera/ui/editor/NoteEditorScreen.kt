@@ -66,6 +66,7 @@ import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.Trash2
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import org.wordpress.aztec.AztecTextFormat
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -115,6 +116,10 @@ fun NoteEditorScreen(
     val hazeState = remember { HazeState() }
     var tagPickerVisible by remember { mutableStateOf(false) }
     var formatMenuVisible by remember { mutableStateOf(false) }
+    // Live formats at the editor's caret, pushed from RichNoteBody on selection/text/toggle
+    // changes. Drives the toolbar highlight so buttons no longer stay lit after the caret
+    // leaves the formatted span.
+    var activeFormats by remember { mutableStateOf<Set<AztecTextFormat>>(emptySet()) }
     val imeVisible = WindowInsets.isImeVisible
 
     Box(modifier = modifier.fillMaxSize().testTag(UiTestTags.EditorRoot)) {
@@ -189,7 +194,7 @@ fun NoteEditorScreen(
                     ) {
                         EditorFormatBar(
                             actions = actions,
-                            activeFormats = actions?.activeFormats() ?: emptySet(),
+                            activeFormats = activeFormats,
                             onOpenOverflow = { formatMenuVisible = true },
                         )
                     }
@@ -239,6 +244,7 @@ fun NoteEditorScreen(
                         onContentChange = onContentChange,
                         onActionsReady = { actions = wrapActions(it) },
                         onBlockFocused = { lastFocusedBlock = it },
+                        onActiveFormatsChanged = { activeFormats = it },
                     )
 
                     // Tap target below the content forwards focus to the editor body and
@@ -263,9 +269,7 @@ fun NoteEditorScreen(
         if (currentActions != null) {
             MarkdownFormatMenu(
                 visible = formatMenuVisible,
-                activeFormats = remember(formatMenuVisible) {
-                    if (formatMenuVisible) currentActions.activeFormats() else emptySet()
-                },
+                activeFormats = activeFormats,
                 actions = currentActions,
                 onDismiss = { formatMenuVisible = false },
                 hazeState = hazeState,
@@ -298,6 +302,7 @@ private fun EditorBody(
     onContentChange: (String) -> Unit,
     onActionsReady: (RichBodyActions) -> Unit,
     onBlockFocused: (Int) -> Unit,
+    onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit,
 ) {
     if (!hasTable) {
         // FAST PATH — preserves behavior for notes without tables (the majority).
@@ -308,6 +313,7 @@ private fun EditorBody(
             onMarkdownChange = { markdown -> if (markdown != content) onContentChange(markdown) },
             onActionsReady = onActionsReady,
             onFocusChanged = { if (it) onBlockFocused(0) },
+            onActiveFormatsChanged = onActiveFormatsChanged,
             modifier = Modifier.fillMaxWidth(),
         )
         return
@@ -333,6 +339,7 @@ private fun EditorBody(
                         },
                         onActionsReady = onActionsReady,
                         onFocusChanged = { if (it) onBlockFocused(idx) },
+                        onActiveFormatsChanged = onActiveFormatsChanged,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

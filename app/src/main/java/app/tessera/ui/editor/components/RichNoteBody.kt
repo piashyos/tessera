@@ -88,6 +88,26 @@ interface RichBodyActions {
 private const val DebounceMs = 300L
 private const val SerifReapplyMs = 50L
 
+/** Formats the toolbar highlights as "active"; queried against the editor's selection. */
+private val EditorQueryFormats = listOf(
+    AztecTextFormat.FORMAT_BOLD,
+    AztecTextFormat.FORMAT_ITALIC,
+    AztecTextFormat.FORMAT_STRIKETHROUGH,
+    AztecTextFormat.FORMAT_PARAGRAPH,
+    AztecTextFormat.FORMAT_HEADING_1,
+    AztecTextFormat.FORMAT_HEADING_2,
+    AztecTextFormat.FORMAT_HEADING_3,
+    AztecTextFormat.FORMAT_HEADING_4,
+    AztecTextFormat.FORMAT_HEADING_5,
+    AztecTextFormat.FORMAT_HEADING_6,
+    AztecTextFormat.FORMAT_UNORDERED_LIST,
+    AztecTextFormat.FORMAT_TASK_LIST,
+    AztecTextFormat.FORMAT_UNDERLINE,
+    AztecTextFormat.FORMAT_ORDERED_LIST,
+    AztecTextFormat.FORMAT_QUOTE,
+    AztecTextFormat.FORMAT_CODE,
+)
+
 /**
  * Call `refresh()` on every `AztecTaskListSpan` currently attached to the editor's
  * editable. Aztec's stock `fromHtml` installs the task-list span but the leading
@@ -161,6 +181,7 @@ fun RichNoteBody(
     onActionsReady: (RichBodyActions) -> Unit,
     modifier: Modifier = Modifier,
     onFocusChanged: (Boolean) -> Unit = {},
+    onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit = {},
 ) {
     if (LocalInspectionMode.current) {
         // Aztec cannot instantiate in Compose preview — show a placeholder
@@ -200,6 +221,7 @@ fun RichNoteBody(
     val currentOnMarkdownChange by rememberUpdatedState(onMarkdownChange)
     val currentHtmlToMarkdown by rememberUpdatedState(htmlToMarkdown)
     val currentOnFocusChanged by rememberUpdatedState(onFocusChanged)
+    val currentOnActiveFormatsChanged by rememberUpdatedState(onActiveFormatsChanged)
     DisposableEffect(Unit) {
         onDispose {
             handler.removeCallbacksAndMessages(null)
@@ -305,12 +327,24 @@ fun RichNoteBody(
                 handler.postDelayed(runnable, SerifReapplyMs)
             }
 
+            // Recompute the formats active at the current selection and push them to the
+            // toolbar. Called on selection moves, text changes, and after each toggle so the
+            // active-format highlight never goes stale (e.g. an H2 button staying lit after
+            // the caret moved to a plain paragraph).
+            fun pushActiveFormats() {
+                val active = EditorQueryFormats.filterTo(mutableSetOf()) {
+                    editor.contains(it, editor.selectionStart, editor.selectionEnd)
+                }
+                currentOnActiveFormatsChanged(active)
+            }
+
             editor.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
                 override fun afterTextChanged(s: Editable?) {
                     scheduleHtmlFlush()
                     scheduleSerifReapply()
+                    pushActiveFormats()
                 }
             })
 
@@ -319,6 +353,12 @@ fun RichNoteBody(
             // `setText(editable)` relayout — we hook its lightweight-refresh callback to
             // persist the new state without triggering the relayout flicker.
             (editor as? FlickerlessAztecText)?.onLightweightRefresh = { scheduleHtmlFlush() }
+
+            // Keep the toolbar's active-format highlight in sync as the caret moves. The
+            // initial fromHtml above fires before this listener is attached, so seed the
+            // toolbar once here too.
+            (editor as? FlickerlessAztecText)?.onCaretSelectionChanged = { _, _ -> pushActiveFormats() }
+            pushActiveFormats()
 
             // Expose formatting actions to the toolbar
             onActionsReady(object : RichBodyActions {
@@ -332,6 +372,9 @@ fun RichNoteBody(
                     ) {
                         editor.setSelection(start, end)
                     }
+                    // Block toggles change format without moving the caret or text, so the
+                    // selection/text listeners won't fire — refresh the toolbar explicitly.
+                    pushActiveFormats()
                 }
 
                 // Aztec's BlockFormatter.toggleHeading is a no-op when the line already has
@@ -387,27 +430,8 @@ fun RichNoteBody(
                     imm.showSoftInput(editor, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
                 }
 
-                private val queryFormats = listOf(
-                    AztecTextFormat.FORMAT_BOLD,
-                    AztecTextFormat.FORMAT_ITALIC,
-                    AztecTextFormat.FORMAT_STRIKETHROUGH,
-                    AztecTextFormat.FORMAT_PARAGRAPH,
-                    AztecTextFormat.FORMAT_HEADING_1,
-                    AztecTextFormat.FORMAT_HEADING_2,
-                    AztecTextFormat.FORMAT_HEADING_3,
-                    AztecTextFormat.FORMAT_HEADING_4,
-                    AztecTextFormat.FORMAT_HEADING_5,
-                    AztecTextFormat.FORMAT_HEADING_6,
-                    AztecTextFormat.FORMAT_UNORDERED_LIST,
-                    AztecTextFormat.FORMAT_TASK_LIST,
-                    AztecTextFormat.FORMAT_UNDERLINE,
-                    AztecTextFormat.FORMAT_ORDERED_LIST,
-                    AztecTextFormat.FORMAT_QUOTE,
-                    AztecTextFormat.FORMAT_CODE,
-                )
-
                 override fun activeFormats(): Set<AztecTextFormat> =
-                    queryFormats.filterTo(mutableSetOf()) {
+                    EditorQueryFormats.filterTo(mutableSetOf()) {
                         editor.contains(it, editor.selectionStart, editor.selectionEnd)
                     }
             })

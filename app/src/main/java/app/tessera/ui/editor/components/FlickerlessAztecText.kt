@@ -35,6 +35,20 @@ class FlickerlessAztecText : AztecText {
      */
     var onLightweightRefresh: (() -> Unit)? = null
 
+    /**
+     * Notified on every caret/selection move. Aztec recomputes the active block/inline
+     * formats per selection, but Compose has no way to observe that — without this hook the
+     * toolbar's active-format highlight only refreshes on an unrelated recomposition, so a
+     * heading button stays lit long after the caret left the heading. Hosting code listens
+     * here to re-read [contains] and update the toolbar state live.
+     */
+    var onCaretSelectionChanged: ((Int, Int) -> Unit)? = null
+
+    override fun onSelectionChanged(selStart: Int, selEnd: Int) {
+        super.onSelectionChanged(selStart, selEnd)
+        onCaretSelectionChanged?.invoke(selStart, selEnd)
+    }
+
     override fun refreshText(stealEditorFocus: Boolean) {
         if (stealEditorFocus) {
             super.refreshText(stealEditorFocus)
