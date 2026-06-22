@@ -25,6 +25,7 @@ class SearchClearTest {
                     pinnedCount = 0,
                     query = query,
                     selection = emptySet(),
+                    selectionMode = false,
                     availableTags = emptyList(),
                     selectedTags = emptySet(),
                     viewMode = NotesViewMode.Tiles,

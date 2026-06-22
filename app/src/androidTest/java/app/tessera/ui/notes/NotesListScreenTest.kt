@@ -113,6 +113,7 @@ private fun contentState(notes: List<Note>) =
         pinnedCount = notes.count(Note::isPinned),
         query = "",
         selection = emptySet(),
+        selectionMode = false,
         availableTags = emptyList(),
         selectedTags = emptySet(),
         viewMode = NotesViewMode.Tiles,

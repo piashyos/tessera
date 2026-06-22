@@ -55,6 +55,7 @@ class TesseraShowcaseScreenshotTest {
                                 pinnedCount = 1,
                                 query = "",
                                 selection = emptySet(),
+                                selectionMode = false,
                                 availableTags = listOf("android", "compose", "pinned"),
                                 selectedTags = emptySet(),
                                 viewMode = NotesViewMode.Tiles,

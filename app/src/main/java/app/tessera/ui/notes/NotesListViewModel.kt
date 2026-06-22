@@ -2,6 +2,7 @@ package app.tessera.ui.notes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.tessera.core.preferences.UserPreferences
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.Note
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -51,11 +53,12 @@ class NotesListViewModel @Inject constructor(
     private val renameFolderUseCase: RenameFolderUseCase,
     private val deleteFolderUseCase: DeleteFolderUseCase,
     private val moveNoteToFolderUseCase: MoveNoteToFolderUseCase,
+    private val userPreferences: UserPreferences,
 ) : ViewModel() {
     private val query = MutableStateFlow("")
     private val selectedTags = MutableStateFlow<Set<String>>(emptySet())
     private val selection = MutableStateFlow<Set<NoteId>>(emptySet())
-    private val viewMode = MutableStateFlow(NotesViewMode.List)
+    private val selectionMode = MutableStateFlow(false)
     private val selectedFolderId = MutableStateFlow<FolderId?>(null)
 
     private val effectiveQuery =
@@ -83,7 +86,15 @@ class NotesListViewModel @Inject constructor(
 
     val state: StateFlow<NotesListState> =
         combine(
-            combine(query, selectedTags, selection, viewMode) { q, t, sel, vm -> StateInputs(q, t, sel, vm) },
+            combine(
+                query,
+                selectedTags,
+                selection,
+                selectionMode,
+                userPreferences.notesViewMode,
+            ) { q, t, sel, selMode, vm ->
+                StateInputs(q, t, sel, selMode, vm)
+            },
             notesFlow,
             observeFoldersUseCase(),
             selectedFolderId,
@@ -92,6 +103,7 @@ class NotesListViewModel @Inject constructor(
                 query = inputs.query,
                 selectedTags = inputs.tags,
                 selection = inputs.selection,
+                selectionMode = inputs.selectionMode,
                 viewMode = inputs.viewMode,
                 folders = folders,
                 selectedFolderId = folderId,
@@ -130,8 +142,61 @@ class NotesListViewModel @Inject constructor(
         selection.value = emptySet()
     }
 
+    /** Enter multi-select mode, pre-selecting the long-pressed note. */
+    fun enterSelectionMode(id: NoteId) {
+        selection.value = setOf(id)
+        selectionMode.value = true
+    }
+
+    fun exitSelectionMode() {
+        selectionMode.value = false
+        selection.value = emptySet()
+    }
+
+    /** Toggle between "all visible notes selected" and "none selected". */
+    fun toggleSelectAll() {
+        val content = state.value as? NotesListState.Content ?: return
+        val allIds = content.notes.map(Note::id).toSet()
+        selection.value = if (allIds.isNotEmpty() && selection.value.containsAll(allIds)) {
+            emptySet()
+        } else {
+            allIds
+        }
+    }
+
+    /**
+     * Soft-delete every selected note and leave selection mode. Returns the snapshot of
+     * deleted ids so the caller can offer a single undo that restores all of them.
+     */
+    fun deleteSelected(): List<NoteId> {
+        val ids = selection.value.toList()
+        viewModelScope.launch {
+            ids.forEach { deleteNoteUseCase(it) }
+        }
+        exitSelectionMode()
+        return ids
+    }
+
+    fun moveSelectedToFolder(folderId: FolderId?) {
+        val ids = selection.value.toList()
+        viewModelScope.launch {
+            ids.forEach { moveNoteToFolderUseCase(it, folderId) }
+        }
+        exitSelectionMode()
+    }
+
+    fun restoreNotes(ids: List<NoteId>) {
+        viewModelScope.launch {
+            ids.forEach { restoreNoteUseCase(it) }
+        }
+    }
+
     fun onToggleViewMode() {
-        viewMode.update { if (it == NotesViewMode.Tiles) NotesViewMode.List else NotesViewMode.Tiles }
+        viewModelScope.launch {
+            val current = userPreferences.notesViewMode.first()
+            val next = if (current == NotesViewMode.Tiles) NotesViewMode.List else NotesViewMode.Tiles
+            userPreferences.setNotesViewMode(next)
+        }
     }
 
     suspend fun createNoteDraft(): NoteId {
@@ -191,6 +256,7 @@ private data class StateInputs(
     val query: String,
     val tags: Set<String>,
     val selection: Set<NoteId>,
+    val selectionMode: Boolean,
     val viewMode: NotesViewMode,
 )
 
@@ -198,6 +264,7 @@ private fun List<Note>.toUiState(
     query: String,
     selectedTags: Set<String>,
     selection: Set<NoteId>,
+    selectionMode: Boolean,
     viewMode: NotesViewMode,
     folders: List<Folder>,
     selectedFolderId: FolderId?,
@@ -229,6 +296,7 @@ private fun List<Note>.toUiState(
         pinnedCount = visibleNotes.count(Note::isPinned),
         query = query,
         selection = selection,
+        selectionMode = selectionMode,
         availableTags = availableTags,
         selectedTags = selectedTags,
         viewMode = viewMode,

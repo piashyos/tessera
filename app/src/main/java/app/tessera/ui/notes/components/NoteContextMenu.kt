@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import com.composables.icons.lucide.FolderInput
+import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.PinOff
@@ -39,6 +40,7 @@ fun NoteContextMenu(
     isPinned: Boolean,
     onDismiss: () -> Unit,
     onTogglePin: () -> Unit,
+    onSelect: () -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit,
     hazeState: HazeState,
@@ -77,6 +79,11 @@ fun NoteContextMenu(
                     if (isPinned) R.string.note_action_unpin else R.string.note_action_pin,
                 ),
                 onClick = { onTogglePin(); onDismiss() },
+            ),
+            GlassMenuAction(
+                icon = Lucide.ListChecks,
+                label = stringResource(R.string.note_action_select),
+                onClick = { onSelect(); onDismiss() },
             ),
             GlassMenuAction(
                 icon = Lucide.FolderInput,

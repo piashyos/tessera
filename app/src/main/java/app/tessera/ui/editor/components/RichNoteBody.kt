@@ -139,6 +139,7 @@ fun RichNoteBody(
     onMarkdownChange: (String) -> Unit,
     onActionsReady: (RichBodyActions) -> Unit,
     modifier: Modifier = Modifier,
+    onFocusChanged: (Boolean) -> Unit = {},
 ) {
     if (LocalInspectionMode.current) {
         // Aztec cannot instantiate in Compose preview — show a placeholder
@@ -171,15 +172,25 @@ fun RichNoteBody(
     // value, so the dispose-time flush would otherwise call a stale callback.
     val currentOnMarkdownChange by rememberUpdatedState(onMarkdownChange)
     val currentHtmlToMarkdown by rememberUpdatedState(htmlToMarkdown)
+    val currentOnFocusChanged by rememberUpdatedState(onFocusChanged)
     DisposableEffect(Unit) {
         onDispose {
             handler.removeCallbacksAndMessages(null)
             // Flush latest content synchronously so checkbox toggles or sub-debounce edits
             // made right before back-nav are not lost when pending runnables are cancelled.
+            //
+            // Guard: only flush when the editor actually holds unsaved edits (md differs
+            // from what we last loaded). Without this, switching layouts — e.g. inserting a
+            // table flips the editor from the single fast-path body to the block stack —
+            // disposes this editor while it still holds the *pre-insert* HTML, and an
+            // unconditional flush would write that stale markdown back over the new
+            // content, silently reverting the inserted table.
             editorRef.value?.let { editor ->
                 val md = currentHtmlToMarkdown(editor.toHtml())
-                lastLoadedMarkdownRef[0] = md
-                currentOnMarkdownChange(md)
+                if (md != lastLoadedMarkdownRef[0]) {
+                    lastLoadedMarkdownRef[0] = md
+                    currentOnMarkdownChange(md)
+                }
             }
         }
     }
@@ -227,6 +238,9 @@ fun RichNoteBody(
 
             editor.isFocusable = true
             editor.isFocusableInTouchMode = true
+            // Report focus so the screen knows which text block the cursor is in — the
+            // "insert table" action uses this to place the table at the cursor, not the end.
+            editor.setOnFocusChangeListener { _, hasFocus -> currentOnFocusChanged(hasFocus) }
 
             fun scheduleHtmlFlush() {
                 debounceRunnable?.let { handler.removeCallbacks(it) }

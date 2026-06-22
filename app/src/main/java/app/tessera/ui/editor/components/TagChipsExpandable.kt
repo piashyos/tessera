@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.components.FloatingCapsule
+import app.tessera.core.ui.rememberHaptics
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.X
@@ -43,6 +44,7 @@ fun TagChipsExpandable(
     onAddTagClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = rememberHaptics()
     val springExpand = spring<IntSize>(
         dampingRatio = 0.7f,
         stiffness = Spring.StiffnessMediumLow,
@@ -78,7 +80,7 @@ fun TagChipsExpandable(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("#$tag", style = MaterialTheme.typography.labelMedium)
                         Surface(
-                            onClick = { onRemoveTag(tag) },
+                            onClick = { haptics.tick(); onRemoveTag(tag) },
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.0f),
                             modifier = Modifier.size(20.dp),
@@ -94,15 +96,15 @@ fun TagChipsExpandable(
             }
 
             Surface(
-                onClick = onAddTagClick,
+                onClick = { haptics.tick(); onAddTagClick() },
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                 modifier = Modifier.size(28.dp),
             ) {
                 Icon(
                     imageVector = Lucide.Plus,
                     contentDescription = stringResource(R.string.editor_add_tag),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(14.dp),
                 )
             }

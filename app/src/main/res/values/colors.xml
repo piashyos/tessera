@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Bullet marker color for Aztec lists — light theme: warm brown (PrimaryLight). -->
-    <color name="aztec_bullet">#7A5C3E</color>
+    <!-- Bullet marker color for Aztec lists — light theme: coral accent (PrimaryLight). -->
+    <color name="aztec_bullet">#C96442</color>
+    <!-- Window background (light) — mirrors BackgroundGlowLight in the Compose theme. -->
+    <color name="window_background">#FAF9F5</color>
 </resources>

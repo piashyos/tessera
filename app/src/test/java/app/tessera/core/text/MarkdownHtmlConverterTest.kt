@@ -84,4 +84,76 @@ class MarkdownHtmlConverterTest {
         assertEquals(once, twice, "converter must be idempotent on the Markdown side")
         assertEquals(md, once)
     }
+
+    // --- HTML special-character handling ------------------------------------------------------
+
+    @Test fun `less-than round-trips`() = roundTrip("5 < 3")
+    @Test fun `greater-than round-trips`() = roundTrip("3 > 5")
+    @Test fun `ampersand round-trips`() = roundTrip("Tom & Jerry")
+    @Test fun `mixed specials round-trip`() = roundTrip("if a < b && c > d")
+
+    @Test
+    fun `angle brackets do not produce raw html tags`() {
+        val html = converter.markdownToHtml("a <fake> tag")
+        assertEquals("<p>a &lt;fake&gt; tag</p>", html)
+    }
+
+    @Test
+    fun `specials inside emphasis round-trip`() = roundTrip("**a < b**")
+
+    @Test
+    fun `specials inside heading round-trip`() = roundTrip("# Q & A < B")
+
+    @Test
+    fun `specials inside task item round-trip`() = roundTrip("- [ ] fix a < b & c")
+
+    @Test
+    fun `aztec entities decode back to literals`() {
+        assertEquals("a < b & c", converter.htmlToMarkdown("<p>a &lt; b &amp; c</p>"))
+    }
+
+    @Test
+    fun `non-breaking space decodes to plain space`() {
+        assertEquals("a b", converter.htmlToMarkdown("<p>a&nbsp;b</p>"))
+    }
+
+    @Test
+    fun `double-encoded entity decodes to single entity text`() {
+        // Literal text "&lt;" stored by Aztec as "&amp;lt;" must decode to "&lt;", not "<".
+        assertEquals("&lt;", converter.htmlToMarkdown("<p>&amp;lt;</p>"))
+    }
+
+    // --- Aztec paragraph-separator normalization -------------------------------------------
+    // Aztec's toHtml() emits plain text with "\n\n" between paragraphs (no <p> tags). Our
+    // markdownToHtml uses one "\n" per paragraph, so the import must collapse the doubled
+    // breaks or blank lines accumulate on every load→save cycle.
+
+    @Test
+    fun `aztec double-newline paragraphs collapse to single`() {
+        assertEquals("a\nb\nc", converter.htmlToMarkdown("a\n\nb\n\nc"))
+    }
+
+    @Test
+    fun `runs of blank lines collapse to a single break`() {
+        assertEquals("a\nb", converter.htmlToMarkdown("a\n\n\n\n\n\nb"))
+    }
+
+    @Test
+    fun `plain multiline body round-trips without growing`() {
+        val md = "first\nsecond\nthird"
+        val once = converter.htmlToMarkdown(converter.markdownToHtml(md))
+        assertEquals(md, once)
+        // Simulate Aztec re-doubling the breaks, then importing again — must stay stable.
+        val aztecEcho = once.replace("\n", "\n\n")
+        assertEquals(md, converter.htmlToMarkdown(aztecEcho))
+    }
+
+    @Test
+    fun `specials are a fixed point after one html normalization pass`() {
+        val md = "5 < 3 & 7 > 2"
+        val once = converter.htmlToMarkdown(converter.markdownToHtml(md))
+        val twice = converter.htmlToMarkdown(converter.markdownToHtml(once))
+        assertEquals(once, twice, "converter must be idempotent on the Markdown side")
+        assertEquals(md, once)
+    }
 }

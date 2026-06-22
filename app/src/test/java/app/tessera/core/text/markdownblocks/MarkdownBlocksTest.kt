@@ -40,4 +40,27 @@ class MarkdownBlocksTest {
         """.trimIndent()
         assertEquals(md, joinBlocksIntoMarkdown(splitMarkdownIntoBlocks(md)))
     }
+
+    @Test fun `column widths and row heights round-trip via tessera comment`() {
+        val grid = TableGrid(
+            headers = listOf("A", "B"),
+            rows = listOf(listOf("1", "2")),
+            colWidths = listOf(140f, 80f),
+            rowHeights = listOf(44f, 30f),
+        )
+        val md = joinBlocksIntoMarkdown(listOf(Block.Table(grid)))
+        assertTrue(md.startsWith("<!-- tessera:cols=140,80;rows=44,30 -->"))
+
+        val parsed = (splitMarkdownIntoBlocks(md).single() as Block.Table).grid
+        assertEquals(listOf(140f, 80f), parsed.colWidths)
+        assertEquals(listOf(44f, 30f), parsed.rowHeights)
+        assertEquals(listOf("A", "B"), parsed.headers)
+    }
+
+    @Test fun `table without custom sizing emits no comment`() {
+        val md = joinBlocksIntoMarkdown(
+            listOf(Block.Table(TableGrid(listOf("A", "B"), listOf(listOf("1", "2"))))),
+        )
+        assertTrue(!md.contains("tessera:"))
+    }
 }

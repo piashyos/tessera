@@ -1,7 +1,5 @@
 package app.tessera.ui.editor
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -56,20 +54,18 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
+import app.tessera.core.ui.rememberHaptics
 import app.tessera.core.ui.components.EdgeFadeScrim
 import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.components.ScrimEdge
 import app.tessera.core.ui.theme.FloatingShadowAmbient
 import app.tessera.core.ui.theme.FloatingShadowSpot
-import app.tessera.core.ui.theme.Motion
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.core.text.MarkdownHtmlConverter
 import app.tessera.core.text.markdownblocks.Block
 import app.tessera.core.text.markdownblocks.TableGrid
 import app.tessera.core.text.markdownblocks.joinBlocksIntoMarkdown
 import app.tessera.core.text.markdownblocks.splitMarkdownIntoBlocks
-import app.tessera.ui.navigation.LocalAnimatedVisibilityScope
-import app.tessera.ui.navigation.LocalSharedTransitionScope
 import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.MarkdownToolbar
 import app.tessera.ui.editor.components.RichBodyActions
@@ -80,7 +76,7 @@ import app.tessera.ui.editor.components.TagPickerPopup
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NoteEditorScreen(
     state: NoteEditorState,
@@ -93,8 +89,13 @@ fun NoteEditorScreen(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = rememberHaptics()
     val converter = remember { MarkdownHtmlConverter() }
     var actions by remember { mutableStateOf<RichBodyActions?>(null) }
+    // Index of the text block whose Aztec editor last held focus. Drives where the
+    // "insert table" action places the new table (after the focused block, not at the end).
+    var lastFocusedBlock by remember { mutableStateOf(0) }
+    val currentFocusedBlock by rememberUpdatedState(lastFocusedBlock)
     val initialHtml = remember(state.content) { converter.markdownToHtml(state.content) }
     val blocks = remember(state.content) { splitMarkdownIntoBlocks(state.content) }
     val hasTable = blocks.any { it is Block.Table }
@@ -108,12 +109,12 @@ fun NoteEditorScreen(
         object : RichBodyActions by base {
             override fun insertTable() {
                 val existing = splitMarkdownIntoBlocks(currentContent).toMutableList()
-                // Insert at the end: append a new table block, followed by an empty
-                // text block so the user can continue typing prose past the grid.
-                // (Per-block focus tracking is deferred; "append at end" is the
-                // natural default for v1.)
-                existing.add(Block.Table(TableGrid.empty(columns = 2, rows = 2)))
-                existing.add(Block.Text(""))
+                // Insert the table right after the text block that currently holds the
+                // cursor, followed by an empty text block so the user can keep typing
+                // prose past the grid. Falls back to the end when nothing is focused.
+                val insertAt = (currentFocusedBlock + 1).coerceIn(0, existing.size)
+                existing.add(insertAt, Block.Table(TableGrid.empty(columns = 2, rows = 2)))
+                existing.add(insertAt + 1, Block.Text(""))
                 val joined = joinBlocksIntoMarkdown(existing)
                 if (joined != currentContent) currentOnContentChange(joined)
             }
@@ -131,31 +132,11 @@ fun NoteEditorScreen(
     var tagsExpanded by remember { mutableStateOf(false) }
     var formatMenuVisible by remember { mutableStateOf(false) }
 
-    val sharedScope = LocalSharedTransitionScope.current
-    val visibilityScope = LocalAnimatedVisibilityScope.current
-
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(pageColor)
-            .testTag(UiTestTags.EditorRoot)
-            .then(
-                if (sharedScope != null && visibilityScope != null &&
-                    (isDraftEntry || state.noteId.isNotEmpty())
-                ) {
-                    with(sharedScope) {
-                        Modifier.sharedElement(
-                            state = rememberSharedContentState(
-                                key = if (isDraftEntry) "note-card-draft" else "note-card-${state.noteId}",
-                            ),
-                            animatedVisibilityScope = visibilityScope,
-                            boundsTransform = { _, _ -> tween(Motion.SharedElementDurationMs) },
-                        )
-                    }
-                } else {
-                    Modifier
-                },
-            ),
+            .testTag(UiTestTags.EditorRoot),
     ) {
         // Inner wrapper — everything that the popup blurs over
         Box(
@@ -194,6 +175,7 @@ fun NoteEditorScreen(
                                 if (markdown != state.content) onContentChange(markdown)
                             },
                             onActionsReady = { actions = wrapActions(it) },
+                            onFocusChanged = { if (it) lastFocusedBlock = 0 },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
@@ -221,10 +203,19 @@ fun NoteEditorScreen(
                                                 if (joined != state.content) onContentChange(joined)
                                             },
                                             onActionsReady = { actions = wrapActions(it) },
+                                            onFocusChanged = { if (it) lastFocusedBlock = idx },
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }
                                     is Block.Table -> {
+                                        val swapBlocks: (Int, Int) -> Unit = { a, b ->
+                                            val updated = blocks.toMutableList()
+                                            val tmp = updated[a]
+                                            updated[a] = updated[b]
+                                            updated[b] = tmp
+                                            val joined = joinBlocksIntoMarkdown(updated)
+                                            if (joined != state.content) onContentChange(joined)
+                                        }
                                         TableBlockEditor(
                                             grid = block.grid,
                                             onGridChange = { newGrid ->
@@ -233,6 +224,12 @@ fun NoteEditorScreen(
                                                 val joined = joinBlocksIntoMarkdown(updated)
                                                 if (joined != state.content) onContentChange(joined)
                                             },
+                                            onMoveUp = if (idx > 0) {
+                                                { swapBlocks(idx, idx - 1) }
+                                            } else null,
+                                            onMoveDown = if (idx < blocks.lastIndex) {
+                                                { swapBlocks(idx, idx + 1) }
+                                            } else null,
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(vertical = 4.dp),
@@ -302,7 +299,7 @@ fun NoteEditorScreen(
                         contentPadding = PaddingValues(0.dp),
                     ) {
                         IconButton(
-                            onClick = onBack,
+                            onClick = { haptics.tick(); onBack() },
                             modifier = Modifier
                                 .size(44.dp)
                                 .testTag(UiTestTags.EditorBack),
@@ -330,7 +327,7 @@ fun NoteEditorScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(
-                                onClick = onTogglePin,
+                                onClick = { haptics.tick(); onTogglePin() },
                                 modifier = Modifier
                                     .size(40.dp)
                                     .testTag(UiTestTags.EditorPin),
@@ -350,7 +347,7 @@ fun NoteEditorScreen(
                             }
 
                             IconButton(
-                                onClick = onDelete,
+                                onClick = { haptics.tick(); onDelete() },
                                 modifier = Modifier
                                     .size(40.dp)
                                     .testTag(UiTestTags.EditorDelete),
@@ -395,7 +392,10 @@ fun NoteEditorScreen(
                         ),
                     blurRadius = 20.dp,
                     shadowElevation = 4.dp,
-                    hazeState = null,
+                    // Real backdrop blur over the scrollable content registered via
+                    // hazeSource(hazeState) above. Compose-drawn content (background,
+                    // table blocks) blurs through; the toolbar reads as frosted glass.
+                    hazeState = hazeState,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                 ) {
                     Row(
@@ -426,12 +426,12 @@ fun NoteEditorScreen(
                             }
                         }
                         Surface(
-                            onClick = { tagsExpanded = !tagsExpanded },
+                            onClick = { haptics.tick(); tagsExpanded = !tagsExpanded },
                             shape = CircleShape,
                             color = if (tagsExpanded) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                             } else {
-                                MaterialTheme.colorScheme.secondaryContainer
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                             },
                             modifier = Modifier
                                 .size(34.dp)
@@ -441,11 +441,7 @@ fun NoteEditorScreen(
                                 Icon(
                                     imageVector = Lucide.Tag,
                                     contentDescription = stringResource(R.string.editor_tags_toggle),
-                                    tint = if (tagsExpanded) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    },
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp),
                                 )
                             }

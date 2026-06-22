@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,10 +51,9 @@ import coil.compose.AsyncImage
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.User
 
-private const val AppVersion = "0.1.0"
+private const val FallbackAppVersion = "0.1.0"
 
 @Composable
 fun SettingsScreen(
@@ -145,16 +146,16 @@ fun SettingsScreen(
                 onSelect = onSelectLanguage,
             )
 
-            SettingsRow(
-                icon = Lucide.RefreshCw,
-                title = stringResource(R.string.settings_sync_status),
-                subtitle = stringResource(R.string.settings_sync_placeholder),
-            )
-
+            val context = LocalContext.current
+            val appVersion = remember(context) {
+                runCatching {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                }.getOrNull() ?: FallbackAppVersion
+            }
             SettingsRow(
                 icon = Lucide.Info,
                 title = stringResource(R.string.settings_about),
-                subtitle = stringResource(R.string.settings_version, AppVersion),
+                subtitle = stringResource(R.string.settings_version, appVersion),
             )
         }
     }

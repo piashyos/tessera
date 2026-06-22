@@ -86,8 +86,12 @@ class MarkdownHtmlConverter {
 
     /** Convert inline Markdown spans (bold, italic, strike) to HTML inside a block. */
     private fun inlineToHtml(text: String): String {
+        // Escape HTML-special chars FIRST so literal '<', '>', '&' in the note text can't be
+        // mistaken for markup. Markdown markers ('*', '~') are not HTML-special, so the
+        // bold/italic/strike regexes below still match and wrap the already-escaped content
+        // in real tags. '&' must be escaped before '<'/'>' to avoid double-escaping entities.
+        var result = escapeHtml(text)
         // Order matters: bold (** **) must be matched before single * italic.
-        var result = text
         // Bold: **text** → <b>text</b>
         result = result.replace(Regex("""\*\*(.+?)\*\*""")) { "<b>${it.groupValues[1]}</b>" }
         // Italic: *text* → <i>text</i>  (only bare * not preceded by another *)
@@ -105,7 +109,13 @@ class MarkdownHtmlConverter {
         if (html.isEmpty()) return ""
 
         val blocks = parseBlocks(html)
-        return blocks.joinToString("\n")
+        // Aztec's toHtml() separates plain paragraphs with a *double* newline ("\n\n"),
+        // whereas our markdownToHtml treats every single "\n" as its own paragraph (<p>).
+        // Left unreconciled, each load→edit→save cycle re-expands one logical break into an
+        // extra blank line, so paragraph gaps grow without bound. Collapsing runs of blank
+        // lines back to a single newline makes the round-trip idempotent AND retroactively
+        // heals notes that already accumulated stray blank lines.
+        return blocks.joinToString("\n").replace(Regex("\n{2,}"), "\n")
     }
 
     /**
@@ -313,6 +323,24 @@ class MarkdownHtmlConverter {
         result = result.replace(Regex("<strike>(.+?)</strike>")) { "~~${it.groupValues[1]}~~" }
         // Strip any remaining unknown inline tags
         result = result.replace(Regex("<[^>]+>"), "")
+        // Decode HTML entities back to literal characters. Aztec's toHtml() emits these for
+        // any special char the user typed; without decoding they would persist verbatim in the
+        // stored Markdown ('&amp;' instead of '&'). Decode '&amp;' LAST so a literal,
+        // double-encoded sequence like '&amp;lt;' resolves to the text '&lt;', not '<'.
+        result = decodeHtmlEntities(result)
         return result
     }
+
+    /** Escape the three HTML-significant characters. Order: '&' first to avoid double-escaping. */
+    private fun escapeHtml(text: String): String =
+        text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+
+    /** Decode the entities our [escapeHtml] produces plus the non-breaking space Aztec emits. */
+    private fun decodeHtmlEntities(text: String): String =
+        text.replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
 }

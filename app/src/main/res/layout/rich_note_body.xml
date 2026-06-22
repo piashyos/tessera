@@ -17,4 +17,5 @@
     app:historySize="20"
     app:bulletColor="@color/aztec_bullet"
     app:bulletWidth="6dp"
-    app:bulletPadding="6dp" />
+    app:bulletPadding="6dp"
+    app:paragraphVerticalMargin="0dp" />

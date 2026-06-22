@@ -1,5 +1,6 @@
 package app.tessera.ui.editor.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
@@ -38,7 +40,6 @@ import com.composables.icons.lucide.Heading5
 import com.composables.icons.lucide.Heading6
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pilcrow
-import com.composables.icons.lucide.Table
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import org.wordpress.aztec.AztecTextFormat
@@ -74,7 +75,8 @@ fun MarkdownFormatMenu(
         FormatEntry(AztecTextFormat.FORMAT_HEADING_4, Lucide.Heading4, R.string.toolbar_h4, actions::toggleHeading4),
         FormatEntry(AztecTextFormat.FORMAT_HEADING_5, Lucide.Heading5, R.string.toolbar_h5, actions::toggleHeading5),
         FormatEntry(AztecTextFormat.FORMAT_HEADING_6, Lucide.Heading6, R.string.toolbar_h6, actions::toggleHeading6),
-        FormatEntry(null, Lucide.Table, R.string.toolbar_insert_table, actions::insertTable),
+        // TODO: re-enable once table UX is finalized.
+        // FormatEntry(null, Lucide.Table, R.string.toolbar_insert_table, actions::insertTable),
     )
 
     Popup(
@@ -120,14 +122,22 @@ private val SHADOW_PADDING = 16.dp
 private fun FormatRow(entry: FormatEntry, active: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        color = if (active) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0f)
-        },
+        color = Color.Transparent,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier
+                // Inset rounded highlight so the active state reads as a pill, not a
+                // sharp full-width rectangle touching the menu edges.
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (active) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    } else {
+                        Color.Transparent
+                    },
+                )
+                .padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(

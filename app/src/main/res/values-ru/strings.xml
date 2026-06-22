@@ -1,4 +1,5 @@
 <resources>
+    <string name="app_name">Tessera</string>
     <string name="app_subtitle">Локальные заметки — готовы к поиску и быстрой записи.</string>
     <string name="notes_all_notes">Все заметки</string>
     <string name="notes_empty_title">Пока нет заметок</string>
@@ -49,8 +50,6 @@
     <string name="settings_signed_out_subtitle">Войдите, чтобы синхронизировать заметки между устройствами.</string>
     <string name="settings_sign_in">Войти через Google</string>
     <string name="settings_sign_out">Выйти</string>
-    <string name="settings_sync_status">Синхронизация</string>
-    <string name="settings_sync_placeholder">Облачная синхронизация появится в следующем обновлении.</string>
     <string name="settings_section_appearance">Внешний вид</string>
     <string name="settings_theme_auto">Авто</string>
     <string name="settings_theme_light_dynamic">Светлая</string>
@@ -79,5 +78,10 @@
     <string name="folders_delete">Удалить</string>
     <string name="folders_open_drawer">Папки</string>
     <string name="note_action_move">В папку</string>
+    <string name="note_action_select">Выбрать</string>
+    <string name="notes_selection_count">Выбрано: %1$d</string>
+    <string name="notes_selection_select_all">Выбрать все</string>
+    <string name="notes_selection_deselect_all">Снять выделение</string>
+    <string name="notes_selection_deleted">Заметки удалены</string>
     <string name="folder_picker_none">Без папки</string>
 </resources>

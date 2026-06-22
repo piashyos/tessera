@@ -1,6 +1,8 @@
 package app.tessera.ui.notes
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -72,6 +74,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
+import app.tessera.core.ui.rememberHaptics
 import app.tessera.core.ui.components.EdgeFadeScrim
 import app.tessera.core.ui.components.GlassFab
 import app.tessera.core.ui.components.ScrimEdge
@@ -89,12 +92,15 @@ import app.tessera.ui.notes.components.FoldersDrawer
 import app.tessera.ui.notes.components.NoteContextMenu
 import app.tessera.ui.notes.components.SwipeableNoteCard
 import app.tessera.ui.notes.components.TagFilterBar
+import com.composables.icons.lucide.FolderInput
 import com.composables.icons.lucide.LayoutGrid
+import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Menu
 import com.composables.icons.lucide.Rows3
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Tag
+import com.composables.icons.lucide.Trash2
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
@@ -136,6 +142,13 @@ fun NotesListScreen(
     onRenameFolder: (app.tessera.domain.model.FolderId, String) -> Unit = { _, _ -> },
     onDeleteFolder: (app.tessera.domain.model.FolderId) -> Unit = {},
     onMoveNoteToFolder: (NoteId, app.tessera.domain.model.FolderId?) -> Unit = { _, _ -> },
+    onEnterSelectionMode: (NoteId) -> Unit = {},
+    onExitSelectionMode: () -> Unit = {},
+    onToggleSelection: (NoteId) -> Unit = {},
+    onToggleSelectAll: () -> Unit = {},
+    onDeleteSelected: () -> List<NoteId> = { emptyList() },
+    onMoveSelectedToFolder: (app.tessera.domain.model.FolderId?) -> Unit = {},
+    onRestoreNotes: (List<NoteId>) -> Unit = {},
     isRefreshing: Boolean = false,
 ) {
     val sharedScope = LocalSharedTransitionScope.current
@@ -218,6 +231,16 @@ fun NotesListScreen(
         }
     }
 
+    val haptics = rememberHaptics()
+    val selectionMode = state.selectionActive()
+    val selection = state.selectedIds()
+    val visibleNotes = (state as? NotesListState.Content)?.notes.orEmpty()
+    val allSelected = visibleNotes.isNotEmpty() && selection.size >= visibleNotes.size
+    var selectionMovePickerVisible by remember { mutableStateOf(false) }
+    val selectionDeletedMessage = stringResource(R.string.notes_selection_deleted)
+
+    BackHandler(enabled = selectionMode) { onExitSelectionMode() }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -243,9 +266,13 @@ fun NotesListScreen(
                     onTogglePin = onTogglePin,
                     onDeleteNote = handleDelete,
                     onLongClickNote = { note, offset ->
+                        haptics.longPress()
                         contextMenuNote = note
                         contextMenuAnchor = offset
                     },
+                    selectionMode = selectionMode,
+                    selection = selection,
+                    onToggleSelection = onToggleSelection,
                 )
                 if (isSearchFocused) {
                     DismissFocusLayer {
@@ -268,13 +295,32 @@ fun NotesListScreen(
         val currentFolderName = state.selectedFolderId?.let { id ->
             state.folders.firstOrNull { it.id == id }?.name
         } ?: stringResource(R.string.notes_all_notes)
+        val selectionTitle = stringResource(R.string.notes_selection_count, selection.size)
         CollapsingHeader(
-            title = currentFolderName,
+            title = if (selectionMode) selectionTitle else currentFolderName,
             scrollPx = scrollPx,
             viewMode = state.viewMode(),
-            onToggleViewMode = onToggleViewMode,
-            onOpenSettings = onOpenSettings,
-            onOpenDrawer = openDrawer,
+            onToggleViewMode = { haptics.tick(); onToggleViewMode() },
+            onOpenSettings = { haptics.tick(); onOpenSettings() },
+            onOpenDrawer = { haptics.tick(); openDrawer() },
+            selectionMode = selectionMode,
+            allSelected = allSelected,
+            onToggleSelectAll = { haptics.tick(); onToggleSelectAll() },
+            onMoveSelected = { haptics.tick(); selectionMovePickerVisible = true },
+            onDeleteSelected = {
+                haptics.tick()
+                val ids = onDeleteSelected()
+                if (ids.isNotEmpty()) {
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = selectionDeletedMessage,
+                            actionLabel = undoLabel,
+                            duration = SnackbarDuration.Short,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) onRestoreNotes(ids)
+                    }
+                }
+            },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -332,7 +378,7 @@ fun NotesListScreen(
                         )
                     }
                     GlassFab(
-                        onClick = if (isSearchFocused) null else { { tagBarExpanded = !tagBarExpanded } },
+                        onClick = if (isSearchFocused) null else { { haptics.tick(); tagBarExpanded = !tagBarExpanded } },
                         size = 40.dp,
                         contentDescription = stringResource(R.string.notes_filter_tags),
                         hazeState = hazeState,
@@ -358,10 +404,16 @@ fun NotesListScreen(
                         )
                     }
                 }
-                // Row 2 — search bar paired with the create FAB.
+                // Row 2 — search bar paired with the create FAB. On focus the FAB slot
+                // (button + 12.dp gap) collapses to 0.dp so the weighted search bar grows
+                // to the full row width.
+                val createFabSlot by animateDpAsState(
+                    targetValue = if (isSearchFocused) 0.dp else 60.dp,
+                    animationSpec = spring(dampingRatio = 0.92f, stiffness = 520f),
+                    label = "createFabSlot",
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     BottomSearchBar(
@@ -378,8 +430,12 @@ fun NotesListScreen(
                         onFocusChanged = { isSearchFocused = it },
                         hazeState = hazeState,
                     )
+                    Box(
+                        modifier = Modifier.width(createFabSlot),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
                     GlassFab(
-                        onClick = if (isSearchFocused) null else onCreateNote,
+                        onClick = if (isSearchFocused) null else { { haptics.tick(); onCreateNote() } },
                         size = 48.dp,
                         contentDescription = stringResource(R.string.create_note),
                         modifier = Modifier
@@ -415,6 +471,7 @@ fun NotesListScreen(
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
+                    }
                     }
                 }
             }
@@ -556,12 +613,13 @@ fun NotesListScreen(
                 contextMenuNote = null
                 contextMenuAnchor = null
             },
-            onTogglePin = { ctxNote?.let { onTogglePin(it.id) } },
+            onTogglePin = { haptics.tick(); ctxNote?.let { onTogglePin(it.id) } },
+            onSelect = { ctxNote?.let { onEnterSelectionMode(it.id) } },
             onMove = {
                 folderPickerNote = ctxNote
                 contextMenuNote = null
             },
-            onDelete = { ctxNote?.let { handleDelete(it) } },
+            onDelete = { haptics.tick(); ctxNote?.let { handleDelete(it) } },
             hazeState = hazeState,
         )
 
@@ -574,6 +632,15 @@ fun NotesListScreen(
                 if (pickerNote != null) onMoveNoteToFolder(pickerNote.id, folderId)
             },
             onDismiss = { folderPickerNote = null },
+            hazeState = hazeState,
+        )
+
+        // Folder picker for batch move of the current selection
+        FolderPickerPopup(
+            visible = selectionMovePickerVisible,
+            folders = state.folders,
+            onPick = { folderId -> onMoveSelectedToFolder(folderId) },
+            onDismiss = { selectionMovePickerVisible = false },
             hazeState = hazeState,
         )
     }
@@ -601,13 +668,19 @@ fun CollapsingHeader(
     modifier: Modifier = Modifier,
     title: String = stringResource(R.string.notes_all_notes),
     onOpenDrawer: () -> Unit = {},
+    selectionMode: Boolean = false,
+    allSelected: Boolean = false,
+    onToggleSelectAll: () -> Unit = {},
+    onMoveSelected: () -> Unit = {},
+    onDeleteSelected: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .height(HeaderHeight),
     ) {
-        // Top row: burger (leading) + view-mode + settings (trailing).
+        // Top row. Normally: burger (leading) + view-mode + settings (trailing).
+        // In selection mode the same slots become: select-all + move + delete.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -616,44 +689,77 @@ fun CollapsingHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
-                onClick = onOpenDrawer,
+                onClick = if (selectionMode) onToggleSelectAll else onOpenDrawer,
                 modifier = Modifier.size(40.dp),
             ) {
                 Icon(
-                    imageVector = Lucide.Menu,
-                    contentDescription = stringResource(R.string.folders_open_drawer),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    imageVector = if (selectionMode) Lucide.ListChecks else Lucide.Menu,
+                    contentDescription = stringResource(
+                        if (selectionMode) {
+                            if (allSelected) R.string.notes_selection_deselect_all else R.string.notes_selection_select_all
+                        } else {
+                            R.string.folders_open_drawer
+                        },
+                    ),
+                    tint = if (selectionMode && allSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val (toggleIcon, toggleDesc) = if (viewMode == NotesViewMode.Tiles) {
-                    Lucide.Rows3 to stringResource(R.string.notes_view_mode_list)
+                if (selectionMode) {
+                    IconButton(
+                        onClick = onMoveSelected,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            imageVector = Lucide.FolderInput,
+                            contentDescription = stringResource(R.string.note_action_move),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(
+                        onClick = onDeleteSelected,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Trash2,
+                            contentDescription = stringResource(R.string.note_action_delete),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 } else {
-                    Lucide.LayoutGrid to stringResource(R.string.notes_view_mode_tiles)
-                }
-                IconButton(
-                    onClick = onToggleViewMode,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .testTag(UiTestTags.ViewModeToggle),
-                ) {
-                    Icon(
-                        imageVector = toggleIcon,
-                        contentDescription = toggleDesc,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .testTag(UiTestTags.OpenSettings),
-                ) {
-                    Icon(
-                        imageVector = Lucide.Settings,
-                        contentDescription = stringResource(R.string.settings_open),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    val (toggleIcon, toggleDesc) = if (viewMode == NotesViewMode.Tiles) {
+                        Lucide.Rows3 to stringResource(R.string.notes_view_mode_list)
+                    } else {
+                        Lucide.LayoutGrid to stringResource(R.string.notes_view_mode_tiles)
+                    }
+                    IconButton(
+                        onClick = onToggleViewMode,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag(UiTestTags.ViewModeToggle),
+                    ) {
+                        Icon(
+                            imageVector = toggleIcon,
+                            contentDescription = toggleDesc,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag(UiTestTags.OpenSettings),
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Settings,
+                            contentDescription = stringResource(R.string.settings_open),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -704,6 +810,9 @@ private fun NotesContent(
     onTogglePin: (NoteId) -> Unit,
     onDeleteNote: (Note) -> Unit,
     onLongClickNote: (Note, androidx.compose.ui.unit.IntOffset) -> Unit,
+    selectionMode: Boolean,
+    selection: Set<NoteId>,
+    onToggleSelection: (NoteId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (state) {
@@ -768,6 +877,9 @@ private fun NotesContent(
                                 note = note,
                                 modifier = Modifier.animateItem(),
                                 isTile = state.viewMode == NotesViewMode.Tiles,
+                                selectionMode = selectionMode,
+                                selected = note.id in selection,
+                                onToggleSelect = { onToggleSelection(note.id) },
                                 onClick = { onNoteClick(note.id) },
                                 onTogglePin = { onTogglePin(note.id) },
                                 onDelete = { onDeleteNote(note) },
@@ -830,3 +942,9 @@ private fun NotesListState.viewMode(): NotesViewMode =
         is NotesListState.Empty -> viewMode
         is NotesListState.Content -> viewMode
     }
+
+private fun NotesListState.selectionActive(): Boolean =
+    (this as? NotesListState.Content)?.selectionMode == true
+
+private fun NotesListState.selectedIds(): Set<NoteId> =
+    (this as? NotesListState.Content)?.selection ?: emptySet()

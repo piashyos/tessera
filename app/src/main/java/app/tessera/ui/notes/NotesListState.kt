@@ -28,6 +28,7 @@ sealed interface NotesListState {
         val pinnedCount: Int,
         val query: String,
         val selection: Set<NoteId>,
+        val selectionMode: Boolean,
         val availableTags: List<String>,
         val selectedTags: Set<String>,
         val viewMode: NotesViewMode,

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Editor · Light</title>
+<link rel="stylesheet" href="../shared.css">
+</head>
+<body class="standalone">
+<div class="phone">
+
+  <div class="status-bar">
+    <span class="time">9:41</span>
+    <span class="icons"><svg class="i-18" viewBox="0 0 24 24" fill="currentColor"><path d="M2 11h3v8H2zm5-3h3v11H7zm5-3h3v14h-3zm5-3h3v17h-3z"/></svg></span>
+  </div>
+
+  <div class="top-bar">
+    <button class="icon-btn"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+    <div style="flex:1"></div>
+    <button class="icon-btn" style="color:var(--primary);"><svg class="i" viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.6 6.5L21 10l-5 4.5L17 21l-5-3-5 3 1-6.5-5-4.5 6.4-.5z"/></svg></button>
+    <button class="icon-btn"><svg class="i" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+  </div>
+
+  <div class="editor-meta">
+    <div class="crumb">
+      <svg class="i-18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7c0-1 .8-2 2-2h4l2 2h8c1.2 0 2 .9 2 2v9c0 1-.8 2-2 2H5c-1 0-2-.9-2-2V7z"/></svg>
+      <b>Работа</b>
+      <span style="opacity:0.5;">›</span>
+      <b>Проекты</b>
+    </div>
+    <span class="date">изменено 12 июн · 16:42</span>
+  </div>
+
+  <div class="inline-tags">
+    <span class="tag-chip">#срочно</span>
+    <span class="tag-chip">#встреча</span>
+    <span class="tag-add"><svg class="i-18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span>
+  </div>
+
+  <div class="editor-divider"></div>
+
+  <div class="editor-body">
+    <div class="editor-h1">Q3 roadmap — приоритеты</div>
+
+    <p class="editor-p">Список приоритетов для третьего квартала. Обсудили на ретро 11 июня, договорились вернуться через две недели.</p>
+
+    <h2 class="editor-h2">Что точно делаем</h2>
+    <ul class="editor-checklist">
+      <li class="done"><span class="cb checked"></span><span>Закрыть онбординг для новых пользователей</span></li>
+      <li><span class="cb"></span><span>Доделать invisible sync (текущая ветка)</span></li>
+      <li><span class="cb"></span><span>Разобраться с CRDT для офлайн-конфликтов</span></li>
+      <li><span class="cb"></span><span>Material You редизайн</span></li>
+    </ul>
+
+    <h2 class="editor-h2">Под вопросом</h2>
+    <p class="editor-p">Голосовой ввод и шифрование заметок — отдельным треком, не блокируем релиз.</p>
+
+    <div class="editor-quote">«Сначала закрываем долги по UX, потом расширяемся.»</div>
+
+    <h2 class="editor-h2">Связанное</h2>
+    <pre class="editor-code">git log --oneline feature/sync
+baae2d4 fix(prefs): avoid loop
+10cf6f3 feat(settings): account block</pre>
+  </div>
+
+  <div class="home-indicator"></div>
+</div>
+</body>
+</html>

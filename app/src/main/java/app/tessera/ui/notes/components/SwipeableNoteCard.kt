@@ -6,12 +6,14 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -20,7 +22,9 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,10 +46,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
+import app.tessera.core.ui.rememberHaptics
 import app.tessera.core.ui.theme.Motion
 import app.tessera.domain.model.Note
 import app.tessera.ui.navigation.LocalAnimatedVisibilityScope
 import app.tessera.ui.navigation.LocalSharedTransitionScope
+import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.PinOff
@@ -61,6 +67,9 @@ fun SwipeableNoteCard(
     note: Note,
     modifier: Modifier = Modifier,
     isTile: Boolean = false,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: () -> Unit = {},
     onClick: () -> Unit = {},
     onTogglePin: () -> Unit = {},
     onDelete: () -> Unit = {},
@@ -89,6 +98,7 @@ fun SwipeableNoteCard(
             )
         }
 
+    val haptics = rememberHaptics()
     val containerShape = if (isTile) RoundedCornerShape(24.dp) else RoundedCornerShape(0.dp)
     Box(
         modifier = modifier
@@ -97,92 +107,123 @@ fun SwipeableNoteCard(
     ) {
         // Reveal strip — width grows with the drag so actions slide out from under the card,
         // not by fading in. Anchored to the right edge and clipped to its own bounds so the
-        // fixed-width SwipeAction children get cropped while emerging.
-        val totalActionsWidthDp = actionWidth * 2
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
-                .width(
-                    with(density) {
-                        kotlin.math.abs(state.requireOffset()).toDp().coerceAtMost(totalActionsWidthDp)
-                    },
-                )
-                .clipToBounds(),
-        ) {
-            Row(
+        // fixed-width SwipeAction children get cropped while emerging. Hidden in selection
+        // mode, where swipe is disabled in favor of tap-to-select.
+        if (!selectionMode) {
+            val totalActionsWidthDp = actionWidth * 2
+            Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .requiredWidth(totalActionsWidthDp)
                     .fillMaxHeight()
-                    .padding(end = 4.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
+                    .width(
+                        with(density) {
+                            kotlin.math.abs(state.requireOffset()).toDp().coerceAtMost(totalActionsWidthDp)
+                        },
+                    )
+                    .clipToBounds(),
             ) {
-            SwipeAction(
-                icon = if (note.isPinned) Lucide.PinOff else Lucide.Pin,
-                contentDescription = if (note.isPinned) {
-                    stringResource(R.string.note_action_unpin)
-                } else {
-                    stringResource(R.string.note_action_pin)
-                },
-                container = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                content = MaterialTheme.colorScheme.primary,
-                width = actionWidth,
-                testTag = UiTestTags.revealPinAction(note.id.value),
-                onClick = {
-                    onTogglePin()
-                    scope.launch { state.animateTo(SwipeAnchor.Resting) }
-                },
-            )
-            SwipeAction(
-                icon = Lucide.Trash2,
-                contentDescription = stringResource(R.string.note_action_delete),
-                container = MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
-                content = MaterialTheme.colorScheme.error,
-                width = actionWidth,
-                testTag = UiTestTags.revealDeleteAction(note.id.value),
-                onClick = onDelete,
-            )
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .requiredWidth(totalActionsWidthDp)
+                        .fillMaxHeight()
+                        .padding(end = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SwipeAction(
+                        icon = if (note.isPinned) Lucide.PinOff else Lucide.Pin,
+                        contentDescription = if (note.isPinned) {
+                            stringResource(R.string.note_action_unpin)
+                        } else {
+                            stringResource(R.string.note_action_pin)
+                        },
+                        container = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        content = MaterialTheme.colorScheme.primary,
+                        width = actionWidth,
+                        testTag = UiTestTags.revealPinAction(note.id.value),
+                        onClick = {
+                            haptics.tick()
+                            onTogglePin()
+                            scope.launch { state.animateTo(SwipeAnchor.Resting) }
+                        },
+                    )
+                    SwipeAction(
+                        icon = Lucide.Trash2,
+                        contentDescription = stringResource(R.string.note_action_delete),
+                        container = MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
+                        content = MaterialTheme.colorScheme.error,
+                        width = actionWidth,
+                        testTag = UiTestTags.revealDeleteAction(note.id.value),
+                        onClick = { haptics.tick(); onDelete() },
+                    )
+                }
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(state.requireOffset().roundToInt(), 0) }
-                .anchoredDraggable(state, Orientation.Horizontal)
-                .then(
-                    if (isTile) {
-                        Modifier.background(MaterialTheme.colorScheme.background)
-                    } else {
-                        Modifier
-                    },
-                )
-                .then(
-                    if (sharedScope != null && visibilityScope != null) {
-                        with(sharedScope) {
-                            Modifier.sharedElement(
-                                state = rememberSharedContentState(key = "note-card-${note.id.value}"),
-                                animatedVisibilityScope = visibilityScope,
-                                boundsTransform = { _, _ -> tween(Motion.SharedElementDurationMs) },
-                            )
-                        }
-                    } else {
-                        Modifier
-                    },
-                ),
-        ) {
-            NoteCard(
-                note = note,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = if (isTile) 12.dp else 0.dp)
-                    .testTag(UiTestTags.noteCard(note.id.value)),
-                isTile = isTile,
-                onClick = onClick,
-                onLongClick = onLongClick,
+        val foreground = Modifier
+            .fillMaxWidth()
+            .then(
+                if (selectionMode) {
+                    Modifier
+                } else {
+                    Modifier
+                        .offset { IntOffset(state.requireOffset().roundToInt(), 0) }
+                        .anchoredDraggable(state, Orientation.Horizontal)
+                },
             )
+            .then(
+                if (isTile) Modifier.background(MaterialTheme.colorScheme.background) else Modifier,
+            )
+            .then(
+                if (!selectionMode && sharedScope != null && visibilityScope != null) {
+                    with(sharedScope) {
+                        Modifier.sharedElement(
+                            state = rememberSharedContentState(key = "note-card-${note.id.value}"),
+                            animatedVisibilityScope = visibilityScope,
+                            boundsTransform = { _, _ -> tween(Motion.SharedElementDurationMs) },
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            )
+
+        Box(modifier = foreground) {
+            if (selectionMode) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { haptics.tick(); onToggleSelect() },
+                        )
+                        .padding(start = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SelectionCheckbox(selected = selected)
+                    NoteCard(
+                        note = note,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = if (isTile) 12.dp else 0.dp)
+                            .testTag(UiTestTags.noteCard(note.id.value)),
+                        isTile = isTile,
+                    )
+                }
+            } else {
+                NoteCard(
+                    note = note,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = if (isTile) 12.dp else 0.dp)
+                        .testTag(UiTestTags.noteCard(note.id.value)),
+                    isTile = isTile,
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                )
+            }
             if (!isTile) {
                 HorizontalDivider(
                     modifier = Modifier.align(Alignment.BottomCenter),
@@ -190,6 +231,33 @@ fun SwipeableNoteCard(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SelectionCheckbox(selected: Boolean) {
+    val primary = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .padding(end = 12.dp)
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(if (selected) primary else Color.Transparent)
+            .border(
+                width = 1.5.dp,
+                color = if (selected) primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                shape = CircleShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) {
+            Icon(
+                imageVector = Lucide.Check,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(14.dp),
+            )
         }
     }
 }
@@ -208,10 +276,12 @@ private fun SwipeAction(
         modifier = Modifier
             .width(width)
             .fillMaxHeight()
-            .padding(vertical = 12.dp, horizontal = 4.dp)
+            .padding(vertical = 12.dp, horizontal = 6.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(container)
             .clickable(onClick = onClick)
+            // Inner padding so the icon isn't flush against the pill edges.
+            .padding(horizontal = 16.dp, vertical = 14.dp)
             .testTag(testTag),
         contentAlignment = Alignment.Center,
     ) {

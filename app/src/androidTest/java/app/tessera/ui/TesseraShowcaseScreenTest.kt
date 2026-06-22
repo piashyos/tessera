@@ -40,6 +40,7 @@ class TesseraShowcaseScreenTest {
                         pinnedCount = 0,
                         query = "",
                         selection = emptySet(),
+                        selectionMode = false,
                         availableTags = listOf("smoke"),
                         selectedTags = emptySet(),
                         viewMode = NotesViewMode.Tiles,

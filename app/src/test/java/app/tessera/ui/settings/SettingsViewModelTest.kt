@@ -166,14 +166,20 @@ class SettingsViewModelTest {
 private class FakeUserPreferences : UserPreferences {
     private val theme = MutableStateFlow(ThemeMode.AUTO)
     private val lang = MutableStateFlow("")
+    private val viewMode = MutableStateFlow(app.tessera.ui.notes.NotesViewMode.List)
     override val themeMode: Flow<ThemeMode> get() = theme
     override val languageTag: Flow<String> get() = lang
+    override val notesViewMode: Flow<app.tessera.ui.notes.NotesViewMode> get() = viewMode
     override suspend fun setThemeMode(mode: ThemeMode) {
         theme.value = mode
     }
 
     override suspend fun setLanguageTag(tag: String) {
         lang.value = tag
+    }
+
+    override suspend fun setNotesViewMode(mode: app.tessera.ui.notes.NotesViewMode) {
+        viewMode.value = mode
     }
 }
 

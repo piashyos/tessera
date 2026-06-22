@@ -6,8 +6,6 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -25,7 +23,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import app.tessera.core.ui.theme.Motion
 import app.tessera.ui.editor.NoteEditorScreen
 import app.tessera.ui.editor.NoteEditorViewModel
 import app.tessera.ui.notes.NotesListScreen
@@ -73,7 +70,15 @@ private fun NavGraphBuilder.notesListDestination(
     onOpenEditor: (String, Boolean) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    composable(route = NotesListRoute) {
+    composable(
+        route = NotesListRoute,
+        // Returning from editor/settings: the list slides back in from the left
+        // (parallax) while the popped screen slides out to the right.
+        popEnterTransition = {
+            slideInHorizontally(animationSpec = tween(280), initialOffsetX = { -it / 4 }) +
+                fadeIn(tween(280))
+        },
+    ) {
         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
             val viewModel: NotesListViewModel = hiltViewModel()
             val state by viewModel.state.collectAsState()
@@ -103,6 +108,13 @@ private fun NavGraphBuilder.notesListDestination(
                 onRenameFolder = viewModel::renameFolder,
                 onDeleteFolder = viewModel::deleteFolder,
                 onMoveNoteToFolder = viewModel::moveNoteToFolder,
+                onEnterSelectionMode = viewModel::enterSelectionMode,
+                onExitSelectionMode = viewModel::exitSelectionMode,
+                onToggleSelection = viewModel::onSelectionToggle,
+                onToggleSelectAll = viewModel::toggleSelectAll,
+                onDeleteSelected = viewModel::deleteSelected,
+                onMoveSelectedToFolder = viewModel::moveSelectedToFolder,
+                onRestoreNotes = viewModel::restoreNotes,
             )
         }
     }
@@ -152,11 +164,12 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
             },
         ),
         enterTransition = {
-            scaleIn(initialScale = 0.92f, animationSpec = tween(Motion.SharedElementDurationMs)) +
-                fadeIn(tween(Motion.SharedElementDurationMs))
+            slideInHorizontally(animationSpec = tween(280), initialOffsetX = { it }) +
+                fadeIn(tween(280))
         },
         exitTransition = {
-            scaleOut(targetScale = 0.92f, animationSpec = tween(220)) + fadeOut(tween(220))
+            slideOutHorizontally(animationSpec = tween(240), targetOffsetX = { it }) +
+                fadeOut(tween(240))
         },
     ) { backStackEntry ->
         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
