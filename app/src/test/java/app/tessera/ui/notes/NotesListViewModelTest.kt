@@ -221,6 +221,8 @@ private class FakeNotesRepository(
     private val searchResults: Map<String, List<Note>> = emptyMap(),
 ) : NotesRepository {
     private val notesFlow = MutableStateFlow(initialNotes)
+    val archivedFlow = MutableStateFlow<List<Note>>(emptyList())
+    val archivedCalls = mutableListOf<Pair<NoteId, Boolean>>()
 
     val searchQueries = mutableListOf<String>()
     var observeSubscriptions = 0
@@ -248,6 +250,12 @@ private class FakeNotesRepository(
     override suspend fun restoreNote(id: NoteId) {}
 
     override suspend fun togglePin(id: NoteId) {}
+
+    override fun observeArchivedNotes(): Flow<List<Note>> = archivedFlow
+
+    override suspend fun setArchived(id: NoteId, archived: Boolean) {
+        archivedCalls += id to archived
+    }
 
     fun createViewModel(): NotesListViewModel {
         val folderRepo = app.tessera.test.fakes.FakeFolderRepository()

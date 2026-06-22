@@ -166,4 +166,8 @@ private class FakeNotesRepository : NotesRepository {
     override suspend fun togglePin(id: NoteId) {
         lastToggledId = id
     }
+
+    override fun observeArchivedNotes(): Flow<List<Note>> = MutableStateFlow(emptyList())
+
+    override suspend fun setArchived(id: NoteId, archived: Boolean) {}
 }

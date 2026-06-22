@@ -273,6 +273,8 @@ private class SyncFakeNoteDao : NoteDao {
 
     override fun observeActive(): Flow<List<NoteEntity>> = activeFlow
 
+    override fun observeArchived(): Flow<List<NoteEntity>> = MutableStateFlow(emptyList())
+
     override fun observeById(id: String): Flow<NoteEntity?> = MutableStateFlow(notes[id])
 
     override suspend fun getById(id: String): NoteEntity? = notes[id]
@@ -301,6 +303,11 @@ private class SyncFakeNoteDao : NoteDao {
 
     override suspend fun setPinned(id: String, pinned: Boolean, ts: Long) {
         notes[id]?.let { notes[id] = it.copy(isPinned = pinned, updatedAt = ts, syncedAt = null) }
+        emitActive()
+    }
+
+    override suspend fun setArchived(id: String, archived: Boolean, ts: Long) {
+        notes[id]?.let { notes[id] = it.copy(isArchived = archived, updatedAt = ts, syncedAt = null) }
         emitActive()
     }
 

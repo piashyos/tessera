@@ -21,7 +21,7 @@ import app.tessera.data.local.entity.TagEntity
         FolderEntity::class,
         NoteFolderCrossRef::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {

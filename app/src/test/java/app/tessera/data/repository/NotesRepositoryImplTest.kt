@@ -100,6 +100,27 @@ class NotesRepositoryImplTest {
         }
 
     @Test
+    fun `setArchived moves note out of active list into archived list`() =
+        runTest {
+            val noteDao = FakeNoteDao()
+            val tagDao = FakeTagDao()
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(1L), FakeSyncScheduler())
+            val created = repository.createNote()
+            repository.updateNote(created.copy(title = "Keep", content = "Body"))
+
+            repository.setArchived(created.id, true)
+
+            assertTrue(repository.observeNotes().first().none { it.id == created.id })
+            val archived = repository.observeArchivedNotes().first()
+            assertEquals(listOf(created.id), archived.map { it.id })
+            assertTrue(archived.single().isArchived)
+
+            repository.setArchived(created.id, false)
+            assertTrue(repository.observeArchivedNotes().first().isEmpty())
+            assertEquals(listOf(created.id), repository.observeNotes().first().map { it.id })
+        }
+
+    @Test
     fun `deleteNote soft deletes using current clock time`() =
         runTest {
             val noteDao = FakeNoteDao()
@@ -298,9 +319,12 @@ private class MutableClock(
 private class FakeNoteDao : NoteDao {
     private val notes = linkedMapOf<String, NoteEntity>()
     private val activeFlow = MutableStateFlow(emptyList<NoteEntity>())
+    private val archivedFlow = MutableStateFlow(emptyList<NoteEntity>())
     private val noteFlows = mutableMapOf<String, MutableStateFlow<NoteEntity?>>()
 
     override fun observeActive(): Flow<List<NoteEntity>> = activeFlow
+
+    override fun observeArchived(): Flow<List<NoteEntity>> = archivedFlow
 
     override fun observeById(id: String): Flow<NoteEntity?> =
         noteFlows.getOrPut(id) { MutableStateFlow(notes[id]) }
@@ -341,6 +365,12 @@ private class FakeNoteDao : NoteDao {
     override suspend fun setPinned(id: String, pinned: Boolean, ts: Long) {
         val current = notes[id] ?: return
         notes[id] = current.copy(isPinned = pinned, updatedAt = ts, syncedAt = null)
+        emitChanges(id)
+    }
+
+    override suspend fun setArchived(id: String, archived: Boolean, ts: Long) {
+        val current = notes[id] ?: return
+        notes[id] = current.copy(isArchived = archived, updatedAt = ts, syncedAt = null)
         emitChanges(id)
     }
 
@@ -400,7 +430,11 @@ private class FakeNoteDao : NoteDao {
     private fun emitChanges(vararg ids: String) {
         activeFlow.value =
             notes.values
-                .filter { it.deletedAt == null }
+                .filter { it.deletedAt == null && !it.isArchived }
+                .sortedWith(compareByDescending<NoteEntity> { it.isPinned }.thenByDescending { it.updatedAt })
+        archivedFlow.value =
+            notes.values
+                .filter { it.deletedAt == null && it.isArchived }
                 .sortedWith(compareByDescending<NoteEntity> { it.isPinned }.thenByDescending { it.updatedAt })
 
         ids.distinct().forEach { id ->

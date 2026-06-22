@@ -11,6 +11,7 @@ data class Note(
     val deletedAt: Long?,
     val syncedAt: Long?,
     val ownerId: UserId?,
+    val isArchived: Boolean = false,
 ) {
     fun isBlankDraft(): Boolean = content.isBlank()
 }

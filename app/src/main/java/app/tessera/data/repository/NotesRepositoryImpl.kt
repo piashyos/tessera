@@ -108,6 +108,15 @@ class NotesRepositoryImpl @Inject constructor(
         syncScheduler.requestSync()
     }
 
+    override fun observeArchivedNotes(): Flow<List<Note>> =
+        combine(noteDao.observeArchived(), tagDao.observeAllCrossRefs()) { notes, _ -> notes }
+            .map { notes -> notes.map { note -> toDomain(note) }.filterNot(Note::isBlankDraft) }
+
+    override suspend fun setArchived(id: NoteId, archived: Boolean) {
+        noteDao.setArchived(id.value, archived, clock.nowMs())
+        syncScheduler.requestSync()
+    }
+
     private suspend fun toDomain(entity: app.tessera.data.local.entity.NoteEntity): Note =
         noteMapper.toDomain(entity, tagDao.tagsForNote(entity.id))
 
