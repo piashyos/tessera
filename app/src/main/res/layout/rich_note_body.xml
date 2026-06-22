@@ -12,7 +12,7 @@
     android:textColorHint="?attr/colorOnSurfaceVariant"
     android:textSize="15sp"
     android:lineSpacingExtra="4dp"
-    android:textCursorDrawable="@null"
+    android:textCursorDrawable="@drawable/editor_text_cursor"
     android:inputType="textMultiLine|textCapSentences|textNoSuggestions"
     android:imeOptions="actionDone|flagNoExtractUi"
     app:historyEnable="true"

@@ -175,6 +175,10 @@ fun RichNoteBody(
 
     // Capture theme values before entering the AndroidView lambda (Compose context required)
     val textColor = MaterialTheme.colorScheme.onSurface
+    // Themed selection highlight — without it the platform paints the stock teal, which
+    // clashes with Tessera's terracotta primary (especially visible because format toggles
+    // keep the range selected via withPreservedSelection).
+    val selectionHighlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
     val density = LocalDensity.current
     val bulletRadiusPx = with(density) { 5.dp.toPx() }
     // Tessera body type: Inter 15sp with 4dp extra leading (spec §6).
@@ -233,6 +237,7 @@ fun RichNoteBody(
 
             // Apply theme-aware styling
             editor.setTextColor(textColor.toArgb())
+            editor.highlightColor = selectionHighlight.toArgb()
             editor.textSize = bodyTextSizeSp
             // Inter is the Tessera body face; the variable font ships as inter_variable.
             ResourcesCompat.getFont(context, R.font.inter_variable)?.let { editor.typeface = it }
@@ -329,23 +334,43 @@ fun RichNoteBody(
                     }
                 }
 
+                // Aztec's BlockFormatter.toggleHeading is a no-op when the line already has
+                // the requested heading (it only acts when !containsHeadingOnly and has no
+                // "remove" branch). So tapping H1/H2 a second time would never revert the
+                // heading. Make it a real toggle: when the heading is already active at the
+                // selection, switch the block back to a paragraph (the only path Aztec
+                // exposes for removing a heading span).
+                private fun toggleHeadingFormat(format: AztecTextFormat) = withPreservedSelection {
+                    if (editor.contains(format, editor.selectionStart, editor.selectionEnd)) {
+                        editor.toggleFormatting(AztecTextFormat.FORMAT_PARAGRAPH)
+                    } else {
+                        editor.toggleFormatting(format)
+                    }
+                }
+
                 override fun toggleBold() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_BOLD) }
                 override fun toggleItalic() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_ITALIC) }
                 override fun toggleStrikethrough() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_STRIKETHROUGH) }
                 override fun toggleParagraph() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_PARAGRAPH) }
-                override fun toggleHeading1() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_1) }
-                override fun toggleHeading2() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_2) }
-                override fun toggleHeading3() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_3) }
-                override fun toggleHeading4() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_4) }
-                override fun toggleHeading5() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_5) }
-                override fun toggleHeading6() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_HEADING_6) }
+                override fun toggleHeading1() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_1)
+                override fun toggleHeading2() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_2)
+                override fun toggleHeading3() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_3)
+                override fun toggleHeading4() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_4)
+                override fun toggleHeading5() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_5)
+                override fun toggleHeading6() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_6)
                 override fun toggleBulletList() = withPreservedSelection {
                     editor.toggleFormatting(AztecTextFormat.FORMAT_UNORDERED_LIST)
                     // Aztec creates a fresh AztecUnorderedListSpan when toggling — swap it
                     // for our custom span so the larger circle bullet keeps rendering.
                     replaceBulletSpans(editor, bulletRadiusPx)
                 }
-                override fun toggleTaskList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_TASK_LIST) }
+                override fun toggleTaskList() = withPreservedSelection {
+                    editor.toggleFormatting(AztecTextFormat.FORMAT_TASK_LIST)
+                    // Prime the freshly-created task-list span so its leading verticalPadding
+                    // is applied immediately — otherwise the first checkbox tap triggers
+                    // Aztec's refresh() and the line height jumps once.
+                    primeTaskListSpans(editor)
+                }
                 override fun toggleUnderline() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_UNDERLINE) }
                 override fun toggleOrderedList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_ORDERED_LIST) }
                 override fun toggleQuote() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_QUOTE) }
