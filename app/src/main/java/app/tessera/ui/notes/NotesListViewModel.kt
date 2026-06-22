@@ -5,13 +5,17 @@ import androidx.lifecycle.viewModelScope
 import app.tessera.core.preferences.UserPreferences
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
+import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.usecase.CreateFolderUseCase
 import app.tessera.domain.usecase.CreateNoteUseCase
+import app.tessera.domain.usecase.CreateSubfolderUseCase
 import app.tessera.domain.usecase.DeleteFolderUseCase
 import app.tessera.domain.usecase.DeleteNoteUseCase
+import app.tessera.domain.usecase.MoveFolderUseCase
 import app.tessera.domain.usecase.MoveNoteToFolderUseCase
+import app.tessera.domain.usecase.ObserveFolderTreeUseCase
 import app.tessera.domain.usecase.ObserveFoldersUseCase
 import app.tessera.domain.usecase.ObserveNotesInFolderUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
@@ -23,6 +27,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,12 +37,17 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val SearchDebounceMs = 300L
+
+sealed interface NotesListEvent {
+    data class ShowSnackbar(val message: String) : NotesListEvent
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -48,9 +59,12 @@ class NotesListViewModel @Inject constructor(
     private val restoreNoteUseCase: RestoreNoteUseCase,
     private val togglePinUseCase: TogglePinUseCase,
     private val observeFoldersUseCase: ObserveFoldersUseCase,
+    private val observeFolderTreeUseCase: ObserveFolderTreeUseCase,
     private val observeNotesInFolderUseCase: ObserveNotesInFolderUseCase,
     private val createFolderUseCase: CreateFolderUseCase,
+    private val createSubfolderUseCase: CreateSubfolderUseCase,
     private val renameFolderUseCase: RenameFolderUseCase,
+    private val moveFolderUseCase: MoveFolderUseCase,
     private val deleteFolderUseCase: DeleteFolderUseCase,
     private val moveNoteToFolderUseCase: MoveNoteToFolderUseCase,
     private val userPreferences: UserPreferences,
@@ -60,6 +74,10 @@ class NotesListViewModel @Inject constructor(
     private val selection = MutableStateFlow<Set<NoteId>>(emptySet())
     private val selectionMode = MutableStateFlow(false)
     private val selectedFolderId = MutableStateFlow<FolderId?>(null)
+    private val searchExpanded = MutableStateFlow(false)
+
+    private val eventsChannel = Channel<NotesListEvent>(Channel.BUFFERED)
+    val events: Flow<NotesListEvent> = eventsChannel.receiveAsFlow()
 
     private val effectiveQuery =
         query
@@ -97,8 +115,10 @@ class NotesListViewModel @Inject constructor(
             },
             notesFlow,
             observeFoldersUseCase(),
-            selectedFolderId,
-        ) { inputs, notes, folders, folderId ->
+            observeFolderTreeUseCase(),
+            combine(selectedFolderId, searchExpanded) { fid, expanded -> fid to expanded },
+        ) { inputs, notes, folders, folderTree, folderAndSearch ->
+            val (folderId, expanded) = folderAndSearch
             notes.toUiState(
                 query = inputs.query,
                 selectedTags = inputs.tags,
@@ -106,7 +126,9 @@ class NotesListViewModel @Inject constructor(
                 selectionMode = inputs.selectionMode,
                 viewMode = inputs.viewMode,
                 folders = folders,
+                folderTree = folderTree,
                 selectedFolderId = folderId,
+                searchExpanded = expanded,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -116,6 +138,15 @@ class NotesListViewModel @Inject constructor(
 
     fun onQueryChange(value: String) {
         query.value = value
+    }
+
+    fun expandSearch() {
+        searchExpanded.value = true
+    }
+
+    fun collapseSearch() {
+        searchExpanded.value = false
+        query.value = ""
     }
 
     fun onTagToggle(tag: String) {
@@ -142,7 +173,6 @@ class NotesListViewModel @Inject constructor(
         selection.value = emptySet()
     }
 
-    /** Enter multi-select mode, pre-selecting the long-pressed note. */
     fun enterSelectionMode(id: NoteId) {
         selection.value = setOf(id)
         selectionMode.value = true
@@ -153,7 +183,6 @@ class NotesListViewModel @Inject constructor(
         selection.value = emptySet()
     }
 
-    /** Toggle between "all visible notes selected" and "none selected". */
     fun toggleSelectAll() {
         val content = state.value as? NotesListState.Content ?: return
         val allIds = content.notes.map(Note::id).toSet()
@@ -164,10 +193,6 @@ class NotesListViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Soft-delete every selected note and leave selection mode. Returns the snapshot of
-     * deleted ids so the caller can offer a single undo that restores all of them.
-     */
     fun deleteSelected(): List<NoteId> {
         val ids = selection.value.toList()
         viewModelScope.launch {
@@ -201,8 +226,6 @@ class NotesListViewModel @Inject constructor(
 
     suspend fun createNoteDraft(): NoteId {
         val note = createNoteUseCase()
-        // If a folder is the active filter, the new draft must land there — otherwise
-        // it would silently appear in "All Notes" and surprise the user.
         selectedFolderId.value?.let { folderId ->
             moveNoteToFolderUseCase(note.id, folderId)
         }
@@ -236,8 +259,26 @@ class NotesListViewModel @Inject constructor(
         viewModelScope.launch { createFolderUseCase(name) }
     }
 
+    fun createSubfolder(parentId: FolderId, name: String) {
+        viewModelScope.launch {
+            val result = createSubfolderUseCase(parentId, name)
+            if (result.isFailure) {
+                eventsChannel.send(NotesListEvent.ShowSnackbar("Can't create subfolder here"))
+            }
+        }
+    }
+
     fun renameFolder(id: FolderId, name: String) {
         viewModelScope.launch { renameFolderUseCase(id, name) }
+    }
+
+    fun moveFolder(folderId: FolderId, newParentId: FolderId?) {
+        viewModelScope.launch {
+            val result = moveFolderUseCase(folderId, newParentId)
+            if (result.isFailure) {
+                eventsChannel.send(NotesListEvent.ShowSnackbar("Can't move folder here"))
+            }
+        }
     }
 
     fun deleteFolder(id: FolderId) {
@@ -267,7 +308,9 @@ private fun List<Note>.toUiState(
     selectionMode: Boolean,
     viewMode: NotesViewMode,
     folders: List<Folder>,
+    folderTree: List<FolderTreeNode>,
     selectedFolderId: FolderId?,
+    searchExpanded: Boolean,
 ): NotesListState {
     val availableTags = flatMap { note -> note.tags.map { tag -> tag.name } }.distinct().sorted()
     val visibleNotes =
@@ -287,7 +330,9 @@ private fun List<Note>.toUiState(
             selectedTags = selectedTags,
             viewMode = viewMode,
             folders = folders,
+            folderTree = folderTree,
             selectedFolderId = selectedFolderId,
+            searchExpanded = searchExpanded,
         )
     }
 
@@ -301,6 +346,8 @@ private fun List<Note>.toUiState(
         selectedTags = selectedTags,
         viewMode = viewMode,
         folders = folders,
+        folderTree = folderTree,
         selectedFolderId = selectedFolderId,
+        searchExpanded = searchExpanded,
     )
 }
