@@ -8,13 +8,17 @@ import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.usecase.ArchiveNoteUseCase
 import app.tessera.domain.usecase.CreateFolderUseCase
 import app.tessera.domain.usecase.CreateNoteUseCase
 import app.tessera.domain.usecase.CreateSubfolderUseCase
 import app.tessera.domain.usecase.DeleteFolderUseCase
 import app.tessera.domain.usecase.DeleteNoteUseCase
+import app.tessera.domain.usecase.DuplicateNoteUseCase
+import app.tessera.domain.usecase.GetNoteUseCase
 import app.tessera.domain.usecase.MoveFolderUseCase
 import app.tessera.domain.usecase.MoveNoteToFolderUseCase
+import app.tessera.domain.usecase.ObserveArchivedNotesUseCase
 import app.tessera.domain.usecase.ObserveFolderTreeUseCase
 import app.tessera.domain.usecase.ObserveFoldersUseCase
 import app.tessera.domain.usecase.ObserveNotesInFolderUseCase
@@ -23,6 +27,8 @@ import app.tessera.domain.usecase.RenameFolderUseCase
 import app.tessera.domain.usecase.RestoreNoteUseCase
 import app.tessera.domain.usecase.SearchNotesUseCase
 import app.tessera.domain.usecase.TogglePinUseCase
+import app.tessera.domain.usecase.UpdateNoteUseCase
+import app.tessera.domain.model.Tag
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.delay
@@ -58,6 +64,11 @@ class NotesListViewModel @Inject constructor(
     private val deleteNoteUseCase: DeleteNoteUseCase,
     private val restoreNoteUseCase: RestoreNoteUseCase,
     private val togglePinUseCase: TogglePinUseCase,
+    private val getNoteUseCase: GetNoteUseCase,
+    private val updateNoteUseCase: UpdateNoteUseCase,
+    private val duplicateNoteUseCase: DuplicateNoteUseCase,
+    private val archiveNoteUseCase: ArchiveNoteUseCase,
+    private val observeArchivedNotesUseCase: ObserveArchivedNotesUseCase,
     private val observeFoldersUseCase: ObserveFoldersUseCase,
     private val observeFolderTreeUseCase: ObserveFolderTreeUseCase,
     private val observeNotesInFolderUseCase: ObserveNotesInFolderUseCase,
@@ -75,6 +86,7 @@ class NotesListViewModel @Inject constructor(
     private val selectionMode = MutableStateFlow(false)
     private val selectedFolderId = MutableStateFlow<FolderId?>(null)
     private val searchExpanded = MutableStateFlow(false)
+    private val showArchive = MutableStateFlow(false)
 
     private val eventsChannel = Channel<NotesListEvent>(Channel.BUFFERED)
     val events: Flow<NotesListEvent> = eventsChannel.receiveAsFlow()
@@ -93,9 +105,12 @@ class NotesListViewModel @Inject constructor(
             }
 
     private val notesFlow =
-        combine(effectiveQuery, selectedFolderId) { value, folderId -> value to folderId }
-            .flatMapLatest { (value, folderId) ->
+        combine(effectiveQuery, selectedFolderId, showArchive) { value, folderId, archive ->
+            Triple(value, folderId, archive)
+        }
+            .flatMapLatest { (value, folderId, archive) ->
                 when {
+                    archive -> observeArchivedNotesUseCase()
                     value.isNotBlank() -> searchNotesUseCase(value)
                     folderId != null -> observeNotesInFolderUseCase(folderId)
                     else -> observeNotesUseCase()
@@ -116,9 +131,11 @@ class NotesListViewModel @Inject constructor(
             notesFlow,
             observeFoldersUseCase(),
             observeFolderTreeUseCase(),
-            combine(selectedFolderId, searchExpanded) { fid, expanded -> fid to expanded },
-        ) { inputs, notes, folders, folderTree, folderAndSearch ->
-            val (folderId, expanded) = folderAndSearch
+            combine(selectedFolderId, searchExpanded, showArchive) { fid, expanded, archive ->
+                Triple(fid, expanded, archive)
+            },
+        ) { inputs, notes, folders, folderTree, folderSearchArchive ->
+            val (folderId, expanded, archive) = folderSearchArchive
             notes.toUiState(
                 query = inputs.query,
                 selectedTags = inputs.tags,
@@ -129,6 +146,7 @@ class NotesListViewModel @Inject constructor(
                 folderTree = folderTree,
                 selectedFolderId = folderId,
                 searchExpanded = expanded,
+                isArchiveView = archive,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -252,7 +270,41 @@ class NotesListViewModel @Inject constructor(
     }
 
     fun selectFolder(folderId: FolderId?) {
+        showArchive.value = false
         selectedFolderId.value = folderId
+    }
+
+    fun showArchivedNotes() {
+        selectedFolderId.value = null
+        query.value = ""
+        searchExpanded.value = false
+        showArchive.value = true
+    }
+
+    fun showAllNotes() {
+        showArchive.value = false
+        selectedFolderId.value = null
+    }
+
+    fun archiveNote(id: NoteId, archived: Boolean) {
+        viewModelScope.launch {
+            selection.update { it - id }
+            archiveNoteUseCase(id, archived)
+        }
+    }
+
+    fun duplicateNote(id: NoteId) {
+        viewModelScope.launch { duplicateNoteUseCase(id) }
+    }
+
+    fun addTagToNote(noteId: NoteId, tag: String) {
+        viewModelScope.launch {
+            val note = getNoteUseCase(noteId) ?: return@launch
+            val merged = (note.tags + Tag(tag)).distinctBy { it.name.trim().lowercase() }
+            if (merged.size != note.tags.size) {
+                updateNoteUseCase(note.copy(tags = merged))
+            }
+        }
     }
 
     fun createFolder(name: String) {
@@ -311,6 +363,7 @@ private fun List<Note>.toUiState(
     folderTree: List<FolderTreeNode>,
     selectedFolderId: FolderId?,
     searchExpanded: Boolean,
+    isArchiveView: Boolean,
 ): NotesListState {
     val availableTags = flatMap { note -> note.tags.map { tag -> tag.name } }.distinct().sorted()
     val visibleNotes =
@@ -333,6 +386,7 @@ private fun List<Note>.toUiState(
             folderTree = folderTree,
             selectedFolderId = selectedFolderId,
             searchExpanded = searchExpanded,
+            isArchiveView = isArchiveView,
         )
     }
 
@@ -349,5 +403,6 @@ private fun List<Note>.toUiState(
         folderTree = folderTree,
         selectedFolderId = selectedFolderId,
         searchExpanded = searchExpanded,
+        isArchiveView = isArchiveView,
     )
 }

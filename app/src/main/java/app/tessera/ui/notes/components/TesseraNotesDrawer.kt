@@ -14,7 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.tessera.R
 import app.tessera.core.ui.tessera.TesseraDrawerItem
 import app.tessera.core.ui.tessera.TesseraDrawerShell
 import app.tessera.core.ui.theme.TesseraSpacing
@@ -44,28 +46,28 @@ fun TesseraNotesDrawer(
 ) {
   TesseraDrawerShell(
     drawerState = drawerState,
-    header = { Text("Tessera") },
+    header = { Text(stringResource(R.string.app_name)) },
     content = {
       TesseraDrawerItem(
-        label = "All notes",
+        label = stringResource(R.string.folders_all_notes),
         selected = selectedSystemKey == "all" && selectedFolderId == null,
         onClick = { onSystemSelect("all"); onFolderSelect(null) },
         leadingIcon = { Icon(Lucide.Inbox, contentDescription = null) },
       )
       TesseraDrawerItem(
-        label = "Pinned",
+        label = stringResource(R.string.drawer_pinned),
         selected = selectedSystemKey == "pinned",
         onClick = { onSystemSelect("pinned") },
         leadingIcon = { Icon(Lucide.Pin, contentDescription = null) },
       )
       TesseraDrawerItem(
-        label = "Archive",
+        label = stringResource(R.string.notes_archive),
         selected = selectedSystemKey == "archive",
         onClick = { onSystemSelect("archive") },
         leadingIcon = { Icon(Lucide.Archive, contentDescription = null) },
       )
       TesseraDrawerItem(
-        label = "Trash",
+        label = stringResource(R.string.drawer_trash),
         selected = selectedSystemKey == "trash",
         onClick = { onSystemSelect("trash") },
         leadingIcon = { Icon(Lucide.Trash2, contentDescription = null) },
@@ -82,13 +84,13 @@ fun TesseraNotesDrawer(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(
-          text = "FOLDERS",
+          text = stringResource(R.string.drawer_folders_section),
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.primary,
           modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onCreateRootFolder, modifier = Modifier.size(36.dp)) {
-          Icon(Lucide.Plus, contentDescription = "Create folder")
+          Icon(Lucide.Plus, contentDescription = stringResource(R.string.folders_create))
         }
       }
       folderTree.forEach { node ->
@@ -99,7 +101,7 @@ fun TesseraNotesDrawer(
           leadingIcon = { Icon(Lucide.Folder, contentDescription = null) },
           trailing = {
             IconButton(onClick = { onCreateSubfolder(node.folder.id) }) {
-              Icon(Lucide.Plus, contentDescription = "Create subfolder")
+              Icon(Lucide.Plus, contentDescription = stringResource(R.string.folders_create_subfolder))
             }
           },
           indentLevel = 0,
@@ -118,7 +120,7 @@ fun TesseraNotesDrawer(
     },
     footer = {
       TesseraDrawerItem(
-        label = "Settings",
+        label = stringResource(R.string.settings_title),
         selected = false,
         onClick = onSettingsClick,
         leadingIcon = { Icon(Lucide.Settings, contentDescription = null) },

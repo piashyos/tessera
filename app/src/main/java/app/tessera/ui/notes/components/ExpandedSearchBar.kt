@@ -17,8 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import app.tessera.R
 import app.tessera.core.ui.theme.TesseraSpacing
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
@@ -30,7 +32,7 @@ fun ExpandedSearchBar(
   onQueryChange: (String) -> Unit,
   onCollapse: () -> Unit,
   modifier: Modifier = Modifier,
-  placeholder: String = "Search notes",
+  placeholder: String = stringResource(R.string.search_hint),
 ) {
   Surface(
     color = MaterialTheme.colorScheme.surface,
@@ -45,7 +47,7 @@ fun ExpandedSearchBar(
       horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.xs),
     ) {
       IconButton(onClick = onCollapse) {
-        Icon(Lucide.ArrowLeft, contentDescription = "Close search")
+        Icon(Lucide.ArrowLeft, contentDescription = stringResource(R.string.search_close))
       }
       TextField(
         value = query,
@@ -63,7 +65,7 @@ fun ExpandedSearchBar(
       )
       if (query.isNotEmpty()) {
         IconButton(onClick = { onQueryChange("") }) {
-          Icon(Lucide.X, contentDescription = "Clear")
+          Icon(Lucide.X, contentDescription = stringResource(R.string.search_clear))
         }
       }
     }

@@ -53,6 +53,7 @@ import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.ui.notes.components.ExpandedSearchBar
 import app.tessera.ui.notes.components.FolderNamePopup
+import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.components.FolderPickerPopup
 import app.tessera.ui.notes.components.NoteActionsSheet
 import app.tessera.ui.notes.components.TesseraNotesDrawer
@@ -99,6 +100,11 @@ fun NotesListScreen(
     onCollapseSearch: () -> Unit = {},
     onCreateSubfolder: (FolderId, String) -> Unit = { _, _ -> },
     onMoveFolder: (FolderId, FolderId?) -> Unit = { _, _ -> },
+    onDuplicateNote: (NoteId) -> Unit = {},
+    onArchiveNote: (NoteId, Boolean) -> Unit = { _, _ -> },
+    onAddTagToNote: (NoteId, String) -> Unit = { _, _ -> },
+    onShowArchive: () -> Unit = {},
+    onShowAllNotes: () -> Unit = {},
     isRefreshing: Boolean = false,
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -109,6 +115,7 @@ fun NotesListScreen(
     var folderCreatorVisible by remember { mutableStateOf(false) }
     var folderEditorTarget by remember { mutableStateOf<Folder?>(null) }
     var folderPickerNote by remember { mutableStateOf<Note?>(null) }
+    var tagPickerNote by remember { mutableStateOf<Note?>(null) }
     var selectionMovePickerVisible by remember { mutableStateOf(false) }
     var subfolderParent by remember { mutableStateOf<FolderId?>(null) }
     var selectedSystemKey by remember { mutableStateOf("all") }
@@ -138,8 +145,10 @@ fun NotesListScreen(
     BackHandler(enabled = state.searchExpanded) { onCollapseSearch() }
 
     val allNotesLabel = stringResource(R.string.notes_all_notes)
+    val archiveLabel = stringResource(R.string.notes_archive)
     val headerTitle = when {
         selectionMode -> stringResource(R.string.notes_selection_count, selection.size)
+        state.isArchiveView -> archiveLabel
         state.selectedFolderId != null ->
             state.folders.firstOrNull { it.id == state.selectedFolderId }?.name ?: allNotesLabel
         else -> allNotesLabel
@@ -152,7 +161,10 @@ fun NotesListScreen(
         selectedSystemKey = selectedSystemKey,
         onSystemSelect = { key ->
             selectedSystemKey = key
-            if (key == "all") onSelectFolder(null)
+            when (key) {
+                "all" -> onShowAllNotes()
+                "archive" -> onShowArchive()
+            }
             scope.launch { drawerState.close() }
         },
         onFolderSelect = { id ->
@@ -277,12 +289,12 @@ fun NotesListScreen(
         NoteActionsSheet(
             noteTitle = note.title.ifBlank { stringResource(R.string.note_untitled) },
             isPinned = note.isPinned,
+            isArchived = note.isArchived,
             onPinToggle = { onTogglePin(note.id) },
             onMoveToFolder = { folderPickerNote = note },
-            onAddTags = { onEnterSelectionMode(note.id) },
-            onDuplicate = {},
-            onShare = {},
-            onArchive = { handleDelete(note) },
+            onAddTags = { tagPickerNote = note },
+            onDuplicate = { onDuplicateNote(note.id) },
+            onArchiveToggle = { onArchiveNote(note.id, !note.isArchived) },
             onDelete = { handleDelete(note) },
             onDismiss = { sheetNote = null },
         )
@@ -339,6 +351,18 @@ fun NotesListScreen(
         folders = state.folders,
         onPick = { folderId -> onMoveSelectedToFolder(folderId) },
         onDismiss = { selectionMovePickerVisible = false },
+        hazeState = hazeState,
+    )
+
+    val tagNote = tagPickerNote
+    TagPickerPopup(
+        visible = tagNote != null,
+        availableTags = tagNote?.let { note ->
+            val existing = note.tags.map { it.name }.toSet()
+            (state.availableTags() + existing).distinct().filterNot(existing::contains)
+        }.orEmpty(),
+        onAddTag = { tag -> if (tagNote != null) onAddTagToNote(tagNote.id, tag) },
+        onDismiss = { tagPickerNote = null },
         hazeState = hazeState,
     )
 }

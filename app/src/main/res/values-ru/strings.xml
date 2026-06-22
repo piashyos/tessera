@@ -108,4 +108,29 @@
     <string name="notes_selection_deselect_all">Снять выделение</string>
     <string name="notes_selection_deleted">Заметки удалены</string>
     <string name="folder_picker_none">Без папки</string>
+    <!-- Note action sheet -->
+    <string name="note_action_add_tags">Добавить теги</string>
+    <string name="note_action_duplicate">Дублировать</string>
+    <string name="note_action_archive">Архивировать</string>
+    <string name="note_action_unarchive">Разархивировать</string>
+    <!-- Drawer -->
+    <string name="notes_archive">Архив</string>
+    <string name="drawer_pinned">Закреплённые</string>
+    <string name="drawer_trash">Корзина</string>
+    <string name="drawer_folders_section">Папки</string>
+    <string name="folders_create">Создать папку</string>
+    <string name="folders_create_subfolder">Создать подпапку</string>
+    <!-- Search bar -->
+    <string name="search_close">Закрыть поиск</string>
+    <!-- Tag picker -->
+    <string name="editor_existing_tags">Существующие теги</string>
+    <!-- Table block editor -->
+    <string name="table_row">Строка</string>
+    <string name="table_column">Столбец</string>
+    <string name="table_add_row">Добавить строку</string>
+    <string name="table_remove_row">Удалить строку</string>
+    <string name="table_add_column">Добавить столбец</string>
+    <string name="table_remove_column">Удалить столбец</string>
+    <string name="table_move_up">Переместить таблицу вверх</string>
+    <string name="table_move_down">Переместить таблицу вниз</string>
 </resources>

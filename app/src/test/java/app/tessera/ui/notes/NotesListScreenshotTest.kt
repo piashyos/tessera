@@ -106,12 +106,12 @@ class NotesListScreenshotTest {
                 NoteActionsSheet(
                     noteTitle = "Material You redesign",
                     isPinned = true,
+                    isArchived = false,
                     onPinToggle = {},
                     onMoveToFolder = {},
                     onAddTags = {},
                     onDuplicate = {},
-                    onShare = {},
-                    onArchive = {},
+                    onArchiveToggle = {},
                     onDelete = {},
                     onDismiss = {},
                 )

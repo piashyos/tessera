@@ -11,12 +11,14 @@ sealed interface NotesListState {
     val folderTree: List<FolderTreeNode>
     val selectedFolderId: FolderId?
     val searchExpanded: Boolean
+    val isArchiveView: Boolean
 
     data object Loading : NotesListState {
         override val folders: List<Folder> = emptyList()
         override val folderTree: List<FolderTreeNode> = emptyList()
         override val selectedFolderId: FolderId? = null
         override val searchExpanded: Boolean = false
+        override val isArchiveView: Boolean = false
     }
 
     data class Empty(
@@ -28,6 +30,7 @@ sealed interface NotesListState {
         override val folderTree: List<FolderTreeNode> = emptyList(),
         override val selectedFolderId: FolderId? = null,
         override val searchExpanded: Boolean = false,
+        override val isArchiveView: Boolean = false,
     ) : NotesListState
 
     data class Content(
@@ -43,5 +46,6 @@ sealed interface NotesListState {
         override val folderTree: List<FolderTreeNode> = emptyList(),
         override val selectedFolderId: FolderId? = null,
         override val searchExpanded: Boolean = false,
+        override val isArchiveView: Boolean = false,
     ) : NotesListState
 }

@@ -119,6 +119,11 @@ private fun NavGraphBuilder.notesListDestination(
                 onCollapseSearch = viewModel::collapseSearch,
                 onCreateSubfolder = viewModel::createSubfolder,
                 onMoveFolder = viewModel::moveFolder,
+                onDuplicateNote = viewModel::duplicateNote,
+                onArchiveNote = viewModel::archiveNote,
+                onAddTagToNote = viewModel::addTagToNote,
+                onShowArchive = viewModel::showArchivedNotes,
+                onShowAllNotes = viewModel::showAllNotes,
             )
         }
     }
