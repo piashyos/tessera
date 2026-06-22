@@ -3,6 +3,7 @@ package app.tessera.ui.editor.components
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
+import android.text.Spannable
 import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -20,9 +21,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.res.ResourcesCompat
 import app.tessera.R
+import app.tessera.core.text.applyFirstLineSerifH1
 import org.wordpress.aztec.Aztec
 import org.wordpress.aztec.AztecText
 import org.wordpress.aztec.AztecTextFormat
@@ -84,6 +86,7 @@ interface RichBodyActions {
 }
 
 private const val DebounceMs = 300L
+private const val SerifReapplyMs = 50L
 
 /**
  * Call `refresh()` on every `AztecTaskListSpan` currently attached to the editor's
@@ -172,9 +175,11 @@ fun RichNoteBody(
 
     // Capture theme values before entering the AndroidView lambda (Compose context required)
     val textColor = MaterialTheme.colorScheme.onSurface
-    val textSizeSp = MaterialTheme.typography.bodyLarge.fontSize.takeIf { it != 0.sp } ?: 16.sp
     val density = LocalDensity.current
     val bulletRadiusPx = with(density) { 5.dp.toPx() }
+    // Tessera body type: Inter 15sp with 4dp extra leading (spec §6).
+    val bodyTextSizeSp = 15f
+    val lineSpacingExtraPx = with(density) { 4.dp.toPx() }
 
     // Handler lifted to the composable so DisposableEffect can clear pending debounce
     // runnables when the editor leaves composition (e.g. back-nav during typing).
@@ -217,6 +222,7 @@ fun RichNoteBody(
         modifier = modifier,
         factory = { context ->
             var debounceRunnable: Runnable? = null
+            var serifRunnable: Runnable? = null
 
             val inflater = LayoutInflater.from(context)
             val editor = inflater.inflate(R.layout.rich_note_body, null, false) as AztecText
@@ -227,13 +233,14 @@ fun RichNoteBody(
 
             // Apply theme-aware styling
             editor.setTextColor(textColor.toArgb())
-            editor.textSize = textSizeSp.value
+            editor.textSize = bodyTextSizeSp
+            // Inter is the Tessera body face; the variable font ships as inter_variable.
+            ResourcesCompat.getFont(context, R.font.inter_variable)?.let { editor.typeface = it }
             editor.setPadding(0, 8, 0, 8)
             editor.includeFontPadding = false
-            // Pull wrapped lines closer to the previous line. Aztec inherits Android's
-            // default line spacing which leaves a noticeable gap when text wraps; trim
-            // it by reducing the multiplier and zeroing extra.
-            editor.setLineSpacing(0f, 1.05f)
+            // 4dp extra leading per spec (≈15sp/24). Keeps wrapped lines from drifting too
+            // far apart while giving paragraphs room to breathe.
+            editor.setLineSpacing(lineSpacingExtraPx, 1.0f)
 
             // Wire History + IME callbacks via the Aztec factory (no-op toolbar/listener — the Compose
             // MarkdownToolbar drives formatting through RichBodyActions). Without this call the view
@@ -244,6 +251,13 @@ fun RichNoteBody(
                 NoOpAztecToolbarClickListener,
             )
 
+            // Re-apply the Instrument Serif display style to the first H1. Aztec's
+            // fromHtml round-trip rebuilds spans, so this must run after every (re)load
+            // and after edits that may shift the H1 (debounced via the TextWatcher).
+            fun reapplySerifH1() {
+                (editor.text as? Spannable)?.let { applyFirstLineSerifH1(it, context) }
+            }
+
             // Load initial HTML AFTER Aztec.with so plugins/history see it as the starting state.
             editor.fromHtml(html)
             // After load, force-refresh every task-list span so its line metrics
@@ -252,6 +266,7 @@ fun RichNoteBody(
             // one-time line-height shift when Aztec's `refresh()` reinstalls the span.
             primeTaskListSpans(editor)
             replaceBulletSpans(editor, bulletRadiusPx)
+            reapplySerifH1()
             editorRef.value = editor
 
             editor.isFocusable = true
@@ -276,10 +291,22 @@ fun RichNoteBody(
                 handler.postDelayed(runnable, DebounceMs)
             }
 
+            // Cheap span-only re-apply (no HTML round-trip) so the serif H1 follows the
+            // heading as the user edits / moves it. 50ms keeps it off the typing hot path.
+            fun scheduleSerifReapply() {
+                serifRunnable?.let { handler.removeCallbacks(it) }
+                val runnable = Runnable { reapplySerifH1() }
+                serifRunnable = runnable
+                handler.postDelayed(runnable, SerifReapplyMs)
+            }
+
             editor.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(s: Editable?) = scheduleHtmlFlush()
+                override fun afterTextChanged(s: Editable?) {
+                    scheduleHtmlFlush()
+                    scheduleSerifReapply()
+                }
             })
 
             // Task-list checkbox toggles bypass TextWatcher (Aztec only mutates the leading
@@ -371,6 +398,7 @@ fun RichNoteBody(
                 editor.fromHtml(html)
                 primeTaskListSpans(editor)
                 replaceBulletSpans(editor, bulletRadiusPx)
+                (editor.text as? Spannable)?.let { applyFirstLineSerifH1(it, editor.context) }
                 lastLoadedMarkdownRef[0] = markdownKey
             }
         },
