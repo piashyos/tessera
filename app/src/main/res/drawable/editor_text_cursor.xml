@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Themed text caret for the Aztec note body. Replaces android:textCursorDrawable="@null",
+  which left the caret using the platform default (invisible / off-brand on some devices).
+  Width is fixed at 2dp; the framework stretches the height to the line's text size, so the
+  caret tracks H1/H2/body sizing automatically. Color references @color/brand_primary, which
+  has a values-night variant, so it adapts to dark theme.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <size android:width="2dp" />
+    <solid android:color="@color/brand_primary" />
+    <corners android:radius="1dp" />
+</shape>

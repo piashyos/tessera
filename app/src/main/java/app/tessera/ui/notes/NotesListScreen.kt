@@ -63,7 +63,6 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Menu
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Rows3
-import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Trash2
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
@@ -169,10 +168,6 @@ fun NotesListScreen(
             scope.launch { drawerState.close() }
             onOpenSettings()
         },
-        onProfileClick = {
-            scope.launch { drawerState.close() }
-            onOpenSettings()
-        },
     ) {
         Scaffold(
             modifier = modifier
@@ -228,15 +223,6 @@ fun NotesListScreen(
                                 modifier = Modifier.testTag(UiTestTags.ViewModeToggle),
                             ) {
                                 Icon(toggleIcon, contentDescription = toggleDesc)
-                            }
-                            IconButton(
-                                onClick = onOpenSettings,
-                                modifier = Modifier.testTag(UiTestTags.OpenSettings),
-                            ) {
-                                Icon(
-                                    Lucide.Settings,
-                                    contentDescription = stringResource(R.string.settings_open),
-                                )
                             }
                         }
                     },

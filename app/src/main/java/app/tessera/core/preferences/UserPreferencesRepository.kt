@@ -10,6 +10,7 @@ import app.tessera.ui.notes.NotesViewMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,9 +26,13 @@ class UserPreferencesRepository @Inject constructor(
 ) : UserPreferences {
     private val store: DataStore<Preferences> = context.userPrefsDataStore
 
+    @Volatile
+    private var lastThemeMode: ThemeMode = ThemeMode.AUTO
+    override val cachedThemeMode: ThemeMode get() = lastThemeMode
+
     override val themeMode: Flow<ThemeMode> = store.data.map { p ->
         p[KEY_THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.AUTO
-    }
+    }.onEach { lastThemeMode = it }
 
     /** Empty string = follow system default. */
     override val languageTag: Flow<String> = store.data.map { it[KEY_LANG] ?: "" }

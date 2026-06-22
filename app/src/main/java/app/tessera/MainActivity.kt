@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
-import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.preferences.UserPreferences
 import app.tessera.core.util.CurrentActivityHolder
 import app.tessera.core.ui.theme.TesseraTheme
@@ -45,7 +44,13 @@ class MainActivity : ComponentActivity() {
             val languageTag by produceState<String?>(initialValue = null, userPreferences) {
                 userPreferences.languageTag.collect { value = it }
             }
-            val themeMode by produceState<ThemeMode?>(initialValue = null, userPreferences) {
+            // Seed with the last known theme (not null/AUTO) so a recreation — e.g. triggered by a
+            // language change — keeps the user's theme instead of flashing to the system default
+            // while DataStore re-emits.
+            val themeMode by produceState(
+                initialValue = userPreferences.cachedThemeMode,
+                userPreferences,
+            ) {
                 userPreferences.themeMode.collect { value = it }
             }
 
@@ -76,7 +81,7 @@ class MainActivity : ComponentActivity() {
             // Keep status/navigation bar icon tint in sync with the active theme. With
             // edge-to-edge the bars are transparent, so we only flip light/dark icons:
             // dark icons on a light theme, light icons on a dark theme.
-            val resolvedDark = (themeMode ?: ThemeMode.AUTO).resolve(isSystemInDarkTheme()).first
+            val resolvedDark = themeMode.resolve(isSystemInDarkTheme()).first
             val view = LocalView.current
             LaunchedEffect(resolvedDark) {
                 val controller = WindowCompat.getInsetsController(window, view)
@@ -84,7 +89,7 @@ class MainActivity : ComponentActivity() {
                 controller.isAppearanceLightNavigationBars = !resolvedDark
             }
 
-            TesseraTheme(themeMode = themeMode ?: ThemeMode.AUTO) {
+            TesseraTheme(themeMode = themeMode) {
                 TesseraApp()
             }
         }

@@ -19,6 +19,7 @@
     <string name="editor_title_hint">Заголовок</string>
     <string name="editor_body_hint">Начните писать…</string>
     <string name="editor_add_tag">Добавить тег</string>
+    <string name="editor_remove_tag">Удалить тег %1$s</string>
     <string name="editor_tags_toggle">Показать теги</string>
     <string name="editor_pin">Закрепить заметку</string>
     <string name="editor_unpin">Открепить заметку</string>
@@ -49,7 +50,6 @@
     <string name="note_deleted">Заметка удалена</string>
     <string name="action_undo">Отменить</string>
     <string name="settings_title">Настройки</string>
-    <string name="settings_open">Открыть настройки</string>
     <string name="settings_back">Назад</string>
     <string name="settings_account">Аккаунт</string>
     <string name="settings_signed_out">Вход не выполнен</string>
