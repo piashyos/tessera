@@ -49,6 +49,13 @@
     <string name="note_action_delete">Удалить</string>
     <string name="note_deleted">Заметка удалена</string>
     <string name="action_undo">Отменить</string>
+    <!-- Note list section headers -->
+    <string name="note_group_pinned">Закреплённые</string>
+    <string name="note_group_today">Сегодня</string>
+    <string name="note_group_yesterday">Вчера</string>
+    <string name="note_group_this_week">На этой неделе</string>
+    <string name="note_group_this_month">В этом месяце</string>
+    <string name="note_group_earlier">Ранее</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_back">Назад</string>
     <string name="settings_account">Аккаунт</string>
