@@ -8,9 +8,11 @@ import app.tessera.domain.model.AccountSwitchDecision
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
+import app.tessera.domain.repository.SyncScheduler
 import app.tessera.domain.usecase.HandleAccountSwitchUseCase
 import app.tessera.domain.usecase.SignInUseCase
 import app.tessera.domain.usecase.SignOutUseCase
+import app.tessera.sync.SyncStatusProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,8 @@ class SettingsViewModel @Inject constructor(
     private val signOutUseCase: SignOutUseCase,
     private val handleAccountSwitchUseCase: HandleAccountSwitchUseCase,
     private val userPreferences: UserPreferences,
+    private val syncScheduler: SyncScheduler,
+    syncStatusProvider: SyncStatusProvider,
 ) : ViewModel() {
     private val uiState = MutableStateFlow(SettingsState())
 
@@ -37,7 +41,8 @@ class SettingsViewModel @Inject constructor(
             uiState,
             userPreferences.themeMode,
             userPreferences.languageTag,
-        ) { profile, ui, theme, lang ->
+            syncStatusProvider.syncStatus,
+        ) { profile, ui, theme, lang, sync ->
             ui.copy(
                 isSignedIn = profile != null,
                 userId = profile?.id?.value,
@@ -46,6 +51,7 @@ class SettingsViewModel @Inject constructor(
                 photoUrl = profile?.photoUrl,
                 themeMode = theme,
                 languageTag = lang,
+                syncStatus = sync,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -126,5 +132,10 @@ class SettingsViewModel @Inject constructor(
 
     fun onDismissError() {
         uiState.value = uiState.value.copy(errorMessage = null)
+    }
+
+    /** Re-enqueue a one-time sync, e.g. after a sync error shown in the sync status row. */
+    fun onRetrySync() {
+        syncScheduler.requestSync()
     }
 }

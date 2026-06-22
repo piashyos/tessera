@@ -2,6 +2,7 @@ package app.tessera.ui.settings
 
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.domain.model.UserId
+import app.tessera.sync.SyncIndicator
 
 /**
  * An unresolved account switch: the user signed in as [newUid] but local notes are still
@@ -23,4 +24,5 @@ data class SettingsState(
     val errorMessage: String? = null,
     val themeMode: ThemeMode = ThemeMode.AUTO,
     val languageTag: String = "",
+    val syncStatus: SyncIndicator = SyncIndicator.Ok(),
 )

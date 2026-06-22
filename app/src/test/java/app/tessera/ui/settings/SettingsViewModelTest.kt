@@ -7,9 +7,12 @@ import app.tessera.domain.model.UserId
 import app.tessera.domain.model.UserProfile
 import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
+import app.tessera.domain.repository.SyncScheduler
 import app.tessera.domain.usecase.HandleAccountSwitchUseCase
 import app.tessera.domain.usecase.SignInUseCase
 import app.tessera.domain.usecase.SignOutUseCase
+import app.tessera.sync.SyncIndicator
+import app.tessera.sync.SyncStatusProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -148,10 +151,48 @@ class SettingsViewModelTest {
             }
         }
 
+    @Test
+    fun `sync status from the provider is reflected in state`() =
+        runTest(dispatcher.scheduler) {
+            val auth = FakeAuthRepository(signInResult = Result.success(UserId("uid-new")))
+            val account = FakeAccountRepository(owner = null)
+            val syncStatus = MutableStateFlow<SyncIndicator>(SyncIndicator.Syncing)
+            val viewModel = createViewModel(
+                auth,
+                account,
+                syncStatusProvider = FakeSyncStatusProvider(syncStatus),
+            )
+
+            viewModel.state.test {
+                awaitItem()
+                advanceUntilIdle()
+                assertEquals(SyncIndicator.Syncing, expectMostRecentItem().syncStatus)
+
+                syncStatus.value = SyncIndicator.Ok(42L)
+                advanceUntilIdle()
+                assertEquals(SyncIndicator.Ok(42L), expectMostRecentItem().syncStatus)
+            }
+        }
+
+    @Test
+    fun `retry sync requests a sync from the scheduler`() =
+        runTest(dispatcher.scheduler) {
+            val auth = FakeAuthRepository(signInResult = Result.success(UserId("uid-new")))
+            val account = FakeAccountRepository(owner = null)
+            val scheduler = FakeSyncScheduler()
+            val viewModel = createViewModel(auth, account, syncScheduler = scheduler)
+
+            viewModel.onRetrySync()
+
+            assertEquals(1, scheduler.requestCount)
+        }
+
     private fun createViewModel(
         auth: AuthRepository,
         account: AccountRepository,
         userPreferences: UserPreferences = FakeUserPreferences(),
+        syncScheduler: SyncScheduler = FakeSyncScheduler(),
+        syncStatusProvider: SyncStatusProvider = FakeSyncStatusProvider(),
     ): SettingsViewModel =
         SettingsViewModel(
             authRepository = auth,
@@ -160,8 +201,23 @@ class SettingsViewModelTest {
             signOutUseCase = SignOutUseCase(auth),
             handleAccountSwitchUseCase = HandleAccountSwitchUseCase(account),
             userPreferences = userPreferences,
+            syncScheduler = syncScheduler,
+            syncStatusProvider = syncStatusProvider,
         )
 }
+
+private class FakeSyncScheduler : SyncScheduler {
+    var requestCount = 0
+        private set
+
+    override fun requestSync() {
+        requestCount++
+    }
+}
+
+private class FakeSyncStatusProvider(
+    override val syncStatus: Flow<SyncIndicator> = MutableStateFlow(SyncIndicator.Ok()),
+) : SyncStatusProvider
 
 private class FakeUserPreferences : UserPreferences {
     private val theme = MutableStateFlow(ThemeMode.AUTO)
