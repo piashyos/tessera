@@ -49,7 +49,6 @@
     <string name="note_deleted">Заметка удалена</string>
     <string name="action_undo">Отменить</string>
     <string name="settings_title">Настройки</string>
-    <string name="settings_open">Открыть настройки</string>
     <string name="settings_back">Назад</string>
     <string name="settings_account">Аккаунт</string>
     <string name="settings_signed_out">Вход не выполнен</string>

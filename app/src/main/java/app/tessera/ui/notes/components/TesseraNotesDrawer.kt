@@ -28,7 +28,6 @@ import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.User
 
 @Composable
 fun TesseraNotesDrawer(
@@ -41,7 +40,6 @@ fun TesseraNotesDrawer(
   onCreateRootFolder: () -> Unit,
   onCreateSubfolder: (FolderId) -> Unit,
   onSettingsClick: () -> Unit,
-  onProfileClick: () -> Unit,
   content: @Composable () -> Unit,
 ) {
   TesseraDrawerShell(
@@ -124,12 +122,6 @@ fun TesseraNotesDrawer(
         selected = false,
         onClick = onSettingsClick,
         leadingIcon = { Icon(Lucide.Settings, contentDescription = null) },
-      )
-      TesseraDrawerItem(
-        label = "Profile",
-        selected = false,
-        onClick = onProfileClick,
-        leadingIcon = { Icon(Lucide.User, contentDescription = null) },
       )
     },
     screenContent = content,

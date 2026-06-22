@@ -55,7 +55,6 @@
     <string name="note_deleted">Note deleted</string>
     <string name="action_undo">Undo</string>
     <string name="settings_title">Settings</string>
-    <string name="settings_open">Open settings</string>
     <string name="settings_back">Back</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_out">Not signed in</string>
