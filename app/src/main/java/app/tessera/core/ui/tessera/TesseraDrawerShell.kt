@@ -43,7 +43,7 @@ fun TesseraDrawerShell(
   header: @Composable () -> Unit,
   content: @Composable ColumnScope.() -> Unit,
   modifier: Modifier = Modifier,
-  footer: @Composable () -> Unit = {},
+  footer: @Composable ColumnScope.() -> Unit = {},
   screenContent: @Composable () -> Unit,
 ) {
   ModalNavigationDrawer(
@@ -77,10 +77,11 @@ fun TesseraDrawerShell(
             content = content,
           )
           HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-          Box(
+          Column(
             modifier = Modifier
               .fillMaxWidth()
               .padding(TesseraSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(TesseraSpacing.xs),
           ) { footer() }
         }
       }

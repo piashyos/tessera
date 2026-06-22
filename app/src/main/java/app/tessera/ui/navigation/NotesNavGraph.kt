@@ -115,6 +115,10 @@ private fun NavGraphBuilder.notesListDestination(
                 onDeleteSelected = viewModel::deleteSelected,
                 onMoveSelectedToFolder = viewModel::moveSelectedToFolder,
                 onRestoreNotes = viewModel::restoreNotes,
+                onExpandSearch = viewModel::expandSearch,
+                onCollapseSearch = viewModel::collapseSearch,
+                onCreateSubfolder = viewModel::createSubfolder,
+                onMoveFolder = viewModel::moveFolder,
             )
         }
     }

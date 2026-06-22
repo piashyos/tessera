@@ -66,10 +66,40 @@ class MarkdownHtmlConverterTest {
         assertEquals("*x*", converter.htmlToMarkdown("<em>x</em>"))
     }
 
+    // --- New formats (Plan 05): ordered list, blockquote, inline code, hr, underline ---
+
+    @Test fun `ordered list round-trips`() = roundTrip("1. first\n2. second")
+    @Test fun `blockquote round-trips`() = roundTrip("> quoted")
+    @Test fun `multiline blockquote round-trips`() = roundTrip("> line one\n> line two")
+    @Test fun `inline code round-trips`() = roundTrip("`code`")
+    @Test fun `horizontal rule round-trips`() = roundTrip("---")
+    @Test fun `underline round-trips`() = roundTrip("<u>under</u>")
+    @Test fun `underline with bold round-trips`() = roundTrip("<u>**bold**</u>")
+    @Test fun `code preserves markdown specials`() = roundTrip("`a < b && c`")
+
     @Test
-    fun `unsupported tag is stripped to plain text`() {
-        val out = converter.htmlToMarkdown("<blockquote>quoted</blockquote>")
-        assertEquals("quoted", out)
+    fun `aztec ordered list parses to numbered markdown`() {
+        assertEquals("1. a\n2. b", converter.htmlToMarkdown("<ol><li>a</li><li>b</li></ol>"))
+    }
+
+    @Test
+    fun `aztec underline tag is preserved`() {
+        assertEquals("<u>x</u>", converter.htmlToMarkdown("<u>x</u>"))
+    }
+
+    @Test
+    fun `aztec code tag parses to backticks`() {
+        assertEquals("`x`", converter.htmlToMarkdown("<code>x</code>"))
+    }
+
+    @Test
+    fun `aztec self-closing hr parses to rule`() {
+        assertEquals("---", converter.htmlToMarkdown("<hr />"))
+    }
+
+    @Test
+    fun `blockquote parses to quote markdown`() {
+        assertEquals("> quoted", converter.htmlToMarkdown("<blockquote>quoted</blockquote>"))
     }
 
     // HTML-side idempotency: feeding our generated HTML back through the round-trip must be

@@ -3,7 +3,6 @@ package app.tessera.core.ui.tessera
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
@@ -30,15 +29,15 @@ fun TesseraChipRow(
   chips: List<TesseraChip>,
   onChipClick: (String) -> Unit,
   modifier: Modifier = Modifier,
-  contentPadding: PaddingValues = PaddingValues(horizontal = TesseraSpacing.lg),
+  contentPadding: PaddingValues = PaddingValues(horizontal = TesseraSpacing.lg, vertical = TesseraSpacing.xs),
 ) {
   LazyRow(
     modifier = modifier
       .fillMaxWidth()
-      .height(48.dp)
       .tesseraShadow(elevation = TesseraElevation.Level1, shape = RectangleShape),
     contentPadding = contentPadding,
     horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.sm),
+    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
   ) {
     items(items = chips, key = { it.key }) { chip ->
       FilterChip(

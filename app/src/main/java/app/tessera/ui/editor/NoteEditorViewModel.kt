@@ -55,6 +55,7 @@ class NoteEditorViewModel @Inject constructor(
                         content = note.content,
                         tags = note.tags.map { it.name },
                         isPinned = note.isPinned,
+                        updatedAt = note.updatedAt,
                         isLoading = false,
                     )
                 }
