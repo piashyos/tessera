@@ -1,0 +1,145 @@
+/* ============================================================
+   Tessera Design Tokens (Material You hybrid + brand identity)
+   Source of truth — when porting to Compose, mirror this exactly
+   ============================================================ */
+
+:root {
+  /* ---------- Colors: LIGHT ---------- */
+  --primary:                   #C96442;
+  --on-primary:                #FFFFFF;
+  --primary-container:         #FBE3D8;
+  --on-primary-container:      #3A1A0F;
+
+  --secondary:                 #7C5E4F; /* harmonize result demo */
+  --on-secondary:              #FFFFFF;
+  --secondary-container:       #F5E1D6;
+  --on-secondary-container:    #2F1E14;
+
+  --tertiary:                  #5F6A4F; /* harmonized neutral-green */
+  --on-tertiary:               #FFFFFF;
+  --tertiary-container:        #E2EAD3;
+  --on-tertiary-container:     #1B2412;
+
+  --error:                     #B3261E;
+  --on-error:                  #FFFFFF;
+  --error-container:           #F9DEDC;
+  --on-error-container:        #410E0B;
+
+  --background:                #FAF9F5;
+  --on-background:             #262420;
+  --surface:                   #FFFFFF;
+  --on-surface:                #262420;
+  --surface-dim:               #EDEAE3;
+  --surface-bright:            #FFFFFF;
+  --surface-container-lowest:  #FFFFFF;
+  --surface-container-low:     #F6F4ED;
+  --surface-container:         #F3F0E8;
+  --surface-container-high:    #EDEAE3;
+  --surface-container-highest: #E7E3DA;
+  --on-surface-variant:        #5C584F;
+  --outline:                   #8A8478;
+  --outline-variant:           #D9D4C7;
+
+  --scrim:                     rgba(0, 0, 0, 0.32);
+  --shadow-warm:               rgba(184, 177, 166, 0.22);
+  --shadow-floating:           rgba(58, 26, 15, 0.18);
+
+  /* ---------- Type ---------- */
+  --font-serif: 'Instrument Serif', 'Times New Roman', Georgia, serif;
+  --font-sans:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* M3 type scale — slightly compact for mobile density */
+  --display-large:    52px / 58px var(--font-serif);
+  --display-medium:   40px / 48px var(--font-serif);
+  --display-small:    32px / 40px var(--font-serif);
+  --headline-large:   28px / 36px var(--font-serif);
+  --headline-medium:  24px / 32px var(--font-serif);
+  --headline-small:   20px / 28px var(--font-sans);
+  --title-large:      18px / 24px var(--font-sans);
+  --title-medium:     15px / 22px var(--font-sans);
+  --title-small:      13px / 18px var(--font-sans);
+  --body-large:       15px / 22px var(--font-sans);
+  --body-medium:      13px / 19px var(--font-sans);
+  --body-small:       11px / 15px var(--font-sans);
+  --label-large:      13px / 18px var(--font-sans);
+  --label-medium:     11px / 15px var(--font-sans);
+  --label-small:      10px / 14px var(--font-sans);
+
+  /* ---------- Shape (radius) ---------- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 28px;
+  --radius-full: 999px;
+
+  /* ---------- Spacing (4dp grid) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---------- Elevation (warm-tint shadows) ---------- */
+  --elev-0: none;
+  --elev-1: 0 1px 2px var(--shadow-warm), 0 1px 3px rgba(38, 36, 32, 0.06);
+  --elev-2: 0 2px 4px var(--shadow-warm), 0 4px 8px rgba(38, 36, 32, 0.08);
+  --elev-3: 0 4px 8px var(--shadow-warm), 0 8px 16px var(--shadow-floating);
+  --elev-4: 0 6px 10px var(--shadow-warm), 0 12px 22px var(--shadow-floating);
+  --elev-5: 0 8px 14px var(--shadow-warm), 0 18px 32px var(--shadow-floating);
+
+  /* ---------- Motion ---------- */
+  --ease-standard: cubic-bezier(0.2, 0.0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0.0, 0, 1);
+  --ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --dur-short-1: 50ms;
+  --dur-short-4: 200ms;
+  --dur-medium-2: 300ms;
+  --dur-medium-4: 400ms;
+}
+
+/* ---------- Colors: DARK ---------- */
+[data-theme="dark"] {
+  --primary:                   #D97757;
+  --on-primary:                #3A1A0F;
+  --primary-container:         #5C2A18;
+  --on-primary-container:      #FBE3D8;
+
+  --secondary:                 #D8B8A2;
+  --on-secondary:              #3A2818;
+  --secondary-container:       #523929;
+  --on-secondary-container:    #F5E1D6;
+
+  --tertiary:                  #B7C6A1;
+  --on-tertiary:               #1F2A12;
+  --tertiary-container:        #3D4928;
+  --on-tertiary-container:     #E2EAD3;
+
+  --error:                     #F2B8B5;
+  --on-error:                  #601410;
+  --error-container:           #8C1D18;
+  --on-error-container:        #F9DEDC;
+
+  --background:                #191815;
+  --on-background:             #ECE9E3;
+  --surface:                   #201F1D;
+  --on-surface:                #ECE9E3;
+  --surface-dim:               #191815;
+  --surface-bright:            #393734;
+  --surface-container-lowest:  #131211;
+  --surface-container-low:     #232220;
+  --surface-container:         #26241F;
+  --surface-container-high:    #2C2B27;
+  --surface-container-highest: #37352F;
+  --on-surface-variant:        #C9C3B6;
+  --outline:                   #948D80;
+  --outline-variant:           #4A4740;
+
+  --shadow-warm:               rgba(0, 0, 0, 0.40);
+  --shadow-floating:           rgba(0, 0, 0, 0.60);
+}

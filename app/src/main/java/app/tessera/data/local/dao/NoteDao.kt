@@ -59,6 +59,9 @@ interface NoteDao {
     @Query("UPDATE notes SET syncedAt = :ts WHERE id = :id")
     suspend fun markSynced(id: String, ts: Long)
 
+    @Query("UPDATE notes SET syncedAt = NULL, updatedAt = :ts WHERE id = :id")
+    suspend fun markPendingSync(id: String, ts: Long)
+
     @Query("SELECT DISTINCT ownerId FROM notes WHERE ownerId IS NOT NULL LIMIT 1")
     suspend fun getCurrentOwnerId(): String?
 

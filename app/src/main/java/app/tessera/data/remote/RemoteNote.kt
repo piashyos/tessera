@@ -15,4 +15,6 @@ data class RemoteNote(
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
     val deletedAt: Long? = null,
+    /** Folder this note belongs to, null when assigned to "All Notes". */
+    val folderId: String? = null,
 )

@@ -110,6 +110,78 @@ class NotesListViewModelTest {
         }
 
     @Test
+    fun `toggling view mode flips between Tiles and List`() =
+        runTest(dispatcher.scheduler) {
+            val repository = FakeNotesRepository(initialNotes = listOf(sampleNote("n1")))
+            val viewModel = repository.createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Loading
+                val content = awaitItem() as NotesListState.Content
+                assertEquals(NotesViewMode.List, content.viewMode)
+
+                viewModel.onToggleViewMode()
+                val next = awaitItem() as NotesListState.Content
+                assertEquals(NotesViewMode.Tiles, next.viewMode)
+            }
+        }
+
+    @Test
+    fun `selection mode enters with the long-pressed note then select-all toggles`() =
+        runTest(dispatcher.scheduler) {
+            val repository =
+                FakeNotesRepository(initialNotes = listOf(sampleNote("n1"), sampleNote("n2")))
+            val viewModel = repository.createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Loading
+                awaitItem() // Content
+
+                viewModel.enterSelectionMode(NoteId("n1"))
+                val entered = awaitItem() as NotesListState.Content
+                assertTrue(entered.selectionMode)
+                assertEquals(setOf(NoteId("n1")), entered.selection)
+
+                viewModel.toggleSelectAll()
+                val all = awaitItem() as NotesListState.Content
+                assertEquals(setOf(NoteId("n1"), NoteId("n2")), all.selection)
+
+                viewModel.toggleSelectAll()
+                val none = awaitItem() as NotesListState.Content
+                assertTrue(none.selection.isEmpty())
+
+                viewModel.exitSelectionMode()
+                val exited = awaitItem() as NotesListState.Content
+                assertTrue(!exited.selectionMode)
+            }
+        }
+
+    @Test
+    fun `deleteSelected returns the selected ids and leaves selection mode`() =
+        runTest(dispatcher.scheduler) {
+            val repository =
+                FakeNotesRepository(initialNotes = listOf(sampleNote("n1"), sampleNote("n2")))
+            val viewModel = repository.createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Loading
+                awaitItem() // Content
+
+                viewModel.enterSelectionMode(NoteId("n1"))
+                awaitItem()
+                viewModel.toggleSelectAll()
+                awaitItem()
+
+                val deleted = viewModel.deleteSelected()
+                assertEquals(setOf(NoteId("n1"), NoteId("n2")), deleted.toSet())
+
+                val exited = awaitItem() as NotesListState.Content
+                assertTrue(!exited.selectionMode)
+                assertTrue(exited.selection.isEmpty())
+            }
+        }
+
+    @Test
     fun `clearing query returns to observe flow without debounce`() =
         runTest(dispatcher.scheduler) {
             val repository =
@@ -177,15 +249,44 @@ private class FakeNotesRepository(
 
     override suspend fun togglePin(id: NoteId) {}
 
-    fun createViewModel(): NotesListViewModel =
-        NotesListViewModel(
+    fun createViewModel(): NotesListViewModel {
+        val folderRepo = app.tessera.test.fakes.FakeFolderRepository()
+        return NotesListViewModel(
             observeNotesUseCase = ObserveNotesUseCase(this),
             searchNotesUseCase = SearchNotesUseCase(this),
             createNoteUseCase = CreateNoteUseCase(this),
             deleteNoteUseCase = DeleteNoteUseCase(this),
             restoreNoteUseCase = RestoreNoteUseCase(this),
             togglePinUseCase = TogglePinUseCase(this),
+            observeFoldersUseCase = app.tessera.domain.usecase.ObserveFoldersUseCase(folderRepo),
+            observeNotesInFolderUseCase = app.tessera.domain.usecase.ObserveNotesInFolderUseCase(folderRepo),
+            createFolderUseCase = app.tessera.domain.usecase.CreateFolderUseCase(folderRepo),
+            renameFolderUseCase = app.tessera.domain.usecase.RenameFolderUseCase(folderRepo),
+            deleteFolderUseCase = app.tessera.domain.usecase.DeleteFolderUseCase(folderRepo),
+            moveNoteToFolderUseCase = app.tessera.domain.usecase.MoveNoteToFolderUseCase(folderRepo),
+            userPreferences = FakeUserPreferences(),
         )
+    }
+}
+
+private class FakeUserPreferences : app.tessera.core.preferences.UserPreferences {
+    private val theme = MutableStateFlow(app.tessera.core.preferences.ThemeMode.AUTO)
+    private val lang = MutableStateFlow("")
+    private val viewMode = MutableStateFlow(NotesViewMode.List)
+    override val themeMode: Flow<app.tessera.core.preferences.ThemeMode> get() = theme
+    override val languageTag: Flow<String> get() = lang
+    override val notesViewMode: Flow<NotesViewMode> get() = viewMode
+    override suspend fun setThemeMode(mode: app.tessera.core.preferences.ThemeMode) {
+        theme.value = mode
+    }
+
+    override suspend fun setLanguageTag(tag: String) {
+        lang.value = tag
+    }
+
+    override suspend fun setNotesViewMode(mode: NotesViewMode) {
+        viewMode.value = mode
+    }
 }
 
 private fun sampleNote(

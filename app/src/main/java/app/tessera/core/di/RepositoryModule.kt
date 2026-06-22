@@ -1,15 +1,21 @@
 package app.tessera.core.di
 
+import app.tessera.data.remote.FirestoreFoldersClient
 import app.tessera.data.remote.FirestoreNotesClient
+import app.tessera.data.remote.RemoteFoldersDataSource
 import app.tessera.data.remote.RemoteNotesDataSource
 import app.tessera.data.repository.AccountRepositoryImpl
 import app.tessera.data.repository.AuthRepositoryImpl
+import app.tessera.data.repository.FolderRepositoryImpl
 import app.tessera.data.repository.NotesRepositoryImpl
 import app.tessera.data.repository.SyncRepositoryImpl
 import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
+import app.tessera.domain.repository.FolderRepository
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.repository.SyncRepository
+import app.tessera.domain.repository.SyncScheduler
+import app.tessera.sync.WorkManagerSyncScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -38,4 +44,16 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindRemoteNotesDataSource(impl: FirestoreNotesClient): RemoteNotesDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindRemoteFoldersDataSource(impl: FirestoreFoldersClient): RemoteFoldersDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncScheduler(impl: WorkManagerSyncScheduler): SyncScheduler
+
+    @Binds
+    @Singleton
+    abstract fun bindFolderRepository(impl: FolderRepositoryImpl): FolderRepository
 }

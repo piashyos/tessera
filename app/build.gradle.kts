@@ -109,9 +109,11 @@ dependencies {
     implementation(libs.googleid)
     implementation(libs.coroutines.play.services)
 
-    implementation(libs.markwon.core)
     implementation(libs.haze)
     implementation(libs.coil.compose)
+    implementation(libs.aztec)
+    implementation(libs.appcompat)
+    implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit4)
     testImplementation(libs.junit5)

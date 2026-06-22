@@ -1,5 +1,6 @@
 package app.tessera.data.repository
 
+import app.tessera.core.text.deriveTitleFromContent
 import app.tessera.core.util.Clock
 import app.tessera.data.local.dao.NoteDao
 import app.tessera.data.local.dao.TagDao
@@ -10,10 +11,12 @@ import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.NotesRepository
+import app.tessera.domain.repository.SyncScheduler
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 @Singleton
@@ -22,11 +25,11 @@ class NotesRepositoryImpl @Inject constructor(
     private val tagDao: TagDao,
     private val noteMapper: NoteMapper,
     private val clock: Clock,
+    private val syncScheduler: SyncScheduler,
 ) : NotesRepository {
     override fun observeNotes(): Flow<List<Note>> =
-        noteDao.observeActive().map { notes ->
-            notes.map { note -> toDomain(note) }.filterNot(Note::isBlankDraft)
-        }
+        combine(noteDao.observeActive(), tagDao.observeAllCrossRefs()) { notes, _ -> notes }
+            .map { notes -> notes.map { note -> toDomain(note) }.filterNot(Note::isBlankDraft) }
 
     override fun observeNote(id: NoteId): Flow<Note?> =
         noteDao.observeById(id.value).map { note ->
@@ -63,6 +66,7 @@ class NotesRepositoryImpl @Inject constructor(
                 ownerId = ownerId,
             )
         noteDao.upsert(noteMapper.toEntity(note))
+        syncScheduler.requestSync()
         return note
     }
 
@@ -70,32 +74,38 @@ class NotesRepositoryImpl @Inject constructor(
         if (note.isBlankDraft()) {
             tagDao.clearTagsForNote(note.id.value)
             noteDao.hardDelete(note.id.value)
+            syncScheduler.requestSync()
             return note
         }
 
         val persisted =
             note.copy(
+                title = deriveTitleFromContent(note.content),
                 tags = noteMapper.normalizeTags(note.tags),
                 updatedAt = clock.nowMs(),
                 syncedAt = null,
             )
 
-        noteDao.upsert(noteMapper.toEntity(persisted))
         replaceTags(persisted)
+        noteDao.upsert(noteMapper.toEntity(persisted))
+        syncScheduler.requestSync()
         return persisted
     }
 
     override suspend fun deleteNote(id: NoteId) {
         noteDao.softDelete(id.value, clock.nowMs())
+        syncScheduler.requestSync()
     }
 
     override suspend fun restoreNote(id: NoteId) {
         noteDao.restore(id.value, clock.nowMs())
+        syncScheduler.requestSync()
     }
 
     override suspend fun togglePin(id: NoteId) {
         val current = getNote(id) ?: return
         noteDao.setPinned(id.value, !current.isPinned, clock.nowMs())
+        syncScheduler.requestSync()
     }
 
     private suspend fun toDomain(entity: app.tessera.data.local.entity.NoteEntity): Note =

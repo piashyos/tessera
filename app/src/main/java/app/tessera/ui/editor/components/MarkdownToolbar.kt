@@ -6,10 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import com.composables.icons.lucide.Bold
-import com.composables.icons.lucide.List
-import com.composables.icons.lucide.ListChecks
-import com.composables.icons.lucide.Lucide
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -17,15 +13,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
+import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.theme.TesseraTheme
+import com.composables.icons.lucide.Bold
+import com.composables.icons.lucide.Italic
+import com.composables.icons.lucide.List
+import com.composables.icons.lucide.ListChecks
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Strikethrough
+import com.composables.icons.lucide.Type
+import org.wordpress.aztec.AztecTextFormat
 
 @Composable
 fun MarkdownToolbar(
-    onInsertToken: (String) -> Unit,
+    onOpenMenu: () -> Unit,
+    actions: RichBodyActions?,
+    activeFormats: Set<AztecTextFormat>,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -33,28 +41,57 @@ fun MarkdownToolbar(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ToolbarIcon(
+        IconButton(
+            onClick = onOpenMenu,
+            modifier = Modifier
+                .size(34.dp)
+                .testTag(UiTestTags.EditorFormatMenuTrigger),
+        ) {
+            Icon(
+                imageVector = Lucide.Type,
+                contentDescription = stringResource(R.string.toolbar_format),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        FormatToggle(
             icon = Lucide.Bold,
-            contentDescription = stringResource(R.string.toolbar_bold),
-            onClick = { onInsertToken("**bold**") },
+            contentDescriptionRes = R.string.toolbar_bold,
+            active = AztecTextFormat.FORMAT_BOLD in activeFormats,
+            onClick = { actions?.toggleBold() },
         )
-        ToolbarIcon(
+        FormatToggle(
+            icon = Lucide.Italic,
+            contentDescriptionRes = R.string.toolbar_italic,
+            active = AztecTextFormat.FORMAT_ITALIC in activeFormats,
+            onClick = { actions?.toggleItalic() },
+        )
+        FormatToggle(
+            icon = Lucide.Strikethrough,
+            contentDescriptionRes = R.string.toolbar_strikethrough,
+            active = AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats,
+            onClick = { actions?.toggleStrikethrough() },
+        )
+        FormatToggle(
             icon = Lucide.List,
-            contentDescription = stringResource(R.string.toolbar_bullet),
-            onClick = { onInsertToken("- ") },
+            contentDescriptionRes = R.string.toolbar_bullet,
+            active = AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats,
+            onClick = { actions?.toggleBulletList() },
         )
-        ToolbarIcon(
+        FormatToggle(
             icon = Lucide.ListChecks,
-            contentDescription = stringResource(R.string.toolbar_checklist),
-            onClick = { onInsertToken("- [ ] ") },
+            contentDescriptionRes = R.string.toolbar_checklist,
+            active = AztecTextFormat.FORMAT_TASK_LIST in activeFormats,
+            onClick = { actions?.toggleTaskList() },
         )
     }
 }
 
 @Composable
-private fun ToolbarIcon(
+private fun FormatToggle(
     icon: ImageVector,
-    contentDescription: String,
+    contentDescriptionRes: Int,
+    active: Boolean,
     onClick: () -> Unit,
 ) {
     IconButton(
@@ -63,8 +100,12 @@ private fun ToolbarIcon(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            contentDescription = stringResource(contentDescriptionRes),
+            tint = if (active) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
             modifier = Modifier.size(18.dp),
         )
     }
@@ -75,7 +116,7 @@ private fun ToolbarIcon(
 private fun MarkdownToolbarLightPreview() {
     TesseraTheme(darkTheme = false, dynamicColor = false) {
         Box(modifier = Modifier.padding(16.dp)) {
-            MarkdownToolbar(onInsertToken = {})
+            MarkdownToolbar(onOpenMenu = {}, actions = null, activeFormats = emptySet())
         }
     }
 }
@@ -89,7 +130,7 @@ private fun MarkdownToolbarLightPreview() {
 private fun MarkdownToolbarDarkPreview() {
     TesseraTheme(darkTheme = true, dynamicColor = false) {
         Box(modifier = Modifier.padding(16.dp)) {
-            MarkdownToolbar(onInsertToken = {})
+            MarkdownToolbar(onOpenMenu = {}, actions = null, activeFormats = emptySet())
         }
     }
 }

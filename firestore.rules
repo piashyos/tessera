@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Правила доступа к Cloud Firestore для Tessera Notes.
+// Залить их можно через Firebase Console → Firestore → вкладка «Правила»
+// или командой `firebase deploy --only firestore:rules`.
+//
+// Каждый пользователь читает и пишет только в своём поддокументе:
+//   users/{uid}/notes/{noteId}
+//   users/{uid}/folders/{folderId}
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/notes/{noteId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/folders/{folderId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.platform.LocalContext
+import app.tessera.core.preferences.ThemeMode
 
 private val TesseraLightColorScheme = lightColorScheme(
     primary = PrimaryLight,
@@ -63,6 +64,16 @@ fun TesseraTheme(
             content = content,
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TesseraTheme(
+    themeMode: ThemeMode,
+    content: @Composable () -> Unit,
+) {
+    val (darkTheme, dynamicColor) = themeMode.resolve(isSystemInDarkTheme())
+    TesseraTheme(darkTheme = darkTheme, dynamicColor = dynamicColor, content = content)
 }
 
 /** No-op indication so clickable elements never darken or ripple on press. */

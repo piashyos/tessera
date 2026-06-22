@@ -43,13 +43,9 @@ class NoteEditorViewModelTest {
         Dispatchers.resetMain()
     }
 
-    // -------------------------------------------------------------------------
-    // 1. VM loads the note from SavedStateHandle into state
-    // -------------------------------------------------------------------------
-
     @Test
     fun `loads note from savedStateHandle into state`() = runTest(dispatcher.scheduler) {
-        val note = sampleNote("note-1", title = "Hello", content = "World", tags = listOf("kotlin"))
+        val note = sampleNote("note-1", content = "World", tags = listOf("kotlin"))
         val repo = FakeEditorRepository(notes = listOf(note))
         val vm = repo.createViewModel(noteId = "note-1")
 
@@ -57,41 +53,29 @@ class NoteEditorViewModelTest {
 
         val state = vm.state.value
         assertFalse(state.isLoading, "isLoading should be false after load")
-        assertEquals("Hello", state.title)
         assertEquals("World", state.content)
         assertEquals(listOf("kotlin"), state.tags)
         assertTrue(state.isPinned == note.isPinned)
     }
 
-    // -------------------------------------------------------------------------
-    // 2. Editing title then content schedules autosave with 500 ms debounce
-    // -------------------------------------------------------------------------
-
     @Test
-    fun `no updateNote before 499ms, exactly one after 500ms with latest values`() =
+    fun `content change schedules autosave with 500ms debounce`() =
         runTest(dispatcher.scheduler) {
-            val note = sampleNote("note-2", title = "Old", content = "Old")
+            val note = sampleNote("note-2", content = "Old")
             val repo = FakeEditorRepository(notes = listOf(note))
             val vm = repo.createViewModel(noteId = "note-2")
-            runCurrent() // finish loading
+            runCurrent()
 
-            vm.onTitleChange("New Title")
             vm.onContentChange("New Content")
 
             advanceTimeBy(499)
             assertTrue(repo.updateCalls.isEmpty(), "No updateNote expected before debounce fires")
 
-            advanceTimeBy(1) // cross the 500 ms mark
+            advanceTimeBy(1)
             runCurrent()
             assertEquals(1, repo.updateCalls.size, "Exactly one updateNote expected after debounce")
-            val saved = repo.updateCalls.first()
-            assertEquals("New Title", saved.title)
-            assertEquals("New Content", saved.content)
+            assertEquals("New Content", repo.updateCalls.first().content)
         }
-
-    // -------------------------------------------------------------------------
-    // 3. Rapid onContentChange calls collapse to a single debounced updateNote
-    // -------------------------------------------------------------------------
 
     @Test
     fun `rapid content changes collapse to single updateNote with latest value`() =
@@ -107,7 +91,6 @@ class NoteEditorViewModelTest {
             advanceTimeBy(100)
             vm.onContentChange("v3")
 
-            // Still within debounce window after last change
             advanceTimeBy(499)
             assertTrue(repo.updateCalls.isEmpty(), "Debounce should still be pending")
 
@@ -117,45 +100,14 @@ class NoteEditorViewModelTest {
             assertEquals("v3", repo.updateCalls.first().content)
         }
 
-    // -------------------------------------------------------------------------
-    // 4. onToggleChecklist rewrites content and the rewritten value is persisted
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `onToggleChecklist rewrites content and debounced save uses rewritten content`() =
-        runTest(dispatcher.scheduler) {
-            val checklistContent = "- [ ] item one\n- [x] item two"
-            val note = sampleNote("note-4", content = checklistContent)
-            val repo = FakeEditorRepository(notes = listOf(note))
-            val vm = repo.createViewModel(noteId = "note-4")
-            runCurrent()
-
-            vm.onToggleChecklist(0) // toggle first line: unchecked -> checked
-
-            val expectedContent = toggleChecklistLine(checklistContent, 0)
-            assertEquals(expectedContent, vm.state.value.content, "State content should reflect toggle")
-
-            advanceTimeBy(500)
-            runCurrent()
-            assertEquals(1, repo.updateCalls.size)
-            assertEquals(expectedContent, repo.updateCalls.first().content)
-        }
-
-    // -------------------------------------------------------------------------
-    // 5. flush() cancels pending debounce and persists immediately
-    //    When title+content blank -> isBlankDraft() == true
-    // -------------------------------------------------------------------------
-
     @Test
     fun `flush cancels debounce and persists immediately`() = runTest(dispatcher.scheduler) {
-        val note = sampleNote("note-5", title = "Draft", content = "Body")
+        val note = sampleNote("note-5", content = "Body")
         val repo = FakeEditorRepository(notes = listOf(note))
         val vm = repo.createViewModel(noteId = "note-5")
         runCurrent()
 
-        vm.onTitleChange("Updated")
         vm.onContentChange("Updated content")
-        // Only 100 ms have passed — debounce not fired yet
         advanceTimeBy(100)
         assertTrue(repo.updateCalls.isEmpty())
 
@@ -163,23 +115,21 @@ class NoteEditorViewModelTest {
         runCurrent()
 
         assertEquals(1, repo.updateCalls.size, "flush should persist immediately")
-        assertEquals("Updated", repo.updateCalls.first().title)
+        assertEquals("Updated content", repo.updateCalls.first().content)
 
-        // No second save fires from the cancelled debounce
         advanceTimeBy(500)
         runCurrent()
         assertEquals(1, repo.updateCalls.size, "No additional save after flush cancels debounce")
     }
 
     @Test
-    fun `flush with blank title and content saves a blank-draft note`() =
+    fun `flush with blank content saves a blank-draft note`() =
         runTest(dispatcher.scheduler) {
-            val note = sampleNote("note-5b", title = "Will Clear", content = "Also clear")
+            val note = sampleNote("note-5b", content = "Also clear")
             val repo = FakeEditorRepository(notes = listOf(note))
             val vm = repo.createViewModel(noteId = "note-5b")
             runCurrent()
 
-            vm.onTitleChange("")
             vm.onContentChange("")
             vm.flush()
             runCurrent()
@@ -188,10 +138,6 @@ class NoteEditorViewModelTest {
             val saved = repo.updateCalls.last()
             assertTrue(saved.isBlankDraft(), "Saved note should be a blank draft (repo handles deletion)")
         }
-
-    // -------------------------------------------------------------------------
-    // 6. availableTags = distinct tags across all notes MINUS tags on loaded note
-    // -------------------------------------------------------------------------
 
     @Test
     fun `availableTags is all note tags minus loaded note tags`() =
@@ -205,27 +151,21 @@ class NoteEditorViewModelTest {
             runCurrent()
 
             val available = vm.state.value.availableTags
-            // All distinct tags: kotlin, android, compose, hilt
-            // Minus loaded note tags (kotlin, android) => compose, hilt
             assertFalse("kotlin" in available, "kotlin is on loaded note, should not be available")
             assertFalse("android" in available, "android is on loaded note, should not be available")
             assertTrue("compose" in available, "compose should be available")
             assertTrue("hilt" in available, "hilt should be available")
         }
 
-    // -------------------------------------------------------------------------
-    // 7. delete() cancels pending autosave and soft-deletes without re-saving
-    // -------------------------------------------------------------------------
-
     @Test
     fun `delete cancels pending autosave and deletes the note without updateNote`() =
         runTest(dispatcher.scheduler) {
-            val note = sampleNote("note-7", title = "Doomed", content = "Body")
+            val note = sampleNote("note-7", content = "Body")
             val repo = FakeEditorRepository(notes = listOf(note))
             val vm = repo.createViewModel(noteId = "note-7")
             runCurrent()
 
-            vm.onTitleChange("edited")
+            vm.onContentChange("edited")
             advanceTimeBy(100)
             assertTrue(repo.updateCalls.isEmpty())
 
@@ -234,16 +174,11 @@ class NoteEditorViewModelTest {
 
             assertEquals(listOf(NoteId("note-7")), repo.deleteCalls)
 
-            // The cancelled autosave must not fire and resurrect the note
             advanceTimeBy(500)
             runCurrent()
             assertTrue(repo.updateCalls.isEmpty(), "delete must cancel the pending autosave")
         }
 }
-
-// =============================================================================
-// Fake repository
-// =============================================================================
 
 private class FakeEditorRepository(
     notes: List<Note> = emptyList(),
@@ -262,7 +197,6 @@ private class FakeEditorRepository(
     override suspend fun createNote(ownerId: UserId?): Note = sampleNote("created")
     override suspend fun updateNote(note: Note): Note {
         updateCalls += note
-        // Update the flow so observeNotes reflects the saved note
         val updated = notesFlow.value.map { if (it.id == note.id) note else it }
         notesFlow.value = updated
         return note
@@ -285,20 +219,15 @@ private class FakeEditorRepository(
     }
 }
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
 private fun sampleNote(
     id: String,
-    title: String = "Sample",
     content: String = "Body",
     pinned: Boolean = false,
     tags: List<String> = emptyList(),
 ): Note =
     Note(
         id = NoteId(id),
-        title = title,
+        title = "",
         content = content,
         tags = tags.map(::Tag),
         isPinned = pinned,

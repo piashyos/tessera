@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bullet marker color for Aztec lists — dark theme: coral accent (PrimaryDark). -->
+    <color name="aztec_bullet">#D97757</color>
+    <!-- Window background (dark) — mirrors BackgroundGlowDark in the Compose theme. -->
+    <color name="window_background">#191815</color>
+</resources>

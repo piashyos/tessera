@@ -9,6 +9,11 @@ object UiTestTags {
     const val NotesListRoot = "notes_list_root"
     const val NotesGrid = "notes_grid"
     const val SearchField = "search_field"
+    const val SearchClear = "search_clear"
+    const val TagFilterToggle = "tag_filter_toggle"
+    const val ViewModeToggle = "view_mode_toggle"
+
+    fun tagFilterChip(name: String): String = "tag_filter_chip_$name"
 
     // Editor screen
     const val EditorRoot = "editor_root"
@@ -17,8 +22,8 @@ object UiTestTags {
     const val EditorBack = "editor_back"
     const val EditorPin = "editor_pin"
     const val EditorDelete = "editor_delete"
-
-    fun editorChecklistItem(index: Int): String = "editor_checklist_$index"
+    const val EditorTagToggle = "editor_tag_toggle"
+    const val EditorFormatMenuTrigger = "editor_format_menu_trigger"
 
     // Settings screen
     const val OpenSettings = "open_settings"
@@ -35,7 +40,11 @@ object UiTestTags {
     const val PopupScrim = "popup_scrim"
     const val PopupCard = "popup_card"
 
+    const val AddTagConfirm = "add_tag_confirm"
+
     fun noteCard(noteId: String): String = "note_card_$noteId"
+
+    fun sectionHeader(group: String): String = "section_header_$group"
 
     fun revealPinAction(noteId: String): String = "pin_action_$noteId"
 

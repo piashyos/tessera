@@ -42,6 +42,7 @@ class NoteMapper @Inject constructor() {
     fun toRemote(
         entity: NoteEntity,
         tagNames: List<String>,
+        folderId: String? = null,
     ): RemoteNote =
         RemoteNote(
             id = entity.id,
@@ -52,6 +53,7 @@ class NoteMapper @Inject constructor() {
             createdAt = entity.createdAt,
             updatedAt = entity.updatedAt,
             deletedAt = entity.deletedAt,
+            folderId = folderId,
         )
 
     fun toEntity(

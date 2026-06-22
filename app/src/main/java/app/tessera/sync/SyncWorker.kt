@@ -1,6 +1,7 @@
 package app.tessera.sync
 
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -22,14 +23,22 @@ class SyncWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val uid = inputData.getString(KEY_UID)?.takeIf { it.isNotBlank() } ?: return Result.success()
+        Log.d(TAG, "Running sync for uid=$uid")
         return syncRepository.syncNow(UserId(uid)).fold(
-            onSuccess = { Result.success() },
-            onFailure = { Result.retry() },
+            onSuccess = {
+                Log.d(TAG, "Sync OK for uid=$uid")
+                Result.success()
+            },
+            onFailure = { error ->
+                Log.w(TAG, "Sync failed for uid=$uid — will retry", error)
+                Result.retry()
+            },
         )
     }
 
     companion object {
         const val KEY_UID = "uid"
         const val UNIQUE_NAME = "tessera-sync"
+        private const val TAG = "SyncWorker"
     }
 }

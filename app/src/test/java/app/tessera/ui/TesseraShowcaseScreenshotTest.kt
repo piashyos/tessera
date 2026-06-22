@@ -12,6 +12,7 @@ import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.Tag
 import app.tessera.ui.notes.NotesListScreen
 import app.tessera.ui.notes.NotesListState
+import app.tessera.ui.notes.NotesViewMode
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
 import org.junit.Test
@@ -54,12 +55,15 @@ class TesseraShowcaseScreenshotTest {
                                 pinnedCount = 1,
                                 query = "",
                                 selection = emptySet(),
+                                selectionMode = false,
                                 availableTags = listOf("android", "compose", "pinned"),
                                 selectedTags = emptySet(),
+                                viewMode = NotesViewMode.Tiles,
                             ),
                         snackbarHostState = SnackbarHostState(),
                         onQueryChange = {},
                         onTagToggle = {},
+                        onToggleViewMode = {},
                         onCreateNote = {},
                     )
                 }

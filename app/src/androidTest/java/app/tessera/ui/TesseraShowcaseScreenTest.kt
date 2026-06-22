@@ -14,6 +14,7 @@ import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.Tag
 import app.tessera.ui.notes.NotesListScreen
 import app.tessera.ui.notes.NotesListState
+import app.tessera.ui.notes.NotesViewMode
 import org.junit.Rule
 import org.junit.Test
 
@@ -39,17 +40,20 @@ class TesseraShowcaseScreenTest {
                         pinnedCount = 0,
                         query = "",
                         selection = emptySet(),
+                        selectionMode = false,
                         availableTags = listOf("smoke"),
                         selectedTags = emptySet(),
+                        viewMode = NotesViewMode.Tiles,
                     ),
                 snackbarHostState = SnackbarHostState(),
                 onQueryChange = {},
                 onTagToggle = {},
+                onToggleViewMode = {},
                 onCreateNote = {},
             )
         }
 
-        composeRule.onNodeWithText("Tessera").assertIsDisplayed()
+        composeRule.onNodeWithText("All Notes").assertIsDisplayed()
         composeRule.onNodeWithText("Notes list smoke test content").assertIsDisplayed()
         composeRule
             .onNodeWithTag(UiTestTags.CreateNoteFab)

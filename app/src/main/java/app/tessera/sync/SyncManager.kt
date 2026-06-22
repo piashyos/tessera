@@ -63,7 +63,7 @@ class SyncManager @Inject constructor(
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
                 .setInputData(data)
                 .build()
-        workManager.enqueueUniqueWork(SyncWorker.UNIQUE_NAME, ExistingWorkPolicy.REPLACE, syncRequest)
+        workManager.enqueueUniqueWork(SyncWorker.UNIQUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, syncRequest)
 
         val purgeRequest =
             PeriodicWorkRequestBuilder<DeleteTombstonesWorker>(1, TimeUnit.DAYS)
