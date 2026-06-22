@@ -151,6 +151,7 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
                 onDismissDialog = viewModel::onDismissDialog,
                 onSelectThemeMode = viewModel::setThemeMode,
                 onSelectLanguage = viewModel::setLanguage,
+                onRetrySync = viewModel::onRetrySync,
             )
         }
     }
