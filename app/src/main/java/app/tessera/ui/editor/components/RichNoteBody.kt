@@ -48,6 +48,24 @@ interface RichBodyActions {
     fun toggleHeading6()
     fun toggleBulletList()
     fun toggleTaskList()
+
+    // --- Light Aztec formats (Plan 05). Default no-ops so previews / test mocks that
+    // implement RichBodyActions without a live editor keep compiling. ---
+    /** Toggle underline on the current selection. */
+    fun toggleUnderline() {}
+
+    /** Toggle an ordered (numbered) list on the current block(s). */
+    fun toggleOrderedList() {}
+
+    /** Toggle a block quote on the current block(s). */
+    fun toggleQuote() {}
+
+    /** Toggle inline monospace code on the current selection. */
+    fun toggleCode() {}
+
+    /** Insert a horizontal rule (divider) at the cursor. */
+    fun insertHorizontalRule() {}
+
     /** Programmatically focus the editor and surface the IME, placing the cursor at end of text. */
     fun focusBody()
 
@@ -301,6 +319,13 @@ fun RichNoteBody(
                     replaceBulletSpans(editor, bulletRadiusPx)
                 }
                 override fun toggleTaskList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_TASK_LIST) }
+                override fun toggleUnderline() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_UNDERLINE) }
+                override fun toggleOrderedList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_ORDERED_LIST) }
+                override fun toggleQuote() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_QUOTE) }
+                override fun toggleCode() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_CODE) }
+                override fun insertHorizontalRule() {
+                    editor.toggleFormatting(AztecTextFormat.FORMAT_HORIZONTAL_RULE)
+                }
 
                 override fun focusBody() {
                     editor.requestFocus()
@@ -323,6 +348,10 @@ fun RichNoteBody(
                     AztecTextFormat.FORMAT_HEADING_6,
                     AztecTextFormat.FORMAT_UNORDERED_LIST,
                     AztecTextFormat.FORMAT_TASK_LIST,
+                    AztecTextFormat.FORMAT_UNDERLINE,
+                    AztecTextFormat.FORMAT_ORDERED_LIST,
+                    AztecTextFormat.FORMAT_QUOTE,
+                    AztecTextFormat.FORMAT_CODE,
                 )
 
                 override fun activeFormats(): Set<AztecTextFormat> =
