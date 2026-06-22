@@ -1,9 +1,7 @@
 package app.tessera.ui.editor
 
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import app.tessera.core.ui.UiTestTags
@@ -75,25 +73,8 @@ class NoteEditorScreenTest {
         assertTrue(deleteInvoked)
     }
 
-    @Test
-    fun markdownToolbarRendersAllFormattingButtons() {
-        composeRule.setContent {
-            NoteEditorScreen(
-                state = editorState(content = "hello"),
-                onContentChange = {},
-                onAddTag = {},
-                onRemoveTag = {},
-                onTogglePin = {},
-                onBack = {},
-                onDelete = {},
-            )
-        }
-
-        listOf("Bold", "Italic", "Strikethrough", "Bullet list", "Checklist item")
-            .forEach { description ->
-                composeRule.onNodeWithContentDescription(description).assertIsDisplayed()
-            }
-    }
+    // Format-button rendering moved to EditorFormatBarRenderTest (unit): the bar now lives
+    // in an IME-gated bottomBar, so it is intentionally absent without an active keyboard.
 }
 
 private fun editorState(
