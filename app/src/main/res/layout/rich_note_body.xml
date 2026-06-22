@@ -26,6 +26,7 @@
     app:quoteBackgroundAlpha="8%"
     app:quoteWidth="3dp"
     app:quotePadding="12dp"
+    app:quoteVerticalPadding="0dp"
     app:codeColor="@color/brand_on_surface"
     app:codeBackgroundColor="@color/brand_surface_container"
     app:taskListCheckedTextColor="@color/brand_on_surface_variant"
