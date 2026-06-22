@@ -48,6 +48,21 @@ class NotesUseCasesTest {
         }
 
     @Test
+    fun `duplicate use case copies content and tags into a new note`() =
+        runTest {
+            val repository = FakeNotesRepository()
+            val useCase = DuplicateNoteUseCase(repository)
+
+            val result = useCase(repository.sampleNote.id)
+
+            // Copy is created from the source's content/tags but as a fresh (createdNote) id.
+            assertEquals(repository.createdNote.id, result?.id)
+            assertEquals(repository.sampleNote.content, repository.lastUpdatedNote?.content)
+            assertEquals(repository.sampleNote.tags, repository.lastUpdatedNote?.tags)
+            assertEquals(false, repository.lastUpdatedNote?.isPinned)
+        }
+
+    @Test
     fun `update use case forwards note`() =
         runTest {
             val repository = FakeNotesRepository()
