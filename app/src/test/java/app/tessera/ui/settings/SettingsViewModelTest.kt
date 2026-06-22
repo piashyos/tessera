@@ -224,6 +224,7 @@ private class FakeUserPreferences : UserPreferences {
     private val lang = MutableStateFlow("")
     private val viewMode = MutableStateFlow(app.tessera.ui.notes.NotesViewMode.List)
     override val themeMode: Flow<ThemeMode> get() = theme
+    override val cachedThemeMode: ThemeMode get() = theme.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<app.tessera.ui.notes.NotesViewMode> get() = viewMode
     override suspend fun setThemeMode(mode: ThemeMode) {
