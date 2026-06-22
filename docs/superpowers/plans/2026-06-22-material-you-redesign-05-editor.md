@@ -108,11 +108,31 @@
 
 ## Acceptance criteria
 
-- [ ] `EditorMeta`, `EditorFormatBar`, `SerifH1Spanner` существуют и проходят тесты
-- [ ] `NoteEditorScreen` использует `TesseraTopBar` + IME-aware `EditorFormatBar`, без `FloatingCapsule` обёрток
-- [ ] `RichNoteBody` рендерит Inter body, Instrument Serif для первого H1
-- [ ] `TableBlockEditor` использует MaterialTheme tokens
-- [ ] Build green, all unit tests pass
+- [x] `EditorMeta`, `EditorFormatBar`, `SerifH1Spanner` существуют и проходят тесты
+- [x] `NoteEditorScreen` использует `TesseraTopBar` + IME-aware `EditorFormatBar`, без `FloatingCapsule` обёрток
+- [x] `RichNoteBody` рендерит Inter body, Instrument Serif для первого H1
+- [x] `TableBlockEditor` использует MaterialTheme tokens (surfaceContainer / outlineVariant)
+- [x] Build green, all unit tests pass
+
+## Execution notes (2026-06-22)
+
+- **Format-bar scope (user decision):** добавлены лёгкие Aztec-форматы — underline, ordered
+  list, quote, inline code, horizontal rule. `RichBodyActions` расширен; `MarkdownHtmlConverter`
+  получил полный round-trip для всех пяти (underline хранится как литеральный `<u>`).
+- **EditorMeta data:** показывает относительную дату (`note.updatedAt`, проведено в state/VM).
+  Хлебные крошки папки скрыты — связь заметка↔папка идёт через `NoteFolderCrossRef`, редактор-VM
+  папки не наблюдает; проводка breadcrumb отложена в отдельную задачу.
+- **Quote/checklist:** левый primary-бар 3dp + код/чек-лист — через нативные атрибуты AztecText
+  (надёжнее кастомных спанов). Italic Instrument Serif для текста цитаты и primary-заливка
+  чекбокса отложены (нет прямых атрибутов, нужен fragile custom span/drawable).
+- **Tests:** новые unit-тесты — `EditorMetaRenderTest`, `EditorFormatBarRenderTest`,
+  `SerifH1SpannerTest`, + round-trip покрытие конвертера. Aztec-under-Robolectric render-тест
+  для `RichNoteBody` опущен (библиотека не инстанцируется в unit-окружении). Устаревший
+  `NoteEditorScreenTest.markdownToolbarRendersAllFormattingButtons` удалён (бар теперь IME-gated).
+- **Lint:** новых ошибок нет (добавлены ru-переводы). Предсуществующие 9 ошибок
+  (`NotificationPermission` из Aztec, `ProduceState` в MainActivity, `note_group_*` переводы из
+  Plan 04) — вне объёма.
+- **Не сделано:** интерактивный smoke-запуск на устройстве (нет эмулятора в среде).
 
 ## Next plan
 
