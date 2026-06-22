@@ -111,6 +111,7 @@ class SyncRepositoryImpl @Inject constructor(
             RemoteFolder(
                 id = entity.id,
                 name = entity.name,
+                parentId = entity.parentId,
                 createdAt = entity.createdAt,
                 updatedAt = entity.updatedAt,
                 deletedAt = entity.deletedAt,
@@ -148,6 +149,7 @@ class SyncRepositoryImpl @Inject constructor(
                 FolderEntity(
                     id = remoteFolder.id,
                     name = remoteFolder.name,
+                    parentId = remoteFolder.parentId,
                     createdAt = remoteFolder.createdAt,
                     updatedAt = remoteFolder.updatedAt,
                     deletedAt = remoteFolder.deletedAt,

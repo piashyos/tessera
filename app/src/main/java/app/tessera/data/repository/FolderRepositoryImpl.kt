@@ -9,6 +9,7 @@ import app.tessera.data.local.entity.NoteFolderCrossRef
 import app.tessera.data.mapper.NoteMapper
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
+import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.repository.FolderRepository
@@ -33,6 +34,13 @@ class FolderRepositoryImpl @Inject constructor(
     override fun observeFolders(): Flow<List<Folder>> =
         folderDao.observeAll().map { entities -> entities.map(::toDomain) }
 
+    override fun observeFolderTree(): Flow<List<FolderTreeNode>> =
+        observeFolders().map { flat ->
+            val roots = flat.filter { it.parentId == null }
+            val byParent = flat.filter { it.parentId != null }.groupBy { it.parentId!! }
+            roots.map { root -> FolderTreeNode(root, byParent[root.id].orEmpty()) }
+        }
+
     override fun observeFolderForNote(noteId: NoteId): Flow<FolderId?> =
         folderDao.observeFolderForNote(noteId.value).map { it?.let(::FolderId) }
 
@@ -43,13 +51,19 @@ class FolderRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun createFolder(name: String): Folder {
+    override suspend fun createFolder(name: String): Folder = createFolderInternal(name, parentId = null)
+
+    override suspend fun createSubfolder(parentId: FolderId, name: String): Folder =
+        createFolderInternal(name, parentId = parentId.value)
+
+    private suspend fun createFolderInternal(name: String, parentId: String?): Folder {
         val trimmed = name.trim()
         require(trimmed.isNotEmpty()) { "folder name must not be blank" }
         val now = clock.nowMs()
         val folder = FolderEntity(
             id = UUID.randomUUID().toString(),
             name = trimmed,
+            parentId = parentId,
             createdAt = now,
             updatedAt = now,
             deletedAt = null,
@@ -67,6 +81,11 @@ class FolderRepositoryImpl @Inject constructor(
         syncScheduler.requestSync()
     }
 
+    override suspend fun moveFolder(id: FolderId, newParentId: FolderId?) {
+        folderDao.updateParent(id.value, newParentId?.value, clock.nowMs())
+        syncScheduler.requestSync()
+    }
+
     override suspend fun deleteFolder(id: FolderId) {
         val now = clock.nowMs()
         val notesInFolder = folderDao.observeNotesInFolder(id.value).first()
@@ -80,13 +99,16 @@ class FolderRepositoryImpl @Inject constructor(
         if (folderId != null) {
             folderDao.assignNote(NoteFolderCrossRef(noteId = noteId.value, folderId = folderId.value))
         }
-        // The note's `folderId` ships in the RemoteNote payload — mark the note dirty
-        // so the next sync round uploads the new assignment.
         val now = clock.nowMs()
         noteDao.markPendingSync(noteId.value, now)
         syncScheduler.requestSync()
     }
 
     private fun toDomain(e: FolderEntity): Folder =
-        Folder(id = FolderId(e.id), name = e.name, createdAt = e.createdAt)
+        Folder(
+            id = FolderId(e.id),
+            name = e.name,
+            parentId = e.parentId?.let(::FolderId),
+            createdAt = e.createdAt,
+        )
 }

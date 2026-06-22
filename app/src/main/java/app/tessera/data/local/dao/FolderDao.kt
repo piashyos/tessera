@@ -29,6 +29,9 @@ interface FolderDao {
     @Query("UPDATE folders SET name = :name, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
     suspend fun rename(id: String, name: String, ts: Long)
 
+    @Query("UPDATE folders SET parentId = :parentId, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
+    suspend fun updateParent(id: String, parentId: String?, ts: Long)
+
     @Query("SELECT * FROM folders WHERE syncedAt IS NULL")
     suspend fun getPendingSync(): List<FolderEntity>
 

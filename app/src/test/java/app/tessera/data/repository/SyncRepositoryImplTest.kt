@@ -408,6 +408,10 @@ private class SyncFakeFolderDao : app.tessera.data.local.dao.FolderDao {
         folders[id]?.let { folders[id] = it.copy(name = name, updatedAt = ts, syncedAt = null) }
     }
 
+    override suspend fun updateParent(id: String, parentId: String?, ts: Long) {
+        folders[id]?.let { folders[id] = it.copy(parentId = parentId, updatedAt = ts, syncedAt = null) }
+    }
+
     override suspend fun getPendingSync() = folders.values.filter { it.syncedAt == null }
     override suspend fun markSynced(id: String, ts: Long) {
         folders[id]?.let { folders[id] = it.copy(syncedAt = ts) }

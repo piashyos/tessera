@@ -6,6 +6,7 @@ import app.tessera.core.util.Clock
 import app.tessera.core.util.SystemClock
 import app.tessera.data.local.MIGRATION_1_2
 import app.tessera.data.local.MIGRATION_2_3
+import app.tessera.data.local.MIGRATION_3_4
 import app.tessera.data.local.NotesDatabase
 import app.tessera.data.local.dao.FolderDao
 import app.tessera.data.local.dao.NoteDao
@@ -24,7 +25,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): NotesDatabase =
         Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     @Provides
