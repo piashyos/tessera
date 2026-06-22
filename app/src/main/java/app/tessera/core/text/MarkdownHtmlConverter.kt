@@ -12,7 +12,13 @@ class MarkdownHtmlConverter {
 
     companion object {
         /** Tag names that are inline (not block-level) and should be processed via inlineToMarkdown. */
-        private val INLINE_TAGS = setOf("b", "strong", "i", "em", "s", "del", "strike", "span")
+        private val INLINE_TAGS = setOf("b", "strong", "i", "em", "s", "del", "strike", "span", "u", "code")
+
+        /** Matches an ordered-list item prefix like "1. " / "12. ". */
+        private val ORDERED_ITEM = Regex("""^\d+\. """)
+
+        /** Private-use sentinel wrapping protected inline-code content during conversion. */
+        private const val CODE_SENTINEL = "\uE000"
     }
 
     // -----------------------------------------------------------------------------------------
@@ -59,6 +65,31 @@ class MarkdownHtmlConverter {
                     }
                     output.append("</ul>")
                 }
+                // Horizontal rule — a line that is exactly "---".
+                line.trim() == "---" -> {
+                    output.append("<hr>")
+                    i++
+                }
+                // Ordered list items — consume consecutive "N. " lines into one <ol>.
+                ORDERED_ITEM.containsMatchIn(line) -> {
+                    output.append("<ol>")
+                    while (i < lines.size && ORDERED_ITEM.containsMatchIn(lines[i])) {
+                        val text = lines[i].replaceFirst(ORDERED_ITEM, "")
+                        output.append("<li>${inlineToHtml(text)}</li>")
+                        i++
+                    }
+                    output.append("</ol>")
+                }
+                // Blockquote — consume consecutive "> " lines into one <blockquote>, lines
+                // joined with <br> (mirrors Aztec's single-block multiline quote).
+                line.startsWith("> ") -> {
+                    val quoted = mutableListOf<String>()
+                    while (i < lines.size && lines[i].startsWith("> ")) {
+                        quoted.add(inlineToHtml(lines[i].removePrefix("> ")))
+                        i++
+                    }
+                    output.append("<blockquote>${quoted.joinToString("<br>")}</blockquote>")
+                }
                 // Regular bullet list items — consume consecutive bullets into one <ul>
                 line.startsWith("- ") -> {
                     output.append("<ul>")
@@ -91,6 +122,12 @@ class MarkdownHtmlConverter {
         // bold/italic/strike regexes below still match and wrap the already-escaped content
         // in real tags. '&' must be escaped before '<'/'>' to avoid double-escaping entities.
         var result = escapeHtml(text)
+        // Protect inline-code spans first so emphasis markers inside them stay literal.
+        val codeSpans = mutableListOf<String>()
+        result = result.replace(Regex("`([^`]+)`")) { m ->
+            codeSpans.add(m.groupValues[1])
+            "$CODE_SENTINEL${codeSpans.size - 1}$CODE_SENTINEL"
+        }
         // Order matters: bold (** **) must be matched before single * italic.
         // Bold: **text** → <b>text</b>
         result = result.replace(Regex("""\*\*(.+?)\*\*""")) { "<b>${it.groupValues[1]}</b>" }
@@ -98,6 +135,13 @@ class MarkdownHtmlConverter {
         result = result.replace(Regex("""(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)""")) { "<i>${it.groupValues[1]}</i>" }
         // Strikethrough: ~~text~~ → <s>text</s>
         result = result.replace(Regex("""~~(.+?)~~""")) { "<s>${it.groupValues[1]}</s>" }
+        // Restore inline-code spans as real tags.
+        result = result.replace(Regex("$CODE_SENTINEL(\\d+)$CODE_SENTINEL")) {
+            "<code>${codeSpans[it.groupValues[1].toInt()]}</code>"
+        }
+        // Underline has no Markdown syntax, so it is stored as a literal <u> tag. escapeHtml
+        // turned it into entities; turn just those back into real tags.
+        result = result.replace("&lt;u&gt;", "<u>").replace("&lt;/u&gt;", "</u>")
         return result
     }
 
@@ -142,6 +186,18 @@ class MarkdownHtmlConverter {
 
                 remaining.startsWith("<ul>") ->
                     remaining = consumeBulletList(remaining, lines)
+
+                remaining.startsWith("<ol>") ->
+                    remaining = consumeOrderedList(remaining, lines)
+
+                remaining.startsWith("<blockquote>") ->
+                    remaining = consumeBlockquote(remaining, lines)
+
+                remaining.startsWith("<hr") -> {
+                    lines.add("---")
+                    val close = remaining.indexOf('>')
+                    remaining = if (close == -1) "" else remaining.substring(close + 1)
+                }
 
                 remaining.startsWith("<p>") ->
                     remaining = consumeTag(remaining, "p") { inner -> lines.add(inlineToMarkdown(inner)) }
@@ -214,6 +270,39 @@ class MarkdownHtmlConverter {
             lines.add("- ${inlineToMarkdown(itemHtml)}")
         }
         return html.substring(end + closeUl.length)
+    }
+
+    private fun consumeOrderedList(html: String, lines: MutableList<String>): String {
+        val closeOl = "</ol>"
+        val olStart = "<ol>"
+        val start = html.indexOf(olStart)
+        if (start == -1) return html
+        val contentStart = start + olStart.length
+        val end = html.indexOf(closeOl, contentStart)
+        if (end == -1) return ""
+        val inner = html.substring(contentStart, end)
+        extractListItems(inner).forEachIndexed { idx, itemHtml ->
+            lines.add("${idx + 1}. ${inlineToMarkdown(itemHtml)}")
+        }
+        return html.substring(end + closeOl.length)
+    }
+
+    private fun consumeBlockquote(html: String, lines: MutableList<String>): String {
+        val closeQ = "</blockquote>"
+        val qStart = "<blockquote>"
+        val start = html.indexOf(qStart)
+        if (start == -1) return html
+        val contentStart = start + qStart.length
+        val end = html.indexOf(closeQ, contentStart)
+        if (end == -1) return ""
+        val inner = html.substring(contentStart, end)
+        // Aztec keeps a multiline quote as one block with <br> separators; our markdownToHtml
+        // does the same. Split them back into one "> " line each.
+        inner.split(Regex("<br\\s*/?>")).forEach { part ->
+            val text = inlineToMarkdown(part.trim())
+            if (text.isNotEmpty()) lines.add("> $text")
+        }
+        return html.substring(end + closeQ.length)
     }
 
     private fun consumeTaskList(html: String, lines: MutableList<String>): String {
@@ -296,7 +385,7 @@ class MarkdownHtmlConverter {
      * Used to split "inline content before the next block tag".
      */
     private fun indexOfNextBlockTag(html: String): Int {
-        val blockTags = listOf("<h1>", "<h2>", "<ul>", "<ul ", "<p>")
+        val blockTags = listOf("<h1>", "<h2>", "<ul>", "<ul ", "<ol>", "<blockquote>", "<hr", "<p>")
         var idx = -1
         // Search from position 1 to skip current opening tag
         val searchFrom = html.indexOf('>') + 1
@@ -321,8 +410,13 @@ class MarkdownHtmlConverter {
         result = result.replace(Regex("<s>(.+?)</s>")) { "~~${it.groupValues[1]}~~" }
         result = result.replace(Regex("<del>(.+?)</del>")) { "~~${it.groupValues[1]}~~" }
         result = result.replace(Regex("<strike>(.+?)</strike>")) { "~~${it.groupValues[1]}~~" }
+        // Inline code: <code>...</code> → `text`
+        result = result.replace(Regex("<code>(.+?)</code>")) { "`${it.groupValues[1]}`" }
+        // Underline has no Markdown form — keep the literal <u> tag through the strip below.
+        result = result.replace("<u>", CODE_SENTINEL + "u").replace("</u>", CODE_SENTINEL + "/u")
         // Strip any remaining unknown inline tags
         result = result.replace(Regex("<[^>]+>"), "")
+        result = result.replace(CODE_SENTINEL + "/u", "</u>").replace(CODE_SENTINEL + "u", "<u>")
         // Decode HTML entities back to literal characters. Aztec's toHtml() emits these for
         // any special char the user typed; without decoding they would persist verbatim in the
         // stored Markdown ('&amp;' instead of '&'). Decode '&amp;' LAST so a literal,
