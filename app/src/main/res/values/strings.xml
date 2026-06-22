@@ -62,6 +62,16 @@
     <string name="settings_signed_out_subtitle">Sign in to sync your notes across devices.</string>
     <string name="settings_sign_in">Sign in with Google</string>
     <string name="settings_sign_out">Sign out</string>
+    <string name="settings_section_sync">Sync</string>
+    <string name="sync_status_synced">Synced</string>
+    <string name="sync_status_syncing">Syncing…</string>
+    <string name="sync_status_offline">Offline</string>
+    <string name="sync_status_offline_subtitle">Changes will sync when you\'re back online</string>
+    <string name="sync_status_error">Sync failed</string>
+    <string name="sync_status_error_subtitle">Couldn\'t sync your notes. Tap to retry.</string>
+    <string name="sync_status_up_to_date">Up to date</string>
+    <string name="sync_last_synced">Last synced %1$s</string>
+    <string name="sync_retry">Retry</string>
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_theme_auto">Auto</string>
     <string name="settings_theme_light_dynamic">Light</string>

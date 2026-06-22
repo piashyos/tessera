@@ -56,6 +56,16 @@
     <string name="settings_signed_out_subtitle">Войдите, чтобы синхронизировать заметки между устройствами.</string>
     <string name="settings_sign_in">Войти через Google</string>
     <string name="settings_sign_out">Выйти</string>
+    <string name="settings_section_sync">Синхронизация</string>
+    <string name="sync_status_synced">Синхронизировано</string>
+    <string name="sync_status_syncing">Синхронизация…</string>
+    <string name="sync_status_offline">Не в сети</string>
+    <string name="sync_status_offline_subtitle">Изменения синхронизируются при подключении к сети</string>
+    <string name="sync_status_error">Ошибка синхронизации</string>
+    <string name="sync_status_error_subtitle">Не удалось синхронизировать заметки. Нажмите, чтобы повторить.</string>
+    <string name="sync_status_up_to_date">Актуально</string>
+    <string name="sync_last_synced">Последняя синхронизация: %1$s</string>
+    <string name="sync_retry">Повторить</string>
     <string name="settings_section_appearance">Внешний вид</string>
     <string name="settings_theme_auto">Авто</string>
     <string name="settings_theme_light_dynamic">Светлая</string>

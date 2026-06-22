@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import android.util.Log
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import app.tessera.core.connectivity.ConnectivityObserver
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.repository.SyncRepository
@@ -21,8 +22,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -35,7 +39,20 @@ class SyncManager @Inject constructor(
     private val workManager: WorkManager,
     private val authRepository: AuthRepository,
     private val syncRepository: SyncRepository,
-) {
+    connectivityObserver: ConnectivityObserver,
+) : SyncStatusProvider {
+    /**
+     * Live sync state for the UI: RUNNING work → [SyncIndicator.Syncing], no network →
+     * [SyncIndicator.Offline], failed work → [SyncIndicator.Error], otherwise [SyncIndicator.Ok].
+     */
+    override val syncStatus: Flow<SyncIndicator> =
+        combine(
+            workManager.getWorkInfosForUniqueWorkFlow(SyncWorker.UNIQUE_NAME),
+            connectivityObserver.isOnline,
+        ) { infos, online ->
+            syncIndicatorOf(reduceSyncState(infos.map { it.state }), online)
+        }.distinctUntilChanged()
+
     private val exceptionHandler =
         CoroutineExceptionHandler { _, throwable ->
             Log.w(TAG, "Sync coroutine failed", throwable)
