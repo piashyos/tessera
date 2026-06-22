@@ -56,6 +56,7 @@
     <string name="settings_signed_out_subtitle">Войдите, чтобы синхронизировать заметки между устройствами.</string>
     <string name="settings_sign_in">Войти через Google</string>
     <string name="settings_sign_out">Выйти</string>
+    <string name="settings_section_account">Аккаунт</string>
     <string name="settings_section_sync">Синхронизация</string>
     <string name="sync_status_synced">Синхронизировано</string>
     <string name="sync_status_syncing">Синхронизация…</string>
@@ -67,12 +68,6 @@
     <string name="sync_last_synced">Последняя синхронизация: %1$s</string>
     <string name="sync_retry">Повторить</string>
     <string name="settings_section_appearance">Внешний вид</string>
-    <string name="settings_theme_auto">Авто</string>
-    <string name="settings_theme_light_dynamic">Светлая</string>
-    <string name="settings_theme_dark_dynamic">Тёмная</string>
-    <string name="settings_theme_light_static">Светлая · Классика</string>
-    <string name="settings_theme_dark_static">Тёмная · Классика</string>
-    <string name="settings_theme_static_hint">Классика — фиксированные цвета (без Material You)</string>
     <string name="settings_theme_sheet_title">Тема</string>
     <string name="settings_theme_system">Системная</string>
     <string name="settings_theme_light">Светлая</string>
@@ -84,8 +79,14 @@
     <string name="settings_language_system">Системный</string>
     <string name="settings_language_en">English</string>
     <string name="settings_language_ru">Русский</string>
+    <string name="settings_section_data">Данные</string>
+    <string name="settings_data_export">Экспорт заметок</string>
+    <string name="settings_data_import">Импорт…</string>
+    <string name="settings_data_empty_trash">Очистить корзину</string>
+    <string name="settings_section_about">О приложении</string>
     <string name="settings_about">О приложении</string>
     <string name="settings_version">Tessera %1$s</string>
+    <string name="settings_licenses">Лицензии открытого ПО</string>
     <string name="account_switch_title">Другой аккаунт</string>
     <string name="account_switch_message">Эти заметки принадлежат другому аккаунту. Перенесите их в новый аккаунт или удалите локально и начните заново.</string>
     <string name="account_switch_move">Перенести в новый аккаунт</string>
