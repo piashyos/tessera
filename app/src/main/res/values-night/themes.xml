@@ -1,7 +1,0 @@
-<resources>
-    <style name="Theme.Tessera" parent="android:Theme.Material.NoActionBar">
-        <!-- Matches the Compose app background so the activity recreation triggered by a
-             locale change shows the app color instead of a black flash. -->
-        <item name="android:windowBackground">@color/window_background</item>
-    </style>
-</resources>

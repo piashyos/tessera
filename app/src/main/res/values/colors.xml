@@ -1,7 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Bullet marker color for Aztec lists — light theme: coral accent (PrimaryLight). -->
-    <color name="aztec_bullet">#C96442</color>
-    <!-- Window background (light) — mirrors BackgroundGlowLight in the Compose theme. -->
-    <color name="window_background">#FAF9F5</color>
+    <!-- Light brand palette (mirror of TesseraBrandLight). Aztec, system Activity, and
+         any XML drawable references read from here via ?attr/colorXxx. -->
+
+    <color name="brand_primary">#FFC96442</color>
+    <color name="brand_on_primary">#FFFFFFFF</color>
+    <color name="brand_primary_container">#FFFBE3D8</color>
+    <color name="brand_on_primary_container">#FF3A1A0F</color>
+
+    <color name="brand_secondary">#FF7C5E4F</color>
+    <color name="brand_on_secondary">#FFFFFFFF</color>
+    <color name="brand_secondary_container">#FFF5E1D6</color>
+    <color name="brand_on_secondary_container">#FF2F1E14</color>
+
+    <color name="brand_tertiary">#FF5F6A4F</color>
+    <color name="brand_on_tertiary">#FFFFFFFF</color>
+    <color name="brand_tertiary_container">#FFE2EAD3</color>
+    <color name="brand_on_tertiary_container">#FF1B2412</color>
+
+    <color name="brand_error">#FFB3261E</color>
+    <color name="brand_on_error">#FFFFFFFF</color>
+    <color name="brand_error_container">#FFF9DEDC</color>
+    <color name="brand_on_error_container">#FF410E0B</color>
+
+    <color name="brand_background">#FFFAF9F5</color>
+    <color name="brand_on_background">#FF262420</color>
+    <color name="brand_surface">#FFFFFFFF</color>
+    <color name="brand_on_surface">#FF262420</color>
+    <color name="brand_surface_dim">#FFEDEAE3</color>
+    <color name="brand_surface_bright">#FFFFFFFF</color>
+    <color name="brand_surface_container_lowest">#FFFFFFFF</color>
+    <color name="brand_surface_container_low">#FFF6F4ED</color>
+    <color name="brand_surface_container">#FFF3F0E8</color>
+    <color name="brand_surface_container_high">#FFEDEAE3</color>
+    <color name="brand_surface_container_highest">#FFE7E3DA</color>
+    <color name="brand_on_surface_variant">#FF5C584F</color>
+    <color name="brand_outline">#FF8A8478</color>
+    <color name="brand_outline_variant">#FFD9D4C7</color>
+
+    <!-- Legacy aliases (kept for compatibility with code/layouts still using these names) -->
+    <color name="aztec_bullet">@color/brand_primary</color>
+    <color name="window_background">@color/brand_background</color>
 </resources>

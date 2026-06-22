@@ -1,7 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Bullet marker color for Aztec lists — dark theme: coral accent (PrimaryDark). -->
-    <color name="aztec_bullet">#D97757</color>
-    <!-- Window background (dark) — mirrors BackgroundGlowDark in the Compose theme. -->
-    <color name="window_background">#191815</color>
+    <!-- Dark brand palette (mirror of TesseraBrandDark). -->
+
+    <color name="brand_primary">#FFD97757</color>
+    <color name="brand_on_primary">#FF3A1A0F</color>
+    <color name="brand_primary_container">#FF5C2A18</color>
+    <color name="brand_on_primary_container">#FFFBE3D8</color>
+
+    <color name="brand_secondary">#FFD8B8A2</color>
+    <color name="brand_on_secondary">#FF3A2818</color>
+    <color name="brand_secondary_container">#FF523929</color>
+    <color name="brand_on_secondary_container">#FFF5E1D6</color>
+
+    <color name="brand_tertiary">#FFB7C6A1</color>
+    <color name="brand_on_tertiary">#FF1F2A12</color>
+    <color name="brand_tertiary_container">#FF3D4928</color>
+    <color name="brand_on_tertiary_container">#FFE2EAD3</color>
+
+    <color name="brand_error">#FFF2B8B5</color>
+    <color name="brand_on_error">#FF601410</color>
+    <color name="brand_error_container">#FF8C1D18</color>
+    <color name="brand_on_error_container">#FFF9DEDC</color>
+
+    <color name="brand_background">#FF191815</color>
+    <color name="brand_on_background">#FFECE9E3</color>
+    <color name="brand_surface">#FF201F1D</color>
+    <color name="brand_on_surface">#FFECE9E3</color>
+    <color name="brand_surface_dim">#FF191815</color>
+    <color name="brand_surface_bright">#FF393734</color>
+    <color name="brand_surface_container_lowest">#FF131211</color>
+    <color name="brand_surface_container_low">#FF232220</color>
+    <color name="brand_surface_container">#FF26241F</color>
+    <color name="brand_surface_container_high">#FF2C2B27</color>
+    <color name="brand_surface_container_highest">#FF37352F</color>
+    <color name="brand_on_surface_variant">#FFC9C3B6</color>
+    <color name="brand_outline">#FF948D80</color>
+    <color name="brand_outline_variant">#FF4A4740</color>
+
+    <!-- Legacy aliases -->
+    <color name="aztec_bullet">@color/brand_primary</color>
+    <color name="window_background">@color/brand_background</color>
 </resources>
