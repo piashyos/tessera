@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -52,10 +55,10 @@ fun TesseraNoteCard(
     modifier = modifier
       .testTag(TesseraNoteCardTags.Root)
       .fillMaxWidth()
-      .height(78.dp)
+      .heightIn(min = 78.dp)
       .combinedClickable(onClick = onClick, onLongClick = onLongClick),
   ) {
-    Row(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
+    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
       if (isPinned) {
         Box(
           modifier = Modifier
