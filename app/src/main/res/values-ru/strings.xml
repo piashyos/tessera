@@ -37,6 +37,12 @@
     <string name="toolbar_h5">Заголовок 5</string>
     <string name="toolbar_h6">Заголовок 6</string>
     <string name="toolbar_insert_table">Вставить таблицу</string>
+    <string name="toolbar_underline">Подчёркнутый</string>
+    <string name="toolbar_ordered">Нумерованный список</string>
+    <string name="toolbar_quote">Цитата</string>
+    <string name="toolbar_code">Код</string>
+    <string name="toolbar_divider">Разделитель</string>
+    <string name="toolbar_more">Ещё форматы</string>
     <string name="note_action_pin">Закрепить</string>
     <string name="note_action_unpin">Открепить</string>
     <string name="note_action_delete">Удалить</string>
