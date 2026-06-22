@@ -1,0 +1,757 @@
+{
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/.sc/last-chat-settings.json": {
+    "mtime": 1781614234.4867387,
+    "ast_hash": "954473795ac1bfccee55468be6bd1b60",
+    "semantic_hash": "954473795ac1bfccee55468be6bd1b60"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/build.gradle.kts": {
+    "mtime": 1781550540.6611493,
+    "ast_hash": "69e4b563c2012917d09d68b1ffe233e9",
+    "semantic_hash": "69e4b563c2012917d09d68b1ffe233e9"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/schemas/app.tessera.data.local.NotesDatabase/1.json": {
+    "mtime": 1781535187.4890234,
+    "ast_hash": "63d8d1f434a9326340e5a72ca04b0e88",
+    "semantic_hash": "63d8d1f434a9326340e5a72ca04b0e88"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/HiltTestRunner.kt": {
+    "mtime": 1781535187.4896138,
+    "ast_hash": "4446b336f700a50dc077efd9a85230f3",
+    "semantic_hash": "4446b336f700a50dc077efd9a85230f3"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/core/ui/components/TesseraPopupTest.kt": {
+    "mtime": 1781535187.490367,
+    "ast_hash": "a9bcf97720be780697fb46e3ec7ff39c",
+    "semantic_hash": "a9bcf97720be780697fb46e3ec7ff39c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/core/ui/components/TesseraTextFieldTest.kt": {
+    "mtime": 1781535187.490693,
+    "ast_hash": "e4f195e27398d36328161bc515c54fb8",
+    "semantic_hash": "e4f195e27398d36328161bc515c54fb8"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/data/local/NoteDaoTest.kt": {
+    "mtime": 1781535187.4909446,
+    "ast_hash": "dc3c8acfbc9c4baf104d82ca14e89000",
+    "semantic_hash": "dc3c8acfbc9c4baf104d82ca14e89000"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/sync/DeleteTombstonesWorkerTest.kt": {
+    "mtime": 1781535187.4913433,
+    "ast_hash": "d438d15545141302cf035e8f57259382",
+    "semantic_hash": "d438d15545141302cf035e8f57259382"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/ui/TesseraShowcaseScreenTest.kt": {
+    "mtime": 1781552915.8900104,
+    "ast_hash": "125972728af2d74dbdadff8f2f219730",
+    "semantic_hash": "125972728af2d74dbdadff8f2f219730"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/ui/components/TesseraPopupSwipeTest.kt": {
+    "mtime": 1781535187.4919398,
+    "ast_hash": "a3e3ebc65d91bd8b17b1033b1ec6afd2",
+    "semantic_hash": "a3e3ebc65d91bd8b17b1033b1ec6afd2"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/ui/editor/NoteEditorScreenTest.kt": {
+    "mtime": 1781550484.2079272,
+    "ast_hash": "811a6809a3c1484426587f064570f21f",
+    "semantic_hash": "811a6809a3c1484426587f064570f21f"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/ui/editor/TagPickerPopupTest.kt": {
+    "mtime": 1781535187.4925787,
+    "ast_hash": "a34a4d2a9fad93a2e7004a418f0a105c",
+    "semantic_hash": "a34a4d2a9fad93a2e7004a418f0a105c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/ui/notes/NotesListScreenTest.kt": {
+    "mtime": 1781552896.8046846,
+    "ast_hash": "3baff7f815acf2318f8b00729ade680b",
+    "semantic_hash": "3baff7f815acf2318f8b00729ade680b"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/ui/notes/SearchClearTest.kt": {
+    "mtime": 1781552908.0914643,
+    "ast_hash": "e426170a0ec9cab5900cbf7eb1fd42d9",
+    "semantic_hash": "e426170a0ec9cab5900cbf7eb1fd42d9"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/ui/notes/TagFilterBarTest.kt": {
+    "mtime": 1781535187.4936976,
+    "ast_hash": "e3f081a1a8ab3127658d978d1a195918",
+    "semantic_hash": "e3f081a1a8ab3127658d978d1a195918"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/androidTest/java/app/tessera/ui/settings/SettingsScreenTest.kt": {
+    "mtime": 1781535187.4939904,
+    "ast_hash": "ab4488ee9a2c197701f4a8c3d2f239d3",
+    "semantic_hash": "ab4488ee9a2c197701f4a8c3d2f239d3"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/MainActivity.kt": {
+    "mtime": 1781535187.4947875,
+    "ast_hash": "9981ef71eff5d4d9d565458aa1d98b9a",
+    "semantic_hash": "9981ef71eff5d4d9d565458aa1d98b9a"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/TesseraApp.kt": {
+    "mtime": 1781535187.495074,
+    "ast_hash": "4ba9fd75b1b823724093d1e00d6e7a92",
+    "semantic_hash": "4ba9fd75b1b823724093d1e00d6e7a92"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/TesseraApplication.kt": {
+    "mtime": 1781535187.4954371,
+    "ast_hash": "ff4fd26482d47faa5eb709ced9a9f834",
+    "semantic_hash": "ff4fd26482d47faa5eb709ced9a9f834"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/di/DatabaseModule.kt": {
+    "mtime": 1781535187.495711,
+    "ast_hash": "1e8c7b95e6e7dd307937e0d111e31e13",
+    "semantic_hash": "1e8c7b95e6e7dd307937e0d111e31e13"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/di/FirebaseModule.kt": {
+    "mtime": 1781535187.4960713,
+    "ast_hash": "de06a871125becdfe1479e2e930b2b70",
+    "semantic_hash": "de06a871125becdfe1479e2e930b2b70"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/di/RepositoryModule.kt": {
+    "mtime": 1781540684.2992644,
+    "ast_hash": "00b2af6aa445ae0304324b67962f1509",
+    "semantic_hash": "00b2af6aa445ae0304324b67962f1509"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/di/WorkManagerModule.kt": {
+    "mtime": 1781540693.0010352,
+    "ast_hash": "b43ebb5fa8816c4ad399d8ea6bc0e921",
+    "semantic_hash": "b43ebb5fa8816c4ad399d8ea6bc0e921"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/text/MarkdownHtmlConverter.kt": {
+    "mtime": 1781607184.8040822,
+    "ast_hash": "8bb790c34de2c9fd33c72ffebbec404f",
+    "semantic_hash": "8bb790c34de2c9fd33c72ffebbec404f"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/text/MarkdownPreview.kt": {
+    "mtime": 1781552281.079331,
+    "ast_hash": "77e097c5027b41f5349219f6b4d57c33",
+    "semantic_hash": "77e097c5027b41f5349219f6b4d57c33"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/UiTestTags.kt": {
+    "mtime": 1781612780.748834,
+    "ast_hash": "a6623a5502316b41ea85b24895ce63c8",
+    "semantic_hash": "a6623a5502316b41ea85b24895ce63c8"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/components/EdgeFadeScrim.kt": {
+    "mtime": 1781535187.4978247,
+    "ast_hash": "0c7ea1390f9e32c533f08c66894ea7c0",
+    "semantic_hash": "0c7ea1390f9e32c533f08c66894ea7c0"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/components/FloatingCapsule.kt": {
+    "mtime": 1781535187.4982245,
+    "ast_hash": "1fce7d11f6b726c8a1c83e12f633474d",
+    "semantic_hash": "1fce7d11f6b726c8a1c83e12f633474d"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/components/GlassFab.kt": {
+    "mtime": 1781633896.6943011,
+    "ast_hash": "64b3197c526a28d8067d2a00b6d68cd1",
+    "semantic_hash": "64b3197c526a28d8067d2a00b6d68cd1"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/components/TesseraPopup.kt": {
+    "mtime": 1781535187.4990032,
+    "ast_hash": "7968ffb69f2098fe6fee0eec6e350dc5",
+    "semantic_hash": "7968ffb69f2098fe6fee0eec6e350dc5"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/components/TesseraTextField.kt": {
+    "mtime": 1781535187.499246,
+    "ast_hash": "70c17c8b4875778d0b959a8ce8198478",
+    "semantic_hash": "70c17c8b4875778d0b959a8ce8198478"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/theme/Color.kt": {
+    "mtime": 1781535187.4995656,
+    "ast_hash": "af27f4f9387a7e25407075a71f37b655",
+    "semantic_hash": "af27f4f9387a7e25407075a71f37b655"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/theme/Theme.kt": {
+    "mtime": 1781535187.499805,
+    "ast_hash": "bf423d6357c346c3eaa90a57ba1d38a8",
+    "semantic_hash": "bf423d6357c346c3eaa90a57ba1d38a8"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/ui/theme/Type.kt": {
+    "mtime": 1781535187.5002623,
+    "ast_hash": "e6e4f854cbecb6d5e09abec5c7dcf38a",
+    "semantic_hash": "e6e4f854cbecb6d5e09abec5c7dcf38a"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/util/Clock.kt": {
+    "mtime": 1781535187.5006604,
+    "ast_hash": "b4df817ee0f60731be3ed765dc739354",
+    "semantic_hash": "b4df817ee0f60731be3ed765dc739354"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/core/util/CurrentActivityHolder.kt": {
+    "mtime": 1781535187.5008514,
+    "ast_hash": "854985bc6af69171b78bbcea2978aa0f",
+    "semantic_hash": "854985bc6af69171b78bbcea2978aa0f"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/local/NotesDatabase.kt": {
+    "mtime": 1781535187.5012023,
+    "ast_hash": "55d396b1c34a039f2f50b3db2ceb023e",
+    "semantic_hash": "55d396b1c34a039f2f50b3db2ceb023e"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/local/dao/NoteDao.kt": {
+    "mtime": 1781535187.5019605,
+    "ast_hash": "fd6aa4ef5e82c04e94aa5f48024c800c",
+    "semantic_hash": "fd6aa4ef5e82c04e94aa5f48024c800c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/local/dao/TagDao.kt": {
+    "mtime": 1781535187.5022287,
+    "ast_hash": "153e8d4d6cf0b30595d05610a42e50c0",
+    "semantic_hash": "153e8d4d6cf0b30595d05610a42e50c0"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/local/entity/NoteEntity.kt": {
+    "mtime": 1781535187.5025797,
+    "ast_hash": "331feddfa49d315998f5bab06913773c",
+    "semantic_hash": "331feddfa49d315998f5bab06913773c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/local/entity/NoteFtsEntity.kt": {
+    "mtime": 1781535187.5028846,
+    "ast_hash": "351d15948b07c8f378fcc2c8c8646a4e",
+    "semantic_hash": "351d15948b07c8f378fcc2c8c8646a4e"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/local/entity/NoteTagCrossRef.kt": {
+    "mtime": 1781535187.5030866,
+    "ast_hash": "20b40a9471943bb88c35437363c7e8e5",
+    "semantic_hash": "20b40a9471943bb88c35437363c7e8e5"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/local/entity/TagEntity.kt": {
+    "mtime": 1781535187.5033047,
+    "ast_hash": "d301241a87e36c80c3519a4f76aa5c32",
+    "semantic_hash": "d301241a87e36c80c3519a4f76aa5c32"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/mapper/NoteMapper.kt": {
+    "mtime": 1781535187.503612,
+    "ast_hash": "dd73659c8ca8f015337f809bcf3dc90b",
+    "semantic_hash": "dd73659c8ca8f015337f809bcf3dc90b"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/remote/FirestoreNotesClient.kt": {
+    "mtime": 1781535187.5040188,
+    "ast_hash": "307c2cc986f1c2f06a048e8c4efb49bb",
+    "semantic_hash": "307c2cc986f1c2f06a048e8c4efb49bb"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/remote/RemoteNote.kt": {
+    "mtime": 1781535187.5042331,
+    "ast_hash": "bb3c0c66567a72e3124d5ef622baae6c",
+    "semantic_hash": "bb3c0c66567a72e3124d5ef622baae6c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/remote/RemoteNotesDataSource.kt": {
+    "mtime": 1781535187.504573,
+    "ast_hash": "01150a2b07647642cf06d0f8cfd0cfa4",
+    "semantic_hash": "01150a2b07647642cf06d0f8cfd0cfa4"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/repository/AccountRepositoryImpl.kt": {
+    "mtime": 1781535187.5048945,
+    "ast_hash": "a9380241d8a8475c5843bf64186670ee",
+    "semantic_hash": "a9380241d8a8475c5843bf64186670ee"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/repository/AuthRepositoryImpl.kt": {
+    "mtime": 1781535187.5051622,
+    "ast_hash": "5f0101c62cf0c8446f03ca5109a81d4f",
+    "semantic_hash": "5f0101c62cf0c8446f03ca5109a81d4f"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/repository/NotesRepositoryImpl.kt": {
+    "mtime": 1781539709.6115491,
+    "ast_hash": "07637e72ff5839970100444ec141cce2",
+    "semantic_hash": "07637e72ff5839970100444ec141cce2"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/data/repository/SyncRepositoryImpl.kt": {
+    "mtime": 1781535187.5056841,
+    "ast_hash": "28861a99395293fb72e33675a0fe2913",
+    "semantic_hash": "28861a99395293fb72e33675a0fe2913"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/model/AccountSwitchDecision.kt": {
+    "mtime": 1781535187.5059743,
+    "ast_hash": "1bfec927d1b780150cd6de9725f1b4a9",
+    "semantic_hash": "1bfec927d1b780150cd6de9725f1b4a9"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/model/Note.kt": {
+    "mtime": 1781535187.5063584,
+    "ast_hash": "bc903b624e4bdb7698f1fa23b10e7531",
+    "semantic_hash": "bc903b624e4bdb7698f1fa23b10e7531"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/model/NoteId.kt": {
+    "mtime": 1781535187.5065515,
+    "ast_hash": "95f5263c6a104738817eacf887bee1ef",
+    "semantic_hash": "95f5263c6a104738817eacf887bee1ef"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/model/Tag.kt": {
+    "mtime": 1781535187.506797,
+    "ast_hash": "db9edb8b75874837d9e4000236e08758",
+    "semantic_hash": "db9edb8b75874837d9e4000236e08758"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/model/UserId.kt": {
+    "mtime": 1781535187.5070271,
+    "ast_hash": "60870e6b61e3c80d80d30b4f89aaece9",
+    "semantic_hash": "60870e6b61e3c80d80d30b4f89aaece9"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/model/UserProfile.kt": {
+    "mtime": 1781535187.5072675,
+    "ast_hash": "6dfd2aff0d4dc12a7f0aca2572e17dab",
+    "semantic_hash": "6dfd2aff0d4dc12a7f0aca2572e17dab"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/repository/AccountRepository.kt": {
+    "mtime": 1781535187.5076084,
+    "ast_hash": "66c9d6c590dc85cf791c9080f3b47508",
+    "semantic_hash": "66c9d6c590dc85cf791c9080f3b47508"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/repository/AuthRepository.kt": {
+    "mtime": 1781535187.5079086,
+    "ast_hash": "58b365ef2eb8af39ecee544e697e11a4",
+    "semantic_hash": "58b365ef2eb8af39ecee544e697e11a4"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/repository/NotesRepository.kt": {
+    "mtime": 1781535187.5081217,
+    "ast_hash": "386b6708ec662824c884116dfbdf4634",
+    "semantic_hash": "386b6708ec662824c884116dfbdf4634"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/repository/SyncRepository.kt": {
+    "mtime": 1781535187.5084352,
+    "ast_hash": "5e3940a32cfa215950a8800cfa8818da",
+    "semantic_hash": "5e3940a32cfa215950a8800cfa8818da"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/repository/SyncScheduler.kt": {
+    "mtime": 1781535541.969299,
+    "ast_hash": "51cb7f278d9a05b7190936a4e020882d",
+    "semantic_hash": "51cb7f278d9a05b7190936a4e020882d"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/CreateNoteUseCase.kt": {
+    "mtime": 1781535187.5086317,
+    "ast_hash": "ce1a5adfe21f38882e79b2bad63e323c",
+    "semantic_hash": "ce1a5adfe21f38882e79b2bad63e323c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/DeleteNoteUseCase.kt": {
+    "mtime": 1781535187.5088832,
+    "ast_hash": "38d7120b6e4a968a0ff5ad7da23d4783",
+    "semantic_hash": "38d7120b6e4a968a0ff5ad7da23d4783"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/GetNoteUseCase.kt": {
+    "mtime": 1781535187.5090954,
+    "ast_hash": "4bbbf871c1687c5e963dee7f1627fa75",
+    "semantic_hash": "4bbbf871c1687c5e963dee7f1627fa75"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/HandleAccountSwitchUseCase.kt": {
+    "mtime": 1781535187.5094798,
+    "ast_hash": "6e3794b2213d3a6a4e0d78f0ba60a87b",
+    "semantic_hash": "6e3794b2213d3a6a4e0d78f0ba60a87b"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/ObserveNotesUseCase.kt": {
+    "mtime": 1781535187.509625,
+    "ast_hash": "81963771ba3471ce7e5a984600858f88",
+    "semantic_hash": "81963771ba3471ce7e5a984600858f88"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/RestoreNoteUseCase.kt": {
+    "mtime": 1781535187.5097752,
+    "ast_hash": "79a7e95eb55b16c4cda27ec580eb7a49",
+    "semantic_hash": "79a7e95eb55b16c4cda27ec580eb7a49"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/SearchNotesUseCase.kt": {
+    "mtime": 1781535187.5101573,
+    "ast_hash": "2cd39e51c98b286c3e95e13e02cd5e25",
+    "semantic_hash": "2cd39e51c98b286c3e95e13e02cd5e25"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/SignInUseCase.kt": {
+    "mtime": 1781535187.5104256,
+    "ast_hash": "b6962038d0296cd0a8afa0f371590247",
+    "semantic_hash": "b6962038d0296cd0a8afa0f371590247"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/SignOutUseCase.kt": {
+    "mtime": 1781535187.5107262,
+    "ast_hash": "3874878b2111713bbf5b9107ea3d399e",
+    "semantic_hash": "3874878b2111713bbf5b9107ea3d399e"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/TogglePinUseCase.kt": {
+    "mtime": 1781535187.5110247,
+    "ast_hash": "50f6a9e96ca733257c5cb799d7c77216",
+    "semantic_hash": "50f6a9e96ca733257c5cb799d7c77216"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/domain/usecase/UpdateNoteUseCase.kt": {
+    "mtime": 1781535187.5112693,
+    "ast_hash": "fbfdf3b4afb70024e17a20a1b39908ed",
+    "semantic_hash": "fbfdf3b4afb70024e17a20a1b39908ed"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/sync/DeleteTombstonesWorker.kt": {
+    "mtime": 1781535187.511553,
+    "ast_hash": "2fb1246407de187900859f543d6e82ac",
+    "semantic_hash": "2fb1246407de187900859f543d6e82ac"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/sync/SyncManager.kt": {
+    "mtime": 1781541103.9114113,
+    "ast_hash": "01c033efd8cdec87a6eeaaa4b024d615",
+    "semantic_hash": "01c033efd8cdec87a6eeaaa4b024d615"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/sync/SyncWorker.kt": {
+    "mtime": 1781535187.5122137,
+    "ast_hash": "a660b6480aa1e61ccef58ddbff5c2372",
+    "semantic_hash": "a660b6480aa1e61ccef58ddbff5c2372"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/sync/WorkManagerSyncScheduler.kt": {
+    "mtime": 1781540675.884028,
+    "ast_hash": "87c2180eb6c137d5bfdb28e8d1528cfb",
+    "semantic_hash": "87c2180eb6c137d5bfdb28e8d1528cfb"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/NoteEditorScreen.kt": {
+    "mtime": 1781622099.075352,
+    "ast_hash": "d1ed6b454be5287ce8445845f4fd8eec",
+    "semantic_hash": "d1ed6b454be5287ce8445845f4fd8eec"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/NoteEditorState.kt": {
+    "mtime": 1781535187.513198,
+    "ast_hash": "cfcf86a6d259cbd148dab60a77e5f83d",
+    "semantic_hash": "cfcf86a6d259cbd148dab60a77e5f83d"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/NoteEditorViewModel.kt": {
+    "mtime": 1781550358.767539,
+    "ast_hash": "2ae05b23fb0054eb7c1fb5df7a0eaed4",
+    "semantic_hash": "2ae05b23fb0054eb7c1fb5df7a0eaed4"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/components/FlickerlessAztecText.kt": {
+    "mtime": 1781609159.527363,
+    "ast_hash": "dc75a392e3de891ddd1c02ea97b53130",
+    "semantic_hash": "dc75a392e3de891ddd1c02ea97b53130"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/components/MarkdownFormatMenu.kt": {
+    "mtime": 1781621706.940928,
+    "ast_hash": "20a057b7f1a3efafd54deca2c4afd8d8",
+    "semantic_hash": "20a057b7f1a3efafd54deca2c4afd8d8"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/components/MarkdownToolbar.kt": {
+    "mtime": 1781621727.5082195,
+    "ast_hash": "03c75fed55807a0143bac06ab8ea11af",
+    "semantic_hash": "03c75fed55807a0143bac06ab8ea11af"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/components/RichNoteBody.kt": {
+    "mtime": 1781633984.5910337,
+    "ast_hash": "832c09c97b72d0e0891c66e21c92807a",
+    "semantic_hash": "832c09c97b72d0e0891c66e21c92807a"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/components/TagChipsExpandable.kt": {
+    "mtime": 1781622080.2951808,
+    "ast_hash": "0ab7e0e5e59e06d4f3a73d09914bfa25",
+    "semantic_hash": "0ab7e0e5e59e06d4f3a73d09914bfa25"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/components/TagPickerPopup.kt": {
+    "mtime": 1781535187.5149465,
+    "ast_hash": "dcc658269dca3b9f8d325853a2ee4ae8",
+    "semantic_hash": "dcc658269dca3b9f8d325853a2ee4ae8"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/editor/components/TesseraBulletListSpan.kt": {
+    "mtime": 1781623285.8694918,
+    "ast_hash": "07b1b23ce20b697d7f1a2b2d1d2babda",
+    "semantic_hash": "07b1b23ce20b697d7f1a2b2d1d2babda"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/navigation/NotesNavGraph.kt": {
+    "mtime": 1781552832.3232975,
+    "ast_hash": "c7bf5f50f8b742d2bae6cde078df7ef5",
+    "semantic_hash": "c7bf5f50f8b742d2bae6cde078df7ef5"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/HeaderScroll.kt": {
+    "mtime": 1781535187.5156324,
+    "ast_hash": "db978ea620ebf3a813bbe2999e79942f",
+    "semantic_hash": "db978ea620ebf3a813bbe2999e79942f"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/NoteDateFormat.kt": {
+    "mtime": 1781535187.5159726,
+    "ast_hash": "15c7512fd1df1995a33484f04c8827e5",
+    "semantic_hash": "15c7512fd1df1995a33484f04c8827e5"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/NoteGrouping.kt": {
+    "mtime": 1781535187.5164196,
+    "ast_hash": "b476b6a740d2185a78e42ce2b8e37b07",
+    "semantic_hash": "b476b6a740d2185a78e42ce2b8e37b07"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/NotesListScreen.kt": {
+    "mtime": 1781633907.8796802,
+    "ast_hash": "010b757d1a27752b6f421335f3702818",
+    "semantic_hash": "010b757d1a27752b6f421335f3702818"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/NotesListState.kt": {
+    "mtime": 1781535187.5170379,
+    "ast_hash": "7edcbb8bde2dc6daf26c728f4ecbeff2",
+    "semantic_hash": "7edcbb8bde2dc6daf26c728f4ecbeff2"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/NotesListViewModel.kt": {
+    "mtime": 1781596350.276881,
+    "ast_hash": "48ea878c2020a130d464d5421c9efdcc",
+    "semantic_hash": "48ea878c2020a130d464d5421c9efdcc"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/NotesViewMode.kt": {
+    "mtime": 1781535187.517602,
+    "ast_hash": "019e6867a0286ba15a9ae0135123981c",
+    "semantic_hash": "019e6867a0286ba15a9ae0135123981c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/components/BottomSearchBar.kt": {
+    "mtime": 1781535187.517951,
+    "ast_hash": "ebaf11ddcec3e5cffca56a60b46fd0af",
+    "semantic_hash": "ebaf11ddcec3e5cffca56a60b46fd0af"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/components/NoteCard.kt": {
+    "mtime": 1781633953.8107781,
+    "ast_hash": "dd654f43c253908a66f81221bf09b251",
+    "semantic_hash": "dd654f43c253908a66f81221bf09b251"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/components/SwipeableNoteCard.kt": {
+    "mtime": 1781596398.9819531,
+    "ast_hash": "3015437ab18a0ed36db1db71188efafa",
+    "semantic_hash": "3015437ab18a0ed36db1db71188efafa"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/notes/components/TagFilterBar.kt": {
+    "mtime": 1781622276.0747998,
+    "ast_hash": "6858a6fe0e09acc369d9e87ebd27208e",
+    "semantic_hash": "6858a6fe0e09acc369d9e87ebd27208e"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/settings/SettingsScreen.kt": {
+    "mtime": 1781535187.5193224,
+    "ast_hash": "ef8bff7f5a668404ed58aa34d80ee945",
+    "semantic_hash": "ef8bff7f5a668404ed58aa34d80ee945"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/settings/SettingsState.kt": {
+    "mtime": 1781535187.5195713,
+    "ast_hash": "71c963275dbd6ba5f602cb99ca8554da",
+    "semantic_hash": "71c963275dbd6ba5f602cb99ca8554da"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/settings/SettingsViewModel.kt": {
+    "mtime": 1781535187.5200293,
+    "ast_hash": "d89ff5f5d21bc7909ecbcef24bd20179",
+    "semantic_hash": "d89ff5f5d21bc7909ecbcef24bd20179"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/main/java/app/tessera/ui/settings/components/AccountSwitchDialog.kt": {
+    "mtime": 1781535187.5205884,
+    "ast_hash": "cd193698076f919f7f61b5412dfe5dcc",
+    "semantic_hash": "cd193698076f919f7f61b5412dfe5dcc"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/core/text/MarkdownHtmlConverterTest.kt": {
+    "mtime": 1781548739.7996945,
+    "ast_hash": "502559f7f0bc9c77d277ae112442b0c8",
+    "semantic_hash": "502559f7f0bc9c77d277ae112442b0c8"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/core/text/MarkdownPreviewTest.kt": {
+    "mtime": 1781552262.6490703,
+    "ast_hash": "49ec27d42d2e7c3d054dba5e24c020e3",
+    "semantic_hash": "49ec27d42d2e7c3d054dba5e24c020e3"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/core/ui/components/CapsuleScaleTest.kt": {
+    "mtime": 1781535187.5221493,
+    "ast_hash": "654f36f440e151f4b152ffffe1664418",
+    "semantic_hash": "654f36f440e151f4b152ffffe1664418"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/core/ui/components/GlassFabRenderTest.kt": {
+    "mtime": 1781535187.522377,
+    "ast_hash": "ffb4701db7bb813105fe55f03a230554",
+    "semantic_hash": "ffb4701db7bb813105fe55f03a230554"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/data/mapper/NoteMapperTest.kt": {
+    "mtime": 1781535187.5226681,
+    "ast_hash": "35a46ac58ad2e4bfe408354dd45feba4",
+    "semantic_hash": "35a46ac58ad2e4bfe408354dd45feba4"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/data/repository/NotesRepositoryImplTest.kt": {
+    "mtime": 1781539709.6121438,
+    "ast_hash": "5e2f298f04346d315608246e3f84e949",
+    "semantic_hash": "5e2f298f04346d315608246e3f84e949"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/data/repository/NotesRepositoryTagSyncTest.kt": {
+    "mtime": 1781539709.61283,
+    "ast_hash": "828c9679acc7d83c1923f334c10b2d9c",
+    "semantic_hash": "828c9679acc7d83c1923f334c10b2d9c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/data/repository/SyncRepositoryImplTest.kt": {
+    "mtime": 1781535187.5234172,
+    "ast_hash": "b4346029b7fbd4d49d21cf261680107e",
+    "semantic_hash": "b4346029b7fbd4d49d21cf261680107e"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/domain/usecase/HandleAccountSwitchUseCaseTest.kt": {
+    "mtime": 1781535187.5237792,
+    "ast_hash": "cd667943c76e73e24ab7d779e42646d8",
+    "semantic_hash": "cd667943c76e73e24ab7d779e42646d8"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/domain/usecase/NotesUseCasesTest.kt": {
+    "mtime": 1781535187.5241542,
+    "ast_hash": "6c2178c190e6686d14a930535190041b",
+    "semantic_hash": "6c2178c190e6686d14a930535190041b"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/TesseraShowcaseScreenshotTest.kt": {
+    "mtime": 1781552861.2068088,
+    "ast_hash": "7226c5d50772c7cf033814943ff16ebc",
+    "semantic_hash": "7226c5d50772c7cf033814943ff16ebc"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/editor/NoteEditorViewModelTest.kt": {
+    "mtime": 1781550419.6241398,
+    "ast_hash": "292407019bd49a1cf1811657f1d62241",
+    "semantic_hash": "292407019bd49a1cf1811657f1d62241"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/editor/components/MarkdownFormatMenuTest.kt": {
+    "mtime": 1781621760.401445,
+    "ast_hash": "818de89f91ea1aef353042e985359d1b",
+    "semantic_hash": "818de89f91ea1aef353042e985359d1b"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/editor/components/TagChipsExpandableTest.kt": {
+    "mtime": 1781613746.8446982,
+    "ast_hash": "bb7352102c9b63372a3797b9a1f57871",
+    "semantic_hash": "bb7352102c9b63372a3797b9a1f57871"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/notes/CollapsingHeaderRenderTest.kt": {
+    "mtime": 1781613300.3198428,
+    "ast_hash": "9aaba4ee66f0f31a4179a4d9bde5452a",
+    "semantic_hash": "9aaba4ee66f0f31a4179a4d9bde5452a"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/notes/HeaderScrollTest.kt": {
+    "mtime": 1781535187.5257437,
+    "ast_hash": "46a9ac4a1c7258fa31548ed12beb3c1e",
+    "semantic_hash": "46a9ac4a1c7258fa31548ed12beb3c1e"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/notes/NoteDateFormatTest.kt": {
+    "mtime": 1781535187.5260105,
+    "ast_hash": "7a5309df17ba9e29ef20edc9ea7a94a1",
+    "semantic_hash": "7a5309df17ba9e29ef20edc9ea7a94a1"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/notes/NoteGroupingTest.kt": {
+    "mtime": 1781535187.5263326,
+    "ast_hash": "eb6d71d6a491816ee645514b7ba95892",
+    "semantic_hash": "eb6d71d6a491816ee645514b7ba95892"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/notes/NotesListViewModelTest.kt": {
+    "mtime": 1781614161.1088073,
+    "ast_hash": "f25fc2715f3fde7e73b23be3cf550bfb",
+    "semantic_hash": "f25fc2715f3fde7e73b23be3cf550bfb"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/notes/components/NoteCardRenderTest.kt": {
+    "mtime": 1781535187.526887,
+    "ast_hash": "bd815f848b8ccf45e614780cfddf392d",
+    "semantic_hash": "bd815f848b8ccf45e614780cfddf392d"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/java/app/tessera/ui/settings/SettingsViewModelTest.kt": {
+    "mtime": 1781535187.5271132,
+    "ast_hash": "7f7952f9a7360dc08300741d3d51537e",
+    "semantic_hash": "7f7952f9a7360dc08300741d3d51537e"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/build.gradle.kts": {
+    "mtime": 1781535187.531761,
+    "ast_hash": "9552af7d27b5ed7eb80b765075183c3c",
+    "semantic_hash": "9552af7d27b5ed7eb80b765075183c3c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/gradlew": {
+    "mtime": 1781535187.5378058,
+    "ast_hash": "da8caf41291a44f86a85f27f2148970a",
+    "semantic_hash": "da8caf41291a44f86a85f27f2148970a"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/scripts/run-debug-on-emulator.sh": {
+    "mtime": 1781535187.5386636,
+    "ast_hash": "e702924605423a0ce570aee53aba71df",
+    "semantic_hash": "e702924605423a0ce570aee53aba71df"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/scripts/run-maestro-smoke.sh": {
+    "mtime": 1781535187.5388787,
+    "ast_hash": "b7066ab923a549a5c535d88bc4d563f2",
+    "semantic_hash": "b7066ab923a549a5c535d88bc4d563f2"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/settings.gradle.kts": {
+    "mtime": 1781546360.4493363,
+    "ast_hash": "0edffe6db44c1ed5f34eaba85fbdf6a3",
+    "semantic_hash": "0edffe6db44c1ed5f34eaba85fbdf6a3"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/.maestro/showcase-smoke.yaml": {
+    "mtime": 1781535187.4874628,
+    "ast_hash": "cce997db075880df1b518a4714687a8a",
+    "semantic_hash": "cce997db075880df1b518a4714687a8a"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/README.md": {
+    "mtime": 1781535187.4879284,
+    "ast_hash": "1f916e94d5e82f14cb4054a276702058",
+    "semantic_hash": "1f916e94d5e82f14cb4054a276702058"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/PROGRESS.md": {
+    "mtime": 1781535187.5322955,
+    "ast_hash": "15be2f0da4b77331545787b039011281",
+    "semantic_hash": "15be2f0da4b77331545787b039011281"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-14-android-notes.md": {
+    "mtime": 1781535187.5329397,
+    "ast_hash": "ff62ea3ab083e322eec124bb65717f3a",
+    "semantic_hash": "ff62ea3ab083e322eec124bb65717f3a"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-14-reusable-input-and-popup.md": {
+    "mtime": 1781535187.53343,
+    "ast_hash": "37de67a2c8e9d18bce2712eb6e1a923b",
+    "semantic_hash": "37de67a2c8e9d18bce2712eb6e1a923b"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-15-editor-fixes-and-list-polish.md": {
+    "mtime": 1781551518.5463731,
+    "ast_hash": "86bda69c2eddf91040b90bc48ff7c118",
+    "semantic_hash": "86bda69c2eddf91040b90bc48ff7c118"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-15-folders.md": {
+    "mtime": 1781535187.5337195,
+    "ast_hash": "4104febfa9d58e95826b93bd62184e62",
+    "semantic_hash": "4104febfa9d58e95826b93bd62184e62"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-15-notes-list-visual-polish.md": {
+    "mtime": 1781535187.5340638,
+    "ast_hash": "eac532874b3506da4d890a9fdfb42204",
+    "semantic_hash": "eac532874b3506da4d890a9fdfb42204"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-15-rich-markdown-editor.md": {
+    "mtime": 1781535187.5343738,
+    "ast_hash": "8ad58e0cbd1558003b7f7cb1c2d95b4a",
+    "semantic_hash": "8ad58e0cbd1558003b7f7cb1c2d95b4a"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-15-tag-modal-and-live-tags.md": {
+    "mtime": 1781535187.53468,
+    "ast_hash": "de5339bd23e41f7743ae5394b1de8ad8",
+    "semantic_hash": "de5339bd23e41f7743ae5394b1de8ad8"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-15-wysiwyg-editor-and-firestore-sync.md": {
+    "mtime": 1781535213.931725,
+    "ast_hash": "1d0d3557dae50b6bb01adc2def0aa944",
+    "semantic_hash": "1d0d3557dae50b6bb01adc2def0aa944"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-16-editor-ux-polish.md": {
+    "mtime": 1781610572.753495,
+    "ast_hash": "9f7ba189d9e3d20f654257ec7334797c",
+    "semantic_hash": "9f7ba189d9e3d20f654257ec7334797c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-16-settings-theme-and-i18n.md": {
+    "mtime": 1781611244.5597372,
+    "ast_hash": "07c52ec71c8b64bcaa5a6bebec53911e",
+    "semantic_hash": "07c52ec71c8b64bcaa5a6bebec53911e"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-16-shared-element-screen-transitions.md": {
+    "mtime": 1781610989.9257877,
+    "ast_hash": "8e2e2fb21261e6fa0882a0e95d2b0223",
+    "semantic_hash": "8e2e2fb21261e6fa0882a0e95d2b0223"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/2026-06-16-tables-in-editor.md": {
+    "mtime": 1781611135.780046,
+    "ast_hash": "c40ad3bf961eef6abcbe7113e3fa08fd",
+    "semantic_hash": "c40ad3bf961eef6abcbe7113e3fa08fd"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/plans/ROADMAP.md": {
+    "mtime": 1781611273.2400336,
+    "ast_hash": "fced08721ad7c799c447f49d165fa789",
+    "semantic_hash": "fced08721ad7c799c447f49d165fa789"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/specs/2026-06-14-android-notes-design.md": {
+    "mtime": 1781535187.5350397,
+    "ast_hash": "e055c558a3735664440e3a21040a6e93",
+    "semantic_hash": "e055c558a3735664440e3a21040a6e93"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/specs/2026-06-14-reusable-input-and-popup-design.md": {
+    "mtime": 1781535187.53544,
+    "ast_hash": "68cede846bb1effeb4dc17e1d5912d1c",
+    "semantic_hash": "68cede846bb1effeb4dc17e1d5912d1c"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/specs/2026-06-15-wysiwyg-editor-and-firestore-sync-design.md": {
+    "mtime": 1781535187.5357144,
+    "ast_hash": "e3845919935561e5cd870000d2a0c843",
+    "semantic_hash": "e3845919935561e5cd870000d2a0c843"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/docs/superpowers/specs/aztec-spike-findings.md": {
+    "mtime": 1781547788.2560196,
+    "ast_hash": "798c54b7c8ddf60d758843cff8015df9",
+    "semantic_hash": "798c54b7c8ddf60d758843cff8015df9"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/screenshots/ui/glass-fab.png": {
+    "mtime": 1781535187.5274465,
+    "ast_hash": "586e128596b1a6d417e48e4bd314dc5f",
+    "semantic_hash": "586e128596b1a6d417e48e4bd314dc5f"
+  },
+  "/Users/vorislove/.config/superpowers/worktrees/notes/wysiwyg-editor-and-sync/app/src/test/screenshots/ui/tessera-showcase-light.png": {
+    "mtime": 1781535187.531193,
+    "ast_hash": "10fa36aaa4b12c5cef2056081517e704",
+    "semantic_hash": "10fa36aaa4b12c5cef2056081517e704"
+  }
+}
