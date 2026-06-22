@@ -20,7 +20,23 @@ fun markdownToPreviewPlainText(markdown: String): String {
         .map(String::trim)
         .firstOrNull { it.isNotEmpty() }
         ?: return ""
-    return firstLine
+    return sanitizePreviewLine(firstLine)
+}
+
+/**
+ * Like [markdownToPreviewPlainText] but skips the first non-blank line — that line is
+ * the auto-derived title, so showing it twice on a note card is duplication.
+ */
+fun markdownBodyPreviewPlainText(markdown: String): String {
+    val lines = markdown.lineSequence().map(String::trim).filter(String::isNotEmpty).iterator()
+    if (!lines.hasNext()) return ""
+    lines.next() // skip title line
+    if (!lines.hasNext()) return ""
+    return sanitizePreviewLine(lines.next())
+}
+
+private fun sanitizePreviewLine(line: String): String =
+    line
         .replace(BLOCK_PREFIX, "")
         .replace(INLINE_BOLD) { it.groupValues[1] }
         .replace(INLINE_ITALIC) { it.groupValues[1] }
@@ -28,4 +44,3 @@ fun markdownToPreviewPlainText(markdown: String): String {
         .replace(HTML_TAG, "")
         .replace(WHITESPACE, " ")
         .trim()
-}

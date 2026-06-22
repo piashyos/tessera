@@ -40,7 +40,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tessera.R
-import app.tessera.core.text.markdownToPreviewPlainText
+import app.tessera.core.text.markdownBodyPreviewPlainText
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.tessera.TesseraBottomActionBar
 import app.tessera.core.ui.tessera.TesseraChip
@@ -423,7 +423,7 @@ private fun NotesBody(
                         SectionHeader(group = section.group)
                     }
                     items(items = section.notes, key = { it.id.value }) { note ->
-                        val preview = markdownToPreviewPlainText(note.content)
+                        val preview = markdownBodyPreviewPlainText(note.content)
                         TesseraSwipeableNoteCard(
                             modifier = Modifier
                                 .padding(horizontal = 16.dp)
