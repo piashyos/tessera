@@ -79,6 +79,13 @@
     <string name="settings_theme_light_static">Light · Classic</string>
     <string name="settings_theme_dark_static">Dark · Classic</string>
     <string name="settings_theme_static_hint">Classic uses fixed colors (no Material You)</string>
+    <string name="settings_theme_sheet_title">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_dynamic_color">Dynamic color</string>
+    <string name="settings_dynamic_color_subtitle">Use colors from your wallpaper</string>
+    <string name="settings_theme_preview_sample">Aa</string>
     <string name="settings_section_language">Language</string>
     <string name="settings_language_system">System default</string>
     <string name="settings_language_en">English</string>
