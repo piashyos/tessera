@@ -57,7 +57,7 @@ fun TableBlockEditor(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(8.dp),
     ) {
         // The grid scrolls horizontally so adding columns grows the table sideways
@@ -137,7 +137,7 @@ private fun TableRow(
     onColResize: (Int, Float) -> Unit,
     onRowResize: (Float) -> Unit,
 ) {
-    val outline = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val outline = MaterialTheme.colorScheme.outlineVariant
     Box {
         Row(modifier = Modifier.height(heightDp.dp)) {
             cells.forEachIndexed { idx, value ->
