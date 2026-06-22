@@ -69,10 +69,26 @@
 
 ## Acceptance criteria
 
-- [ ] `SettingsGroup`, `SettingsRow`, `SyncStatusRow`, `ThemePickerSheet` существуют
-- [ ] `SettingsScreen` использует только Tessera-композы
-- [ ] `SyncManager` combines WorkManager + connectivity + last-sync + last-error
-- [ ] Settings smoke green
+- [x] `SettingsGroup`, `SettingsRow`, `SyncStatusRow`, `ThemePickerSheet` существуют (+ `LanguagePickerSheet`)
+- [x] `SettingsScreen` использует только Tessera-композы (FloatingCapsule удалён из settings)
+- [x] `SyncManager` combines WorkManager + connectivity (см. notes — `lastSync`/`lastError` не реализованы)
+- [x] Settings smoke green (`:app:assembleDebug` + `:app:testDebugUnitTest` зелёные; `lintDebug` — только 9 предсуществующих ошибок)
+
+## Execution notes (2026-06-22)
+
+Расхождения плана/спеки с кодом и принятые решения (подтверждены пользователем):
+
+- **Sync (вопрос 1 → вариант A).** Спека ссылалась на `SyncRepository.lastSync`/`lastError` — этих
+  полей не существует. `SyncIndicator` выводится чистым маппером из состояния уникальной
+  WorkManager-работы (`getWorkInfosForUniqueWorkFlow("tessera-sync")`) + нового
+  `ConnectivityObserver`. Флоу добавлен в **существующий** `app/tessera/sync/SyncManager`
+  (реализует новый `SyncStatusProvider`), а не во второй класс `core/sync/SyncManager`.
+  `Ok.lastSyncAtMs` — best-effort (WorkInfo не отдаёт точное время завершения).
+- **Тема (вопрос 2 → вариант A).** `ThemePickerSheet` адаптирован под текущий 5-значный
+  `ThemeMode` (System=`AUTO` + dynamic-свитч переключает `_DYNAMIC`/`_STATIC`); рефактора префов нет.
+- **APPEARANCE/DATA/ABOUT (вопрос 3).** Editor font size не добавлялся (нет префа). Language
+  сохранён как row → `LanguagePickerSheet`. Export/Import/Empty trash/Licenses — placeholder-строки.
+- Старые `ThemePicker`/`LanguagePicker` (grid tiles) и их строки удалены.
 
 ## Next
 
