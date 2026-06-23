@@ -4,12 +4,14 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import app.tessera.data.local.dao.FolderDao
 import app.tessera.data.local.dao.NoteDao
+import app.tessera.data.local.dao.SharedMemberDao
 import app.tessera.data.local.dao.TagDao
 import app.tessera.data.local.entity.FolderEntity
 import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.local.entity.NoteFolderCrossRef
 import app.tessera.data.local.entity.NoteFtsEntity
 import app.tessera.data.local.entity.NoteTagCrossRef
+import app.tessera.data.local.entity.SharedMemberEntity
 import app.tessera.data.local.entity.TagEntity
 
 @Database(
@@ -20,8 +22,9 @@ import app.tessera.data.local.entity.TagEntity
         NoteFtsEntity::class,
         FolderEntity::class,
         NoteFolderCrossRef::class,
+        SharedMemberEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -30,4 +33,6 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
 
     abstract fun folderDao(): FolderDao
+
+    abstract fun sharedMemberDao(): SharedMemberDao
 }

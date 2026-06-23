@@ -23,4 +23,13 @@ data class NoteEntity(
     val syncedAt: Long?,
     val ownerId: String?,
     val isArchived: Boolean = false,
-)
+    /** "PRIVATE" | "SHARED" — whether the note lives in the owner's private subtree or `sharedNotes`. */
+    val shareState: String = SHARE_STATE_PRIVATE,
+    /** Current user's role (OWNER/MANAGER/EDITOR/VIEWER) when shared; null while private. */
+    val myRole: String? = null,
+) {
+    companion object {
+        const val SHARE_STATE_PRIVATE = "PRIVATE"
+        const val SHARE_STATE_SHARED = "SHARED"
+    }
+}

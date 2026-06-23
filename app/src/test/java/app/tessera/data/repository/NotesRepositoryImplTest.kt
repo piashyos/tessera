@@ -329,6 +329,8 @@ private class FakeNoteDao : NoteDao {
     private val deletedFlow = MutableStateFlow(emptyList<NoteEntity>())
     override fun observeDeleted(): Flow<List<NoteEntity>> = deletedFlow
 
+    override fun observeShared(): Flow<List<NoteEntity>> = MutableStateFlow(emptyList())
+
     override fun observeById(id: String): Flow<NoteEntity?> =
         noteFlows.getOrPut(id) { MutableStateFlow(notes[id]) }
 
@@ -374,6 +376,12 @@ private class FakeNoteDao : NoteDao {
     override suspend fun setArchived(id: String, archived: Boolean, ts: Long) {
         val current = notes[id] ?: return
         notes[id] = current.copy(isArchived = archived, updatedAt = ts, syncedAt = null)
+        emitChanges(id)
+    }
+
+    override suspend fun setShareState(id: String, shareState: String, myRole: String?) {
+        val current = notes[id] ?: return
+        notes[id] = current.copy(shareState = shareState, myRole = myRole)
         emitChanges(id)
     }
 

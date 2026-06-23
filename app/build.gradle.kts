@@ -51,6 +51,12 @@ android {
         }
     }
     buildFeatures { compose = true }
+    sourceSets {
+        // Exported Room schemas must sit in the merged debug assets so Robolectric-backed
+        // MigrationTestHelper can load them (it reads `mergeDebugAssets`, not the test source set).
+        // Scoped to debug only — never shipped in release.
+        getByName("debug") { assets.srcDirs(files("$projectDir/schemas")) }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -124,6 +130,7 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.room.testing)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.turbine)

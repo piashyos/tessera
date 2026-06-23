@@ -55,7 +55,7 @@ snapshot в RTDB + content в Firestore `sharedNotes`; подрезка `ops`; �
 
 | Фаза | Название | Статус | План | Коммит/PR | Дата | Заметки |
 |------|----------|--------|------|-----------|------|---------|
-| 1 | Бэкенд доступа | ⬜ Todo | — | — | — | |
+| 1 | Бэкенд доступа | 🟡 In progress | — | — | 2026-06-23 | Сделаны п.1–2: Room-миграция 5→6 (`shareState`/`myRole`, таблица `shared_members`, `SharedMemberDao`, тест миграции) + domain-модель прав (`ShareRole`/`ShareMember`/`ShareState`, тесты). Осталось: data sources, sync, Firestore rules. |
 | 2 | Домен и UseCases | ⬜ Todo | — | — | — | |
 | 3 | UI: «Общие» + аватары | ⬜ Todo | — | — | — | |
 | 4 | UI: модалка + меню | ⬜ Todo | — | — | — | |

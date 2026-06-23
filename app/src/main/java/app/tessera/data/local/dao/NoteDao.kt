@@ -30,6 +30,13 @@ interface NoteDao {
     )
     fun observeDeleted(): Flow<List<NoteEntity>>
 
+    @Query(
+        "SELECT * FROM notes " +
+            "WHERE deletedAt IS NULL AND shareState = 'SHARED' " +
+            "ORDER BY isPinned DESC, updatedAt DESC",
+    )
+    fun observeShared(): Flow<List<NoteEntity>>
+
     @Query("SELECT * FROM notes WHERE id = :id")
     fun observeById(id: String): Flow<NoteEntity?>
 
@@ -63,6 +70,9 @@ interface NoteDao {
 
     @Query("UPDATE notes SET isArchived = :archived, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
     suspend fun setArchived(id: String, archived: Boolean, ts: Long)
+
+    @Query("UPDATE notes SET shareState = :shareState, myRole = :myRole WHERE id = :id")
+    suspend fun setShareState(id: String, shareState: String, myRole: String?)
 
     @Query("DELETE FROM notes WHERE deletedAt IS NOT NULL AND deletedAt < :threshold")
     suspend fun purgeOldTombstones(threshold: Long): Int
