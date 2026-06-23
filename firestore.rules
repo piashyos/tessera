@@ -63,9 +63,13 @@ service cloud.firestore {
                  .affectedKeys().hasAny(['members', 'memberIds']);
       }
       // Участник удаляет самого себя из members/memberIds (выход из заметки).
+      // Выходящий вправе менять ТОЛЬКО ключи членства — без piggyback-правок
+      // контента/deletedAt (иначе любой участник мог бы удалить заметку «для всех»).
       function leftSelf() {
         return (request.auth.uid in resource.data.memberIds)
-               && !(request.auth.uid in request.resource.data.memberIds);
+               && !(request.auth.uid in request.resource.data.memberIds)
+               && request.resource.data.diff(resource.data)
+                    .affectedKeys().hasOnly(['members', 'memberIds']);
       }
 
       allow read: if isMember();

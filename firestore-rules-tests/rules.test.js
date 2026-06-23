@@ -245,6 +245,39 @@ describe('sharedNotes leave self', () => {
       }),
     );
   });
+
+  test('editor cannot set deletedAt while leaving', async () => {
+    await seedNote();
+    await assertFails(
+      updateDoc(noteRef(EDITOR), {
+        [`members.${EDITOR}`]: deleteField(),
+        memberIds: arrayRemove(EDITOR),
+        deletedAt: 99,
+      }),
+    );
+  });
+
+  test('viewer cannot set deletedAt while leaving', async () => {
+    await seedNote();
+    await assertFails(
+      updateDoc(noteRef(VIEWER), {
+        [`members.${VIEWER}`]: deleteField(),
+        memberIds: arrayRemove(VIEWER),
+        deletedAt: 99,
+      }),
+    );
+  });
+
+  test('member cannot edit content while leaving', async () => {
+    await seedNote();
+    await assertFails(
+      updateDoc(noteRef(EDITOR), {
+        [`members.${EDITOR}`]: deleteField(),
+        memberIds: arrayRemove(EDITOR),
+        title: 'hijacked',
+      }),
+    );
+  });
 });
 
 describe('sharedNotes delete', () => {
