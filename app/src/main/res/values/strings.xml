@@ -54,6 +54,9 @@
     <string name="delete_all_confirm_title">Delete for everyone?</string>
     <string name="delete_all_confirm_message">This note will be removed for all members.</string>
     <string name="delete_all_confirm_action">Delete</string>
+    <string name="share_failed_title">Sharing failed</string>
+    <string name="share_failed_message">This action couldn\'t be completed. Check your connection and try again.</string>
+    <string name="share_failed_ok">OK</string>
     <string name="toolbar_bold">Bold</string>
     <string name="toolbar_bullet">Bullet list</string>
     <string name="toolbar_checklist">Checklist item</string>

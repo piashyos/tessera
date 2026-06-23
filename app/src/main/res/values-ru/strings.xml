@@ -54,6 +54,9 @@
     <string name="delete_all_confirm_title">Удалить для всех?</string>
     <string name="delete_all_confirm_message">Заметка будет удалена у всех участников.</string>
     <string name="delete_all_confirm_action">Удалить</string>
+    <string name="share_failed_title">Не удалось поделиться</string>
+    <string name="share_failed_message">Действие не выполнено. Проверьте подключение и повторите попытку.</string>
+    <string name="share_failed_ok">ОК</string>
     <string name="toolbar_bold">Жирный</string>
     <string name="toolbar_bullet">Список</string>
     <string name="toolbar_checklist">Пункт чеклиста</string>

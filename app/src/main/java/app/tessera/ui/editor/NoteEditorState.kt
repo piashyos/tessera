@@ -29,6 +29,8 @@ data class NoteEditorState(
     val members: List<ShareMember> = emptyList(),
     val membersSheetVisible: Boolean = false,
     val inviteState: InviteUiState = InviteUiState.Idle,
+    /** One-shot message for a share action that failed; null when there's nothing to surface. */
+    val shareError: String? = null,
 ) {
     /** Viewers see the note but cannot type — the editor body is rendered read-only. */
     val isReadOnly: Boolean get() = isShared && myRole == ShareRole.VIEWER

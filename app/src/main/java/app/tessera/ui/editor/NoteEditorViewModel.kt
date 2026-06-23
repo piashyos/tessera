@@ -81,7 +81,7 @@ class NoteEditorViewModel @Inject constructor(
                         tags = note.tags.map { it.name },
                         isPinned = note.isPinned,
                         updatedAt = note.updatedAt,
-                        isOwner = note.ownerId != null && note.ownerId == me,
+                        isOwner = me != null && (note.ownerId == null || note.ownerId == me),
                         isLoading = false,
                     )
                 }
@@ -166,10 +166,19 @@ class NoteEditorViewModel @Inject constructor(
     /** Owner promotes a private note to shared, then opens the members sheet to invite people. */
     fun makeShared() {
         viewModelScope.launch {
-            shareNoteUseCase(noteId).onSuccess {
-                _state.update { it.copy(membersSheetVisible = true) }
-            }
+            shareNoteUseCase(noteId)
+                .onSuccess {
+                    _state.update { it.copy(membersSheetVisible = true) }
+                }
+                .onFailure { e ->
+                    _state.update { it.copy(shareError = e.message ?: "Couldn't share this note") }
+                }
         }
+    }
+
+    /** Dismisses the one-shot [NoteEditorState.shareError] after the UI has shown it. */
+    fun clearShareError() {
+        _state.update { it.copy(shareError = null) }
     }
 
     fun openMembersSheet() {
@@ -208,33 +217,49 @@ class NoteEditorViewModel @Inject constructor(
     }
 
     fun changeRole(uid: UserId, role: ShareRole) {
-        viewModelScope.launch { changeMemberRoleUseCase(noteId, uid, role) }
+        viewModelScope.launch {
+            changeMemberRoleUseCase(noteId, uid, role).onFailure { e ->
+                _state.update { it.copy(shareError = e.message ?: "Couldn't change this member's role") }
+            }
+        }
     }
 
     fun removeMember(uid: UserId) {
-        viewModelScope.launch { removeMemberUseCase(noteId, uid) }
+        viewModelScope.launch {
+            removeMemberUseCase(noteId, uid).onFailure { e ->
+                _state.update { it.copy(shareError = e.message ?: "Couldn't remove this member") }
+            }
+        }
     }
 
     /** Current user leaves the shared note. The screen pops back afterwards. */
     fun leave() {
         autosaveJob?.cancel()
         autosaveJob = null
-        viewModelScope.launch { leaveSharedNoteUseCase(noteId) }
+        viewModelScope.launch {
+            leaveSharedNoteUseCase(noteId).onFailure { e ->
+                _state.update { it.copy(shareError = e.message ?: "Couldn't leave this note") }
+            }
+        }
     }
 
     /** Owner returns the note to their private subtree; the editor stays open on the now-private note. */
     fun unshare() {
         viewModelScope.launch {
-            unshareNoteUseCase(noteId).onSuccess {
-                _state.update {
-                    it.copy(
-                        membersSheetVisible = false,
-                        isShared = false,
-                        myRole = null,
-                        members = emptyList(),
-                    )
+            unshareNoteUseCase(noteId)
+                .onSuccess {
+                    _state.update {
+                        it.copy(
+                            membersSheetVisible = false,
+                            isShared = false,
+                            myRole = null,
+                            members = emptyList(),
+                        )
+                    }
                 }
-            }
+                .onFailure { e ->
+                    _state.update { it.copy(shareError = e.message ?: "Couldn't unshare this note") }
+                }
         }
     }
 

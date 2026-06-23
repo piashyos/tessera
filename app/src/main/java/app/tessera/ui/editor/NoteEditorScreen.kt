@@ -98,6 +98,7 @@ fun NoteEditorScreen(
     onRemoveMember: (app.tessera.domain.model.UserId) -> Unit = {},
     onInviteInputChanged: () -> Unit = {},
     onDismissMembers: () -> Unit = {},
+    onClearShareError: () -> Unit = {},
 ) {
     val haptics = rememberHaptics()
     val converter = remember { MarkdownHtmlConverter() }
@@ -413,6 +414,27 @@ fun NoteEditorScreen(
                 destructive = true,
                 onConfirm = { deleteForAllConfirmVisible = false; onDeleteForAll() },
                 onDismiss = { deleteForAllConfirmVisible = false },
+            )
+        }
+
+        // Surfaces a failed share action (e.g. denied by security rules, or offline) so the
+        // remote-first share doesn't silently do nothing.
+        val shareError = state.shareError
+        if (shareError != null) {
+            AlertDialog(
+                onDismissRequest = onClearShareError,
+                title = { Text(stringResource(R.string.share_failed_title)) },
+                text = {
+                    Text(
+                        shareError.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.share_failed_message),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = onClearShareError) {
+                        Text(stringResource(R.string.share_failed_ok))
+                    }
+                },
             )
         }
     }

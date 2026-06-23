@@ -250,6 +250,49 @@ class NoteEditorViewModelTest {
         }
 
     @Test
+    fun `null-owner note is owned by the signed-in user and can be made shared`() =
+        runTest(dispatcher.scheduler) {
+            val note = sampleNote("p-null", owner = null)
+            val repo = FakeEditorRepository(notes = listOf(note))
+            val vm = repo.createViewModel(noteId = "p-null", currentUser = "me")
+            runCurrent()
+
+            val state = vm.state.value
+            assertTrue(state.isOwner, "signed-in user owns their null-owner note")
+            assertTrue(state.canMakeShared)
+        }
+
+    @Test
+    fun `null-owner note is not owned when signed out`() =
+        runTest(dispatcher.scheduler) {
+            val note = sampleNote("p-null-out", owner = null)
+            val repo = FakeEditorRepository(notes = listOf(note))
+            val vm = repo.createViewModel(noteId = "p-null-out", currentUser = null)
+            runCurrent()
+
+            assertFalse(vm.state.value.isOwner)
+        }
+
+    @Test
+    fun `makeShared failure surfaces shareError and clearShareError resets it`() =
+        runTest(dispatcher.scheduler) {
+            val note = sampleNote("p-fail", owner = "me")
+            val repo = FakeEditorRepository(notes = listOf(note))
+            repo.shareResult = Result.failure(IllegalStateException("PERMISSION_DENIED"))
+            val vm = repo.createViewModel(noteId = "p-fail", currentUser = "me")
+            runCurrent()
+
+            vm.makeShared()
+            runCurrent()
+
+            assertEquals("PERMISSION_DENIED", vm.state.value.shareError)
+            assertFalse(vm.state.value.membersSheetVisible)
+
+            vm.clearShareError()
+            assertEquals(null, vm.state.value.shareError)
+        }
+
+    @Test
     fun `makeShared shares the note and opens the members sheet`() =
         runTest(dispatcher.scheduler) {
             val note = sampleNote("p-2", owner = "me")
@@ -413,6 +456,7 @@ private class FakeEditorRepository(
     val roleCalls = mutableListOf<Pair<UserId, ShareRole>>()
     val removeCalls = mutableListOf<UserId>()
     var inviteResult: Result<InviteResult> = Result.success(InviteResult.Added)
+    var shareResult: Result<Unit> = Result.success(Unit)
 
     override fun observeNotes(): Flow<List<Note>> = notesFlow
     override fun observeNote(id: NoteId): Flow<Note?> =
@@ -440,7 +484,7 @@ private class FakeEditorRepository(
     override suspend fun setArchived(id: NoteId, archived: Boolean) {}
     override suspend fun shareNote(id: NoteId): Result<Unit> {
         shareCalls += id
-        return Result.success(Unit)
+        return shareResult
     }
     override suspend fun inviteByEmail(
         id: NoteId,
