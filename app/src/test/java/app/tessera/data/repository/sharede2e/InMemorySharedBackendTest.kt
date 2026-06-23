@@ -101,6 +101,58 @@ class InMemorySharedBackendTest {
     }
 
     @Test
+    fun `pushSharedNote is rejected for a viewer`() = runTest {
+        backend.sharedFor("alice").shareNote("alice", sharedNote())
+        backend.sharedFor("alice").addMember(
+            "n1",
+            "bob",
+            RemoteShareMember(
+                role = "VIEWER",
+                displayName = "Bob",
+                email = "bob@x.io",
+                joinedAt = 2L,
+            ),
+        )
+
+        val edited = sharedNote().copy(title = "Sneaky", content = "Sneaky edit", updatedAt = 99L)
+        val error =
+            try {
+                backend.sharedFor("bob").pushSharedNote(edited)
+                null
+            } catch (e: IllegalStateException) {
+                e
+            }
+        assertTrue("expected a permission-denied throw", error != null)
+
+        // Content unchanged: the rejected push must not mutate the canonical doc.
+        val note = backend.sharedFor("alice").fetchAll("alice").single()
+        assertEquals("Title", note.title)
+        assertEquals("Body", note.content)
+    }
+
+    @Test
+    fun `pushSharedNote succeeds for an editor`() = runTest {
+        backend.sharedFor("alice").shareNote("alice", sharedNote())
+        backend.sharedFor("alice").addMember(
+            "n1",
+            "bob",
+            RemoteShareMember(
+                role = "EDITOR",
+                displayName = "Bob",
+                email = "bob@x.io",
+                joinedAt = 2L,
+            ),
+        )
+
+        val edited = sharedNote().copy(title = "Edited", content = "New body", updatedAt = 99L)
+        backend.sharedFor("bob").pushSharedNote(edited)
+
+        val note = backend.sharedFor("alice").fetchAll("alice").single()
+        assertEquals("Edited", note.title)
+        assertEquals("New body", note.content)
+    }
+
+    @Test
     fun `removeMember hides the note from the removed user`() = runTest {
         backend.sharedFor("alice").shareNote("alice", sharedNote())
         backend.sharedFor("alice").addMember(

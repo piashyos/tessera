@@ -8,7 +8,9 @@ import app.tessera.data.remote.RemoteSharedNote
 import app.tessera.data.remote.RemoteSharedNotesDataSource
 import app.tessera.data.remote.UserDirectoryDataSource
 import app.tessera.data.remote.emailKey
+import app.tessera.domain.model.ShareRole
 import app.tessera.domain.model.UserId
+import app.tessera.domain.model.canEditContent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -21,7 +23,9 @@ import kotlinx.coroutines.flow.map
  *
  * Behaviour mirrors [app.tessera.data.remote.FirestoreSharedNotesClient]: membership operations
  * mutate `members`/`memberIds` honestly (unlike the no-op fakes used by SyncRepositoryImplTest),
- * and [RemoteSharedNotesDataSource.pushSharedNote] touches only content fields.
+ * and [RemoteSharedNotesDataSource.pushSharedNote] touches only content fields. Like the real
+ * Firestore security rules, a content push is rejected (throws) when the calling uid is not a
+ * member of the note or holds a role that may not edit content (VIEWER).
  */
 class InMemorySharedBackend {
     /** Canonical `sharedNotes/{id}` documents, keyed by note id. */
@@ -67,7 +71,7 @@ class InMemorySharedBackend {
     /** A [RemoteNotesDataSource] view over [uid]'s private subtree. */
     fun privateFor(uid: String): RemoteNotesDataSource = PrivateAdapter(uid)
 
-    private inner class SharedAdapter(@Suppress("unused") private val uid: String) :
+    private inner class SharedAdapter(private val uid: String) :
         RemoteSharedNotesDataSource {
         override suspend fun shareNote(ownerUid: String, note: RemoteSharedNote) {
             sharedNotes[note.id] = note
@@ -114,6 +118,12 @@ class InMemorySharedBackend {
         override suspend fun pushSharedNote(note: RemoteSharedNote) {
             // Content fields only; membership/ownerId preserved (mirrors the real client).
             val existing = sharedNotes[note.id] ?: return
+            // Faithful to Firestore security rules: a content write is only allowed for a member
+            // whose role may edit content (OWNER/MANAGER/EDITOR). A VIEWER or non-member is rejected.
+            val callerRole = ShareRole.fromWire(existing.members[uid]?.role)
+            check(existing.members.containsKey(uid) && callerRole.canEditContent) {
+                "permission denied: $uid may not edit ${note.id}"
+            }
             sharedNotes[note.id] =
                 existing.copy(
                     title = note.title,
