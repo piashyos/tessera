@@ -221,6 +221,8 @@ private class FakeNotesRepository(
     private val searchResults: Map<String, List<Note>> = emptyMap(),
 ) : NotesRepository {
     private val notesFlow = MutableStateFlow(initialNotes)
+    val archivedFlow = MutableStateFlow<List<Note>>(emptyList())
+    val archivedCalls = mutableListOf<Pair<NoteId, Boolean>>()
 
     val searchQueries = mutableListOf<String>()
     var observeSubscriptions = 0
@@ -245,9 +247,23 @@ private class FakeNotesRepository(
 
     override suspend fun deleteNote(id: NoteId) {}
 
+    val permanentlyDeletedIds = mutableListOf<NoteId>()
+    override suspend fun permanentlyDeleteNote(id: NoteId) {
+        permanentlyDeletedIds += id
+    }
+
     override suspend fun restoreNote(id: NoteId) {}
 
     override suspend fun togglePin(id: NoteId) {}
+
+    override fun observeArchivedNotes(): Flow<List<Note>> = archivedFlow
+
+    val deletedFlow = MutableStateFlow<List<Note>>(emptyList())
+    override fun observeDeletedNotes(): Flow<List<Note>> = deletedFlow
+
+    override suspend fun setArchived(id: NoteId, archived: Boolean) {
+        archivedCalls += id to archived
+    }
 
     fun createViewModel(): NotesListViewModel {
         val folderRepo = app.tessera.test.fakes.FakeFolderRepository()
@@ -256,8 +272,19 @@ private class FakeNotesRepository(
             searchNotesUseCase = SearchNotesUseCase(this),
             createNoteUseCase = CreateNoteUseCase(this),
             deleteNoteUseCase = DeleteNoteUseCase(this),
+            permanentlyDeleteNoteUseCase = app.tessera.domain.usecase.PermanentlyDeleteNoteUseCase(
+                this,
+                FakeSyncRepository(),
+                FakeAuthRepository(),
+            ),
             restoreNoteUseCase = RestoreNoteUseCase(this),
             togglePinUseCase = TogglePinUseCase(this),
+            getNoteUseCase = app.tessera.domain.usecase.GetNoteUseCase(this),
+            updateNoteUseCase = app.tessera.domain.usecase.UpdateNoteUseCase(this),
+            duplicateNoteUseCase = app.tessera.domain.usecase.DuplicateNoteUseCase(this),
+            archiveNoteUseCase = app.tessera.domain.usecase.ArchiveNoteUseCase(this),
+            observeArchivedNotesUseCase = app.tessera.domain.usecase.ObserveArchivedNotesUseCase(this),
+            observeDeletedNotesUseCase = app.tessera.domain.usecase.ObserveDeletedNotesUseCase(this),
             observeFoldersUseCase = app.tessera.domain.usecase.ObserveFoldersUseCase(folderRepo),
             observeFolderTreeUseCase = app.tessera.domain.usecase.ObserveFolderTreeUseCase(folderRepo),
             observeNotesInFolderUseCase = app.tessera.domain.usecase.ObserveNotesInFolderUseCase(folderRepo),
@@ -276,10 +303,12 @@ private class FakeUserPreferences : app.tessera.core.preferences.UserPreferences
     private val theme = MutableStateFlow(app.tessera.core.preferences.ThemeMode.AUTO)
     private val lang = MutableStateFlow("")
     private val viewMode = MutableStateFlow(NotesViewMode.List)
+    private val recent = MutableStateFlow<List<String>>(emptyList())
     override val themeMode: Flow<app.tessera.core.preferences.ThemeMode> get() = theme
     override val cachedThemeMode: app.tessera.core.preferences.ThemeMode get() = theme.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<NotesViewMode> get() = viewMode
+    override val recentSearches: Flow<List<String>> get() = recent
     override suspend fun setThemeMode(mode: app.tessera.core.preferences.ThemeMode) {
         theme.value = mode
     }
@@ -291,6 +320,35 @@ private class FakeUserPreferences : app.tessera.core.preferences.UserPreferences
     override suspend fun setNotesViewMode(mode: NotesViewMode) {
         viewMode.value = mode
     }
+
+    override suspend fun addRecentSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return
+        recent.value = (listOf(trimmed) + recent.value.filterNot { it.equals(trimmed, ignoreCase = true) }).take(8)
+    }
+
+    override suspend fun removeRecentSearch(query: String) {
+        recent.value = recent.value.filterNot { it.equals(query, ignoreCase = true) }
+    }
+
+    override suspend fun clearRecentSearches() {
+        recent.value = emptyList()
+    }
+}
+
+private class FakeSyncRepository : app.tessera.domain.repository.SyncRepository {
+    override suspend fun syncNow(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun purgeTombstones(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun purgeLocalTombstones(): Result<Unit> = Result.success(Unit)
+    override suspend fun permanentlyDelete(uid: UserId, ids: List<NoteId>): Result<Unit> = Result.success(Unit)
+    override fun observeRemote(uid: UserId): Flow<Unit> = flowOf(Unit)
+}
+
+private class FakeAuthRepository : app.tessera.domain.repository.AuthRepository {
+    override val currentUser = MutableStateFlow<UserId?>(null)
+    override val currentProfile = MutableStateFlow<app.tessera.domain.model.UserProfile?>(null)
+    override suspend fun signIn(): Result<UserId> = Result.failure(UnsupportedOperationException())
+    override suspend fun signOut() {}
 }
 
 private fun sampleNote(

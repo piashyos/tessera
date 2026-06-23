@@ -57,7 +57,7 @@ interface FolderDao {
         """
         SELECT notes.* FROM notes
         JOIN note_folders ON notes.id = note_folders.noteId
-        WHERE note_folders.folderId = :folderId AND notes.deletedAt IS NULL
+        WHERE note_folders.folderId = :folderId AND notes.deletedAt IS NULL AND notes.isArchived = 0
         ORDER BY notes.isPinned DESC, notes.updatedAt DESC
         """,
     )

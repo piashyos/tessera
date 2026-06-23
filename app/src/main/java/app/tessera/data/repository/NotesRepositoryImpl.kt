@@ -97,6 +97,12 @@ class NotesRepositoryImpl @Inject constructor(
         syncScheduler.requestSync()
     }
 
+    override suspend fun permanentlyDeleteNote(id: NoteId) {
+        tagDao.clearTagsForNote(id.value)
+        noteDao.hardDelete(id.value)
+        syncScheduler.requestSync()
+    }
+
     override suspend fun restoreNote(id: NoteId) {
         noteDao.restore(id.value, clock.nowMs())
         syncScheduler.requestSync()
@@ -105,6 +111,19 @@ class NotesRepositoryImpl @Inject constructor(
     override suspend fun togglePin(id: NoteId) {
         val current = getNote(id) ?: return
         noteDao.setPinned(id.value, !current.isPinned, clock.nowMs())
+        syncScheduler.requestSync()
+    }
+
+    override fun observeArchivedNotes(): Flow<List<Note>> =
+        combine(noteDao.observeArchived(), tagDao.observeAllCrossRefs()) { notes, _ -> notes }
+            .map { notes -> notes.map { note -> toDomain(note) }.filterNot(Note::isBlankDraft) }
+
+    override fun observeDeletedNotes(): Flow<List<Note>> =
+        combine(noteDao.observeDeleted(), tagDao.observeAllCrossRefs()) { notes, _ -> notes }
+            .map { notes -> notes.map { note -> toDomain(note) }.filterNot(Note::isBlankDraft) }
+
+    override suspend fun setArchived(id: NoteId, archived: Boolean) {
+        noteDao.setArchived(id.value, archived, clock.nowMs())
         syncScheduler.requestSync()
     }
 

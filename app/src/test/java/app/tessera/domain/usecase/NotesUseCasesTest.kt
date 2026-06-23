@@ -48,6 +48,21 @@ class NotesUseCasesTest {
         }
 
     @Test
+    fun `duplicate use case copies content and tags into a new note`() =
+        runTest {
+            val repository = FakeNotesRepository()
+            val useCase = DuplicateNoteUseCase(repository)
+
+            val result = useCase(repository.sampleNote.id)
+
+            // Copy is created from the source's content/tags but as a fresh (createdNote) id.
+            assertEquals(repository.createdNote.id, result?.id)
+            assertEquals(repository.sampleNote.content, repository.lastUpdatedNote?.content)
+            assertEquals(repository.sampleNote.tags, repository.lastUpdatedNote?.tags)
+            assertEquals(false, repository.lastUpdatedNote?.isPinned)
+        }
+
+    @Test
     fun `update use case forwards note`() =
         runTest {
             val repository = FakeNotesRepository()
@@ -159,6 +174,10 @@ private class FakeNotesRepository : NotesRepository {
         lastDeletedId = id
     }
 
+    override suspend fun permanentlyDeleteNote(id: NoteId) {
+        lastDeletedId = id
+    }
+
     override suspend fun restoreNote(id: NoteId) {
         lastRestoredId = id
     }
@@ -166,4 +185,10 @@ private class FakeNotesRepository : NotesRepository {
     override suspend fun togglePin(id: NoteId) {
         lastToggledId = id
     }
+
+    override fun observeArchivedNotes(): Flow<List<Note>> = MutableStateFlow(emptyList())
+
+    override fun observeDeletedNotes(): Flow<List<Note>> = MutableStateFlow(emptyList())
+
+    override suspend fun setArchived(id: NoteId, archived: Boolean) {}
 }

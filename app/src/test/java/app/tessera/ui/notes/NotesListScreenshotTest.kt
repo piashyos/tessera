@@ -106,12 +106,13 @@ class NotesListScreenshotTest {
                 NoteActionsSheet(
                     noteTitle = "Material You redesign",
                     isPinned = true,
+                    isArchived = false,
                     onPinToggle = {},
+                    onSelect = {},
                     onMoveToFolder = {},
                     onAddTags = {},
                     onDuplicate = {},
-                    onShare = {},
-                    onArchive = {},
+                    onArchiveToggle = {},
                     onDelete = {},
                     onDismiss = {},
                 )
@@ -132,6 +133,7 @@ class NotesListScreenshotTest {
             onFolderSelect = {},
             onCreateRootFolder = {},
             onCreateSubfolder = {},
+            onDeleteFolder = {},
             onSettingsClick = {},
         ) {
             Surface(modifier = Modifier.fillMaxSize()) {}

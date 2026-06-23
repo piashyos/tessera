@@ -167,6 +167,7 @@ class NoteMapperTest {
                 deletedAt = 300L,
                 syncedAt = 400L,
                 ownerId = "user-6",
+                isArchived = true,
             )
 
         val remote = mapper.toRemote(entity, emptyList())
@@ -174,5 +175,6 @@ class NoteMapperTest {
 
         assertEquals(entity.copy(syncedAt = null), rebuilt)
         assertNull(rebuilt.syncedAt)
+        assertEquals(true, rebuilt.isArchived)
     }
 }

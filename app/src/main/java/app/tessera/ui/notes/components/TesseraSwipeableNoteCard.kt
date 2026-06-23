@@ -40,6 +40,7 @@ fun TesseraSwipeableNoteCard(
   onArchive: () -> Unit,
   onDelete: () -> Unit,
   modifier: Modifier = Modifier,
+  selected: Boolean = false,
 ) {
   val state = rememberSwipeToDismissBoxState(
     confirmValueChange = { value ->
@@ -87,6 +88,7 @@ fun TesseraSwipeableNoteCard(
       isPinned = isPinned,
       onClick = onClick,
       onLongClick = onLongClick,
+      selected = selected,
     )
   }
 }

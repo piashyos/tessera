@@ -302,18 +302,20 @@ fun RichNoteBody(
             // "insert table" action uses this to place the table at the cursor, not the end.
             editor.setOnFocusChangeListener { _, hasFocus -> currentOnFocusChanged(hasFocus) }
 
+            // Convert the editor's current HTML to markdown and push it upward. Marks the
+            // just-flushed markdown as already loaded so the next recomposition (markdownKey
+            // will now equal this) doesn't trigger a self-inflicted fromHtml round-trip.
+            // Non-state write — no extra recomposition is triggered, which keeps lastLoaded
+            // and markdownKey (via state.content) updating in the same Compose frame.
+            fun flushHtmlNow() {
+                val md = currentHtmlToMarkdown(editor.toHtml())
+                lastLoadedMarkdownRef[0] = md
+                currentOnMarkdownChange(md)
+            }
+
             fun scheduleHtmlFlush() {
                 debounceRunnable?.let { handler.removeCallbacks(it) }
-                val runnable = Runnable {
-                    val md = currentHtmlToMarkdown(editor.toHtml())
-                    // Mark the just-flushed markdown as already loaded so the next
-                    // recomposition (markdownKey will now equal this) doesn't trigger
-                    // a self-inflicted fromHtml round-trip. Non-state write — no extra
-                    // recomposition is triggered, which keeps lastLoaded and
-                    // markdownKey (via state.content) updating in the same Compose frame.
-                    lastLoadedMarkdownRef[0] = md
-                    currentOnMarkdownChange(md)
-                }
+                val runnable = Runnable { flushHtmlNow() }
                 debounceRunnable = runnable
                 handler.postDelayed(runnable, DebounceMs)
             }
@@ -372,9 +374,13 @@ fun RichNoteBody(
                     ) {
                         editor.setSelection(start, end)
                     }
-                    // Block toggles change format without moving the caret or text, so the
-                    // selection/text listeners won't fire — refresh the toolbar explicitly.
+                    // Format toggles change spans without moving the caret or changing text,
+                    // so neither the selection nor the TextWatcher fires. Refresh the toolbar
+                    // highlight AND flush the new markdown synchronously — otherwise the
+                    // formatting never reaches state.content and is lost on exit (the
+                    // dispose-time flush runs too late, after viewModel.flush() on back-nav).
                     pushActiveFormats()
+                    flushHtmlNow()
                 }
 
                 // Aztec's BlockFormatter.toggleHeading is a no-op when the line already has

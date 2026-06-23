@@ -24,6 +24,7 @@ class NoteMapper @Inject constructor() {
             deletedAt = entity.deletedAt,
             syncedAt = entity.syncedAt,
             ownerId = entity.ownerId?.let(::UserId),
+            isArchived = entity.isArchived,
         )
 
     fun toEntity(note: Note): NoteEntity =
@@ -37,6 +38,7 @@ class NoteMapper @Inject constructor() {
             deletedAt = note.deletedAt,
             syncedAt = note.syncedAt,
             ownerId = note.ownerId?.value,
+            isArchived = note.isArchived,
         )
 
     fun toRemote(
@@ -54,6 +56,7 @@ class NoteMapper @Inject constructor() {
             updatedAt = entity.updatedAt,
             deletedAt = entity.deletedAt,
             folderId = folderId,
+            isArchived = entity.isArchived,
         )
 
     fun toEntity(
@@ -71,6 +74,7 @@ class NoteMapper @Inject constructor() {
             deletedAt = remote.deletedAt,
             syncedAt = syncedAt,
             ownerId = ownerId,
+            isArchived = remote.isArchived,
         )
 
     fun normalizeTags(tags: List<Tag>): List<Tag> =

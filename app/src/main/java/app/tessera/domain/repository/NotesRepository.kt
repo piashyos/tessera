@@ -12,6 +12,10 @@ interface NotesRepository {
 
     fun searchNotes(query: String): Flow<List<Note>>
 
+    fun observeArchivedNotes(): Flow<List<Note>>
+
+    fun observeDeletedNotes(): Flow<List<Note>>
+
     suspend fun getNote(id: NoteId): Note?
 
     suspend fun createNote(ownerId: UserId? = null): Note
@@ -20,7 +24,12 @@ interface NotesRepository {
 
     suspend fun deleteNote(id: NoteId)
 
+    /** Irreversibly removes a note (used to empty items from Trash). */
+    suspend fun permanentlyDeleteNote(id: NoteId)
+
     suspend fun restoreNote(id: NoteId)
 
     suspend fun togglePin(id: NoteId)
+
+    suspend fun setArchived(id: NoteId, archived: Boolean)
 }

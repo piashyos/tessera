@@ -93,7 +93,7 @@ fun TagPickerPopup(
         }
         if (availableTags.isNotEmpty()) {
             Text(
-                text = "Existing tags",
+                text = stringResource(R.string.editor_existing_tags),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

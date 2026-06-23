@@ -223,10 +223,12 @@ private class FakeUserPreferences : UserPreferences {
     private val theme = MutableStateFlow(ThemeMode.AUTO)
     private val lang = MutableStateFlow("")
     private val viewMode = MutableStateFlow(app.tessera.ui.notes.NotesViewMode.List)
+    private val recent = MutableStateFlow<List<String>>(emptyList())
     override val themeMode: Flow<ThemeMode> get() = theme
     override val cachedThemeMode: ThemeMode get() = theme.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<app.tessera.ui.notes.NotesViewMode> get() = viewMode
+    override val recentSearches: Flow<List<String>> get() = recent
     override suspend fun setThemeMode(mode: ThemeMode) {
         theme.value = mode
     }
@@ -237,6 +239,21 @@ private class FakeUserPreferences : UserPreferences {
 
     override suspend fun setNotesViewMode(mode: app.tessera.ui.notes.NotesViewMode) {
         viewMode.value = mode
+    }
+
+    override suspend fun addRecentSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isNotEmpty()) {
+            recent.value = (listOf(trimmed) + recent.value.filterNot { it.equals(trimmed, ignoreCase = true) }).take(8)
+        }
+    }
+
+    override suspend fun removeRecentSearch(query: String) {
+        recent.value = recent.value.filterNot { it.equals(query, ignoreCase = true) }
+    }
+
+    override suspend fun clearRecentSearches() {
+        recent.value = emptyList()
     }
 }
 

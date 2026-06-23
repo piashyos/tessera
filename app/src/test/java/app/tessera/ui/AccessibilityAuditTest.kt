@@ -70,8 +70,8 @@ class AccessibilityAuditTest {
             "Remove tag", "Add tag",
             "Bold", "Italic", "Underline", "Strikethrough",
             "Heading 1", "Heading 2", "Bullet list", "Numbered list", "Checklist item", "Quote",
-            // Notes — filter chip (32dp Material chip) and the Material3 icon view-mode toggle.
-            "#", "Show as list", "Show as tiles",
+            // Notes — filter chip (32dp Material chip) and the Material3 icon tag-toggle button.
+            "#", "Toggle tags",
             // Settings — Material3 buttons / rows (real 48dp touch slop, underreported bounds).
             "Back", "Sign out", "Open source licenses",
         )

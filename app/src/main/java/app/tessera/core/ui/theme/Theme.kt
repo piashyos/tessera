@@ -1,14 +1,18 @@
 package app.tessera.core.ui.theme
 
 import android.os.Build
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import app.tessera.core.preferences.ThemeMode
 
@@ -99,6 +103,7 @@ private fun ColorScheme.brandOverlay(dark: Boolean): ColorScheme {
   )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TesseraTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
@@ -123,8 +128,15 @@ fun TesseraTheme(
     colorScheme = scheme,
     typography  = TesseraTypography,
     shapes      = TesseraShapes,
-    content     = content,
-  )
+  ) {
+    // Suppress the dark Material press state-layer everywhere: a null ripple config silences
+    // `ripple()`-based components, while NoIndication covers bare Modifier.clickable surfaces.
+    CompositionLocalProvider(
+      LocalRippleConfiguration provides null,
+      LocalIndication provides NoIndication,
+      content = content,
+    )
+  }
 }
 
 @Composable

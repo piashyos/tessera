@@ -29,11 +29,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tessera.R
 import app.tessera.core.text.markdownblocks.TableGrid
 import com.composables.icons.lucide.ArrowDown
 import com.composables.icons.lucide.ArrowUp
@@ -98,30 +100,30 @@ fun TableBlockEditor(
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { onGridChange(grid.addRow()) }) {
-                Icon(Lucide.Plus, contentDescription = "Add row", modifier = Modifier.size(16.dp))
+                Icon(Lucide.Plus, contentDescription = stringResource(R.string.table_add_row), modifier = Modifier.size(16.dp))
             }
-            Text("Row", style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.table_row), style = MaterialTheme.typography.labelSmall)
             IconButton(onClick = {
                 if (grid.rowCount > 0) onGridChange(grid.removeRow(grid.rowCount - 1))
             }) {
-                Icon(Lucide.Minus, contentDescription = "Remove row", modifier = Modifier.size(16.dp))
+                Icon(Lucide.Minus, contentDescription = stringResource(R.string.table_remove_row), modifier = Modifier.size(16.dp))
             }
             Spacer(Modifier.width(12.dp))
             IconButton(onClick = { onGridChange(grid.addColumn()) }) {
-                Icon(Lucide.Plus, contentDescription = "Add column", modifier = Modifier.size(16.dp))
+                Icon(Lucide.Plus, contentDescription = stringResource(R.string.table_add_column), modifier = Modifier.size(16.dp))
             }
-            Text("Col", style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.table_column), style = MaterialTheme.typography.labelSmall)
             IconButton(onClick = {
                 if (grid.columnCount > 1) onGridChange(grid.removeColumn(grid.columnCount - 1))
             }) {
-                Icon(Lucide.Minus, contentDescription = "Remove column", modifier = Modifier.size(16.dp))
+                Icon(Lucide.Minus, contentDescription = stringResource(R.string.table_remove_column), modifier = Modifier.size(16.dp))
             }
             Spacer(Modifier.width(12.dp))
             IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null) {
-                Icon(Lucide.ArrowUp, contentDescription = "Move table up", modifier = Modifier.size(16.dp))
+                Icon(Lucide.ArrowUp, contentDescription = stringResource(R.string.table_move_up), modifier = Modifier.size(16.dp))
             }
             IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null) {
-                Icon(Lucide.ArrowDown, contentDescription = "Move table down", modifier = Modifier.size(16.dp))
+                Icon(Lucide.ArrowDown, contentDescription = stringResource(R.string.table_move_down), modifier = Modifier.size(16.dp))
             }
         }
     }

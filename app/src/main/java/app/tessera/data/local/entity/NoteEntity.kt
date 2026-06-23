@@ -22,4 +22,5 @@ data class NoteEntity(
     val deletedAt: Long?,
     val syncedAt: Long?,
     val ownerId: String?,
+    val isArchived: Boolean = false,
 )

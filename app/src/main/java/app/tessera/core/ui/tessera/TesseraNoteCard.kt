@@ -1,5 +1,6 @@
 package app.tessera.core.ui.tessera
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -48,10 +49,13 @@ fun TesseraNoteCard(
   onClick: () -> Unit,
   onLongClick: () -> Unit,
   modifier: Modifier = Modifier,
+  selected: Boolean = false,
 ) {
   Surface(
-    color = MaterialTheme.colorScheme.surface,
+    color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+            else MaterialTheme.colorScheme.surface,
     shape = TesseraShape.noteCard,
+    border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
     modifier = modifier
       .testTag(TesseraNoteCardTags.Root)
       .fillMaxWidth()

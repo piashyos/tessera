@@ -11,10 +11,24 @@ import kotlinx.coroutines.flow.Flow
 interface NoteDao {
     @Query(
         "SELECT * FROM notes " +
-            "WHERE deletedAt IS NULL " +
+            "WHERE deletedAt IS NULL AND isArchived = 0 " +
             "ORDER BY isPinned DESC, updatedAt DESC",
     )
     fun observeActive(): Flow<List<NoteEntity>>
+
+    @Query(
+        "SELECT * FROM notes " +
+            "WHERE deletedAt IS NULL AND isArchived = 1 " +
+            "ORDER BY isPinned DESC, updatedAt DESC",
+    )
+    fun observeArchived(): Flow<List<NoteEntity>>
+
+    @Query(
+        "SELECT * FROM notes " +
+            "WHERE deletedAt IS NOT NULL " +
+            "ORDER BY deletedAt DESC",
+    )
+    fun observeDeleted(): Flow<List<NoteEntity>>
 
     @Query("SELECT * FROM notes WHERE id = :id")
     fun observeById(id: String): Flow<NoteEntity?>
@@ -26,7 +40,7 @@ interface NoteDao {
         """
         SELECT notes.* FROM notes
         JOIN notes_fts ON notes.rowid = notes_fts.rowid
-        WHERE notes_fts MATCH :query AND notes.deletedAt IS NULL
+        WHERE notes_fts MATCH :query AND notes.deletedAt IS NULL AND notes.isArchived = 0
         ORDER BY notes.isPinned DESC, notes.updatedAt DESC
         """,
     )
@@ -46,6 +60,9 @@ interface NoteDao {
 
     @Query("UPDATE notes SET isPinned = :pinned, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
     suspend fun setPinned(id: String, pinned: Boolean, ts: Long)
+
+    @Query("UPDATE notes SET isArchived = :archived, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
+    suspend fun setArchived(id: String, archived: Boolean, ts: Long)
 
     @Query("DELETE FROM notes WHERE deletedAt IS NOT NULL AND deletedAt < :threshold")
     suspend fun purgeOldTombstones(threshold: Long): Int

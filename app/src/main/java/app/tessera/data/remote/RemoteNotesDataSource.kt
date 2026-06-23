@@ -24,4 +24,7 @@ interface RemoteNotesDataSource {
      * Returns the number of documents removed.
      */
     suspend fun deleteOlderTombstones(uid: String, threshold: Long): Int
+
+    /** Hard-deletes the remote documents with the given [ids] for [uid]. */
+    suspend fun deleteByIds(uid: String, ids: List<String>)
 }

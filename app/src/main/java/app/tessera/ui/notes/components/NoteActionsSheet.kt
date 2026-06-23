@@ -5,14 +5,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import app.tessera.R
 import app.tessera.core.ui.tessera.TesseraBottomSheet
 import app.tessera.core.ui.tessera.TesseraSheetItem
 import com.composables.icons.lucide.Archive
+import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Folder
+import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
-import com.composables.icons.lucide.Share2
 import com.composables.icons.lucide.Tag
 import com.composables.icons.lucide.Trash2
 
@@ -20,12 +23,13 @@ import com.composables.icons.lucide.Trash2
 fun NoteActionsSheet(
   noteTitle: String,
   isPinned: Boolean,
+  isArchived: Boolean,
   onPinToggle: () -> Unit,
+  onSelect: () -> Unit,
   onMoveToFolder: () -> Unit,
   onAddTags: () -> Unit,
   onDuplicate: () -> Unit,
-  onShare: () -> Unit,
-  onArchive: () -> Unit,
+  onArchiveToggle: () -> Unit,
   onDelete: () -> Unit,
   onDismiss: () -> Unit,
 ) {
@@ -34,38 +38,40 @@ fun NoteActionsSheet(
     header = { Text(noteTitle, style = MaterialTheme.typography.titleMedium) },
   ) {
     TesseraSheetItem(
-      label = if (isPinned) "Unpin" else "Pin",
+      label = stringResource(R.string.note_action_select),
+      leadingIcon = { Icon(Lucide.ListChecks, contentDescription = null) },
+      onClick = { onSelect(); onDismiss() },
+    )
+    TesseraSheetItem(
+      label = stringResource(if (isPinned) R.string.note_action_unpin else R.string.note_action_pin),
       leadingIcon = { Icon(Lucide.Pin, contentDescription = null) },
       onClick = { onPinToggle(); onDismiss() },
     )
     TesseraSheetItem(
-      label = "Move to folder",
+      label = stringResource(R.string.note_action_move),
       leadingIcon = { Icon(Lucide.Folder, contentDescription = null) },
       onClick = { onMoveToFolder(); onDismiss() },
     )
     TesseraSheetItem(
-      label = "Add tags",
+      label = stringResource(R.string.note_action_add_tags),
       leadingIcon = { Icon(Lucide.Tag, contentDescription = null) },
       onClick = { onAddTags(); onDismiss() },
     )
     TesseraSheetItem(
-      label = "Duplicate",
+      label = stringResource(R.string.note_action_duplicate),
       leadingIcon = { Icon(Lucide.Copy, contentDescription = null) },
       onClick = { onDuplicate(); onDismiss() },
     )
     TesseraSheetItem(
-      label = "Share",
-      leadingIcon = { Icon(Lucide.Share2, contentDescription = null) },
-      onClick = { onShare(); onDismiss() },
-    )
-    TesseraSheetItem(
-      label = "Archive",
-      leadingIcon = { Icon(Lucide.Archive, contentDescription = null) },
-      onClick = { onArchive(); onDismiss() },
+      label = stringResource(if (isArchived) R.string.note_action_unarchive else R.string.note_action_archive),
+      leadingIcon = {
+        Icon(if (isArchived) Lucide.ArchiveRestore else Lucide.Archive, contentDescription = null)
+      },
+      onClick = { onArchiveToggle(); onDismiss() },
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     TesseraSheetItem(
-      label = "Delete",
+      label = stringResource(R.string.note_action_delete),
       leadingIcon = { Icon(Lucide.Trash2, contentDescription = null) },
       onClick = { onDelete(); onDismiss() },
       destructive = true,

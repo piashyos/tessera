@@ -1,20 +1,32 @@
 package app.tessera.ui.notes.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tessera.R
 import app.tessera.core.ui.tessera.TesseraDrawerItem
 import app.tessera.core.ui.tessera.TesseraDrawerShell
 import app.tessera.core.ui.theme.TesseraSpacing
@@ -39,33 +51,34 @@ fun TesseraNotesDrawer(
   onFolderSelect: (FolderId?) -> Unit,
   onCreateRootFolder: () -> Unit,
   onCreateSubfolder: (FolderId) -> Unit,
+  onDeleteFolder: (FolderId) -> Unit,
   onSettingsClick: () -> Unit,
   content: @Composable () -> Unit,
 ) {
   TesseraDrawerShell(
     drawerState = drawerState,
-    header = { Text("Tessera") },
+    header = { Text(stringResource(R.string.app_name)) },
     content = {
       TesseraDrawerItem(
-        label = "All notes",
+        label = stringResource(R.string.folders_all_notes),
         selected = selectedSystemKey == "all" && selectedFolderId == null,
         onClick = { onSystemSelect("all"); onFolderSelect(null) },
         leadingIcon = { Icon(Lucide.Inbox, contentDescription = null) },
       )
       TesseraDrawerItem(
-        label = "Pinned",
+        label = stringResource(R.string.drawer_pinned),
         selected = selectedSystemKey == "pinned",
         onClick = { onSystemSelect("pinned") },
         leadingIcon = { Icon(Lucide.Pin, contentDescription = null) },
       )
       TesseraDrawerItem(
-        label = "Archive",
+        label = stringResource(R.string.notes_archive),
         selected = selectedSystemKey == "archive",
         onClick = { onSystemSelect("archive") },
         leadingIcon = { Icon(Lucide.Archive, contentDescription = null) },
       )
       TesseraDrawerItem(
-        label = "Trash",
+        label = stringResource(R.string.drawer_trash),
         selected = selectedSystemKey == "trash",
         onClick = { onSystemSelect("trash") },
         leadingIcon = { Icon(Lucide.Trash2, contentDescription = null) },
@@ -82,35 +95,32 @@ fun TesseraNotesDrawer(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(
-          text = "FOLDERS",
+          text = stringResource(R.string.drawer_folders_section),
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.primary,
           modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onCreateRootFolder, modifier = Modifier.size(36.dp)) {
-          Icon(Lucide.Plus, contentDescription = "Create folder")
+          Icon(Lucide.Plus, contentDescription = stringResource(R.string.folders_create))
         }
       }
       folderTree.forEach { node ->
-        TesseraDrawerItem(
-          label = node.folder.name,
+        DrawerFolderRow(
+          name = node.folder.name,
           selected = selectedFolderId == node.folder.id,
-          onClick = { onFolderSelect(node.folder.id) },
-          leadingIcon = { Icon(Lucide.Folder, contentDescription = null) },
-          trailing = {
-            IconButton(onClick = { onCreateSubfolder(node.folder.id) }) {
-              Icon(Lucide.Plus, contentDescription = "Create subfolder")
-            }
-          },
           indentLevel = 0,
+          onClick = { onFolderSelect(node.folder.id) },
+          onAddSubfolder = { onCreateSubfolder(node.folder.id) },
+          onDelete = { onDeleteFolder(node.folder.id) },
         )
         node.children.forEach { child ->
-          TesseraDrawerItem(
-            label = child.name,
+          DrawerFolderRow(
+            name = child.name,
             selected = selectedFolderId == child.id,
-            onClick = { onFolderSelect(child.id) },
-            leadingIcon = { Icon(Lucide.Folder, contentDescription = null) },
             indentLevel = 1,
+            onClick = { onFolderSelect(child.id) },
+            onAddSubfolder = null,
+            onDelete = { onDeleteFolder(child.id) },
           )
         }
       }
@@ -118,7 +128,7 @@ fun TesseraNotesDrawer(
     },
     footer = {
       TesseraDrawerItem(
-        label = "Settings",
+        label = stringResource(R.string.settings_title),
         selected = false,
         onClick = onSettingsClick,
         leadingIcon = { Icon(Lucide.Settings, contentDescription = null) },
@@ -126,4 +136,83 @@ fun TesseraNotesDrawer(
     },
     screenContent = content,
   )
+}
+
+@Composable
+private fun DrawerFolderRow(
+  name: String,
+  selected: Boolean,
+  indentLevel: Int,
+  onClick: () -> Unit,
+  onAddSubfolder: (() -> Unit)?,
+  onDelete: () -> Unit,
+) {
+  val background = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+  val contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                     else MaterialTheme.colorScheme.onSurface
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(start = (indentLevel * 20).dp)
+      .clip(RoundedCornerShape(18.dp))
+      .background(background)
+      .clickable(onClick = onClick)
+      .padding(start = TesseraSpacing.md, end = TesseraSpacing.xs),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.sm),
+  ) {
+    Icon(
+      Lucide.Folder,
+      contentDescription = null,
+      modifier = Modifier.size(18.dp),
+      tint = contentColor,
+    )
+    Text(
+      text = name,
+      style = MaterialTheme.typography.bodyMedium,
+      color = contentColor,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+      modifier = Modifier
+        .weight(1f)
+        .padding(vertical = 10.dp),
+    )
+    if (onAddSubfolder != null) {
+      DrawerFolderAction(
+        icon = Lucide.Plus,
+        contentDescription = stringResource(R.string.folders_create_subfolder),
+        tint = contentColor,
+        onClick = onAddSubfolder,
+      )
+    }
+    DrawerFolderAction(
+      icon = Lucide.Trash2,
+      contentDescription = stringResource(R.string.folders_delete),
+      tint = MaterialTheme.colorScheme.error,
+      onClick = onDelete,
+    )
+  }
+}
+
+@Composable
+private fun DrawerFolderAction(
+  icon: ImageVector,
+  contentDescription: String,
+  tint: Color = LocalContentColor.current,
+  onClick: () -> Unit,
+) {
+  Box(
+    modifier = Modifier
+      .size(36.dp)
+      .clip(CircleShape)
+      .clickable(onClick = onClick),
+    contentAlignment = Alignment.Center,
+  ) {
+    Icon(
+      imageVector = icon,
+      contentDescription = contentDescription,
+      modifier = Modifier.size(16.dp),
+      tint = tint,
+    )
+  }
 }

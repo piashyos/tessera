@@ -265,6 +265,10 @@ private class FakeRemoteNotesDataSource : RemoteNotesDataSource {
         stale.forEach { notes.remove(it) }
         return stale.size
     }
+
+    override suspend fun deleteByIds(uid: String, ids: List<String>) {
+        ids.forEach { notes.remove(it) }
+    }
 }
 
 private class SyncFakeNoteDao : NoteDao {
@@ -272,6 +276,10 @@ private class SyncFakeNoteDao : NoteDao {
     private val activeFlow = MutableStateFlow(emptyList<NoteEntity>())
 
     override fun observeActive(): Flow<List<NoteEntity>> = activeFlow
+
+    override fun observeArchived(): Flow<List<NoteEntity>> = MutableStateFlow(emptyList())
+
+    override fun observeDeleted(): Flow<List<NoteEntity>> = MutableStateFlow(emptyList())
 
     override fun observeById(id: String): Flow<NoteEntity?> = MutableStateFlow(notes[id])
 
@@ -301,6 +309,11 @@ private class SyncFakeNoteDao : NoteDao {
 
     override suspend fun setPinned(id: String, pinned: Boolean, ts: Long) {
         notes[id]?.let { notes[id] = it.copy(isPinned = pinned, updatedAt = ts, syncedAt = null) }
+        emitActive()
+    }
+
+    override suspend fun setArchived(id: String, archived: Boolean, ts: Long) {
+        notes[id]?.let { notes[id] = it.copy(isArchived = archived, updatedAt = ts, syncedAt = null) }
         emitActive()
     }
 
