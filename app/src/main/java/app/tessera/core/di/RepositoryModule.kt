@@ -2,8 +2,12 @@ package app.tessera.core.di
 
 import app.tessera.data.remote.FirestoreFoldersClient
 import app.tessera.data.remote.FirestoreNotesClient
+import app.tessera.data.remote.FirestoreSharedNotesClient
+import app.tessera.data.remote.FirestoreUserDirectory
 import app.tessera.data.remote.RemoteFoldersDataSource
 import app.tessera.data.remote.RemoteNotesDataSource
+import app.tessera.data.remote.RemoteSharedNotesDataSource
+import app.tessera.data.remote.UserDirectoryDataSource
 import app.tessera.data.repository.AccountRepositoryImpl
 import app.tessera.data.repository.AuthRepositoryImpl
 import app.tessera.data.repository.FolderRepositoryImpl
@@ -48,6 +52,16 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindRemoteFoldersDataSource(impl: FirestoreFoldersClient): RemoteFoldersDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindRemoteSharedNotesDataSource(
+        impl: FirestoreSharedNotesClient,
+    ): RemoteSharedNotesDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindUserDirectoryDataSource(impl: FirestoreUserDirectory): UserDirectoryDataSource
 
     @Binds
     @Singleton

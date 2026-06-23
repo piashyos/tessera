@@ -400,6 +400,9 @@ private class FakeNoteDao : NoteDao {
     override suspend fun getPendingSync(): List<NoteEntity> =
         notes.values.filter { it.syncedAt == null }
 
+    override suspend fun getSharedNotes(): List<NoteEntity> =
+        notes.values.filter { it.shareState == NoteEntity.SHARE_STATE_SHARED }
+
     override suspend fun markSynced(id: String, ts: Long) {
         val current = notes[id] ?: return
         notes[id] = current.copy(syncedAt = ts)

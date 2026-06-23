@@ -55,7 +55,7 @@ snapshot в RTDB + content в Firestore `sharedNotes`; подрезка `ops`; �
 
 | Фаза | Название | Статус | План | Коммит/PR | Дата | Заметки |
 |------|----------|--------|------|-----------|------|---------|
-| 1 | Бэкенд доступа | 🟡 In progress | — | — | 2026-06-23 | Сделаны п.1–2: Room-миграция 5→6 (`shareState`/`myRole`, таблица `shared_members`, `SharedMemberDao`, тест миграции) + domain-модель прав (`ShareRole`/`ShareMember`/`ShareState`, тесты). Осталось: data sources, sync, Firestore rules. |
+| 1 | Бэкенд доступа | ✅ Done | — | (этот коммит) | 2026-06-23 | Room-миграция 5→6 + domain-модель прав (ранее). Добавлено: `usersByEmail` upsert в `AuthRepositoryImpl` + `UserDirectoryDataSource`/`FirestoreUserDirectory`; `RemoteSharedNote`/`RemoteSharedNotesDataSource`/`FirestoreSharedNotesClient` (share/unshare/add/update/remove/leave/push/observe); `SharedNoteMapper`; расширение `SyncRepositoryImpl` (роутинг push по `shareState`, merge `sharedNotes` → `shared_members`+`myRole`, эвикция при исключении, откат правок при понижении роли, защита от приватного tombstone); DI-байндинги. Firestore rules (`usersByEmail`+`sharedNotes`) + Node-харнесс `firestore-rules-tests/` (17/17 на эмуляторе). JVM-тесты `SyncRepositoryImplTest` (7 новых) + assembleDebug + androidTest-компиляция зелёные. |
 | 2 | Домен и UseCases | ⬜ Todo | — | — | — | |
 | 3 | UI: «Общие» + аватары | ⬜ Todo | — | — | — | |
 | 4 | UI: модалка + меню | ⬜ Todo | — | — | — | |

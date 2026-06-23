@@ -9,6 +9,7 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import app.tessera.R
 import app.tessera.core.util.CurrentActivityHolder
+import app.tessera.data.remote.emailKey
 import app.tessera.domain.model.UserId
 import app.tessera.domain.model.UserProfile
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -97,20 +98,34 @@ class AuthRepositoryImpl @Inject constructor(
         mutableCurrentProfile.value = null
     }
 
-    /** Persists the user's public profile to `users/{uid}`. Failures never block sign-in. */
+    /**
+     * Persists the user's public profile to `users/{uid}` and upserts the `usersByEmail/{emailKey}`
+     * index that the invite flow looks up. Both writes go in one idempotent batch and failures
+     * never block sign-in.
+     */
     private suspend fun saveProfile(profile: UserProfile) {
         runCatching {
-            firestore.collection(USERS)
-                .document(profile.id.value)
-                .set(
+            val now = System.currentTimeMillis()
+            val batch = firestore.batch()
+            batch.set(
+                firestore.collection(USERS).document(profile.id.value),
+                mapOf(
+                    FIELD_DISPLAY_NAME to profile.displayName,
+                    FIELD_EMAIL to profile.email,
+                    FIELD_PHOTO_URL to profile.photoUrl,
+                    FIELD_UPDATED_AT to now,
+                ),
+            )
+            profile.email?.takeIf { it.isNotBlank() }?.let { email ->
+                batch.set(
+                    firestore.collection(USERS_BY_EMAIL).document(emailKey(email)),
                     mapOf(
-                        FIELD_DISPLAY_NAME to profile.displayName,
-                        FIELD_EMAIL to profile.email,
-                        FIELD_PHOTO_URL to profile.photoUrl,
-                        FIELD_UPDATED_AT to System.currentTimeMillis(),
+                        FIELD_UID to profile.id.value,
+                        FIELD_EMAIL to email,
                     ),
                 )
-                .await()
+            }
+            batch.commit().await()
         }.onFailure { Log.w(TAG, "Failed to save user profile", it) }
     }
 
@@ -125,6 +140,8 @@ class AuthRepositoryImpl @Inject constructor(
     private companion object {
         const val TAG = "AuthRepository"
         const val USERS = "users"
+        const val USERS_BY_EMAIL = "usersByEmail"
+        const val FIELD_UID = "uid"
         const val FIELD_DISPLAY_NAME = "displayName"
         const val FIELD_EMAIL = "email"
         const val FIELD_PHOTO_URL = "photoUrl"

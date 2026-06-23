@@ -13,8 +13,13 @@ import app.tessera.core.util.Clock
 import app.tessera.data.local.NotesDatabase
 import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.mapper.NoteMapper
+import app.tessera.data.mapper.SharedNoteMapper
+import app.tessera.data.remote.RemoteFolder
+import app.tessera.data.remote.RemoteFoldersDataSource
 import app.tessera.data.remote.RemoteNote
 import app.tessera.data.remote.RemoteNotesDataSource
+import app.tessera.data.remote.RemoteSharedNote
+import app.tessera.data.remote.RemoteSharedNotesDataSource
 import app.tessera.data.repository.SyncRepositoryImpl
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -55,7 +60,18 @@ class DeleteTombstonesWorkerTest {
         dao.upsert(tombstone(id = "recent", deletedAt = threshold + 1))
 
         val remote = RecordingRemote()
-        val syncRepository = SyncRepositoryImpl(dao, database.tagDao(), remote, NoteMapper(), FixedClock(now))
+        val syncRepository = SyncRepositoryImpl(
+            dao,
+            database.tagDao(),
+            database.folderDao(),
+            database.sharedMemberDao(),
+            remote,
+            NoOpRemoteFolders(),
+            NoOpRemoteShared(),
+            NoteMapper(),
+            SharedNoteMapper(),
+            FixedClock(now),
+        )
         val worker = buildWorker(syncRepository)
 
         val result = worker.doWork()
@@ -114,5 +130,26 @@ class DeleteTombstonesWorkerTest {
             purgedThreshold = threshold
             return 0
         }
+
+        override suspend fun deleteByIds(uid: String, ids: List<String>) = Unit
+    }
+
+    private class NoOpRemoteFolders : RemoteFoldersDataSource {
+        override suspend fun fetchAll(uid: String): List<RemoteFolder> = emptyList()
+        override suspend fun upsertAll(uid: String, folders: List<RemoteFolder>) = Unit
+        override fun observeFolders(uid: String): Flow<List<RemoteFolder>> = emptyFlow()
+        override suspend fun deleteOlderTombstones(uid: String, threshold: Long): Int = 0
+    }
+
+    private class NoOpRemoteShared : RemoteSharedNotesDataSource {
+        override suspend fun shareNote(ownerUid: String, note: RemoteSharedNote) = Unit
+        override suspend fun unshareNote(ownerUid: String, privateNote: RemoteNote) = Unit
+        override suspend fun addMember(noteId: String, uid: String, member: app.tessera.data.remote.RemoteShareMember) = Unit
+        override suspend fun updateRole(noteId: String, uid: String, role: String) = Unit
+        override suspend fun removeMember(noteId: String, uid: String) = Unit
+        override suspend fun leaveNote(noteId: String, myUid: String) = Unit
+        override suspend fun pushSharedNote(note: RemoteSharedNote) = Unit
+        override suspend fun fetchAll(uid: String): List<RemoteSharedNote> = emptyList()
+        override fun observeSharedNotes(uid: String): Flow<List<RemoteSharedNote>> = emptyFlow()
     }
 }

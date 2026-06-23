@@ -2,13 +2,19 @@ package app.tessera.data.repository
 
 import app.tessera.core.util.Clock
 import app.tessera.data.local.dao.NoteDao
+import app.tessera.data.local.dao.SharedMemberDao
 import app.tessera.data.local.dao.TagDao
 import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.local.entity.NoteTagCrossRef
+import app.tessera.data.local.entity.SharedMemberEntity
 import app.tessera.data.local.entity.TagEntity
 import app.tessera.data.mapper.NoteMapper
+import app.tessera.data.mapper.SharedNoteMapper
 import app.tessera.data.remote.RemoteNote
 import app.tessera.data.remote.RemoteNotesDataSource
+import app.tessera.data.remote.RemoteShareMember
+import app.tessera.data.remote.RemoteSharedNote
+import app.tessera.data.remote.RemoteSharedNotesDataSource
 import app.tessera.domain.model.UserId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,16 +54,21 @@ class SyncRepositoryImplTest {
         noteDao: NoteDao = SyncFakeNoteDao(),
         tagDao: TagDao = SyncFakeTagDao(),
         folderDao: SyncFakeFolderDao = SyncFakeFolderDao(),
+        sharedMemberDao: FakeSharedMemberDao = FakeSharedMemberDao(),
         remote: FakeRemoteNotesDataSource = FakeRemoteNotesDataSource(),
         remoteFolders: SyncFakeRemoteFoldersDataSource = SyncFakeRemoteFoldersDataSource(),
+        remoteShared: FakeRemoteSharedNotesDataSource = FakeRemoteSharedNotesDataSource(),
         clock: Clock = SyncTestClock(1000L),
     ) = SyncRepositoryImpl(
         noteDao,
         tagDao,
         folderDao,
+        sharedMemberDao,
         remote,
         remoteFolders,
+        remoteShared,
         NoteMapper(),
+        SharedNoteMapper(),
         clock,
     )
 
@@ -226,6 +237,167 @@ class SyncRepositoryImplTest {
             assertNotNull(noteDao.getById("recent"))
             assertEquals(threshold, remote.purgedThreshold)
         }
+
+    private fun sharedRemote(
+        id: String,
+        updatedAt: Long = 5L,
+        deletedAt: Long? = null,
+        myRole: String = "EDITOR",
+        title: String = "remote",
+        content: String = "remote-body",
+        extraMembers: Map<String, RemoteShareMember> = emptyMap(),
+    ): RemoteSharedNote {
+        val members =
+            mapOf(
+                uid.value to RemoteShareMember(role = myRole, displayName = "me", email = "me@x.io", joinedAt = 1L),
+            ) + extraMembers
+        return RemoteSharedNote(
+            id = id,
+            ownerId = "owner-x",
+            title = title,
+            content = content,
+            updatedAt = updatedAt,
+            deletedAt = deletedAt,
+            members = members,
+            memberIds = members.keys.toList(),
+        )
+    }
+
+    @Test
+    fun `mergeRemoteShared upserts the note, mirrors members and sets myRole`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val members = FakeSharedMemberDao()
+            val remoteShared = FakeRemoteSharedNotesDataSource()
+            val repo = create(noteDao = noteDao, sharedMemberDao = members, remoteShared = remoteShared)
+            remoteShared.store(
+                sharedRemote(
+                    "s1",
+                    myRole = "EDITOR",
+                    extraMembers = mapOf(
+                        "buddy" to RemoteShareMember(role = "VIEWER", displayName = "Bud", email = "b@x.io", joinedAt = 2L),
+                    ),
+                ),
+            )
+
+            repo.syncNow(uid)
+
+            val local = noteDao.getById("s1")
+            assertEquals(NoteEntity.SHARE_STATE_SHARED, local?.shareState)
+            assertEquals("EDITOR", local?.myRole)
+            assertEquals(setOf(uid.value, "buddy"), members.getForNote("s1").map { it.uid }.toSet())
+        }
+
+    @Test
+    fun `pushPending routes shared notes to sharedNotes when the user can edit`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val remoteShared = FakeRemoteSharedNotesDataSource()
+            val repo = create(noteDao = noteDao, remote = remote, remoteShared = remoteShared)
+            remoteShared.store(sharedRemote("s1", updatedAt = 1L, myRole = "EDITOR"))
+            noteDao.upsert(
+                entity("s1", updatedAt = 1L, syncedAt = null)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "EDITOR"),
+            )
+
+            repo.syncNow(uid)
+
+            assertTrue(remoteShared.pushed.containsKey("s1"))
+            assertTrue(remote.uploaded.isEmpty())
+            assertNotNull(noteDao.getById("s1")?.syncedAt)
+        }
+
+    @Test
+    fun `pushPending skips shared content push when the user is a viewer`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remoteShared = FakeRemoteSharedNotesDataSource()
+            val repo = create(noteDao = noteDao, remoteShared = remoteShared)
+            remoteShared.store(sharedRemote("s1", updatedAt = 1L, myRole = "VIEWER"))
+            noteDao.upsert(
+                entity("s1", updatedAt = 1L, syncedAt = null)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "VIEWER"),
+            )
+
+            repo.syncNow(uid)
+
+            // A viewer's local edit is never pushed; it is rolled back by the merge instead.
+            assertTrue(remoteShared.pushed.isEmpty())
+        }
+
+    @Test
+    fun `mergeRemoteShared evicts a non-owner note removed from the member set`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val repo = create(noteDao = noteDao)
+            noteDao.upsert(
+                entity("s1", syncedAt = 1L)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "EDITOR"),
+            )
+
+            repo.syncNow(uid) // remote snapshot has no shared notes -> removed
+
+            assertNull(noteDao.getById("s1"))
+        }
+
+    @Test
+    fun `mergeRemoteShared keeps an owner note absent from the snapshot`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val repo = create(noteDao = noteDao)
+            noteDao.upsert(
+                entity("s1", syncedAt = 1L)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "OWNER"),
+            )
+
+            repo.syncNow(uid)
+
+            assertNotNull(noteDao.getById("s1"))
+        }
+
+    @Test
+    fun `mergeRemoteShared rolls back unsynced edits when the role is downgraded below editor`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val repo = create(noteDao = noteDao)
+            // Local has newer, unsynced edits but the remote role is now VIEWER.
+            noteDao.upsert(
+                entity("s1", title = "local-edit", updatedAt = 100L, syncedAt = null)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "EDITOR"),
+            )
+
+            // Drive the merge directly to isolate it from the push step.
+            repo.mergeRemoteShared(
+                uid,
+                listOf(sharedRemote("s1", updatedAt = 5L, myRole = "VIEWER", title = "remote")),
+            )
+
+            val local = noteDao.getById("s1")
+            assertEquals("remote", local?.title)
+            assertEquals("VIEWER", local?.myRole)
+        }
+
+    @Test
+    fun `mergeRemote does not clobber a shared note with a stale private tombstone`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val repo = create(noteDao = noteDao, remote = remote)
+            noteDao.upsert(
+                entity("s1", updatedAt = 1L, syncedAt = 1L)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "OWNER"),
+            )
+            // Private subtree still holds a tombstone for the same id left behind on share.
+            remote.store(
+                RemoteNote(id = "s1", title = "old", content = "old", updatedAt = 50L, deletedAt = 50L),
+            )
+
+            repo.syncNow(uid)
+
+            assertNull(noteDao.getById("s1")?.deletedAt)
+            assertEquals(NoteEntity.SHARE_STATE_SHARED, noteDao.getById("s1")?.shareState)
+        }
 }
 
 private class SyncTestClock(
@@ -337,6 +509,9 @@ private class SyncFakeNoteDao : NoteDao {
     }
 
     override suspend fun getPendingSync(): List<NoteEntity> = notes.values.filter { it.syncedAt == null }
+
+    override suspend fun getSharedNotes(): List<NoteEntity> =
+        notes.values.filter { it.shareState == NoteEntity.SHARE_STATE_SHARED }
 
     override suspend fun markSynced(id: String, ts: Long) {
         notes[id]?.let { notes[id] = it.copy(syncedAt = ts) }
@@ -476,4 +651,71 @@ private class SyncFakeRemoteFoldersDataSource : app.tessera.data.remote.RemoteFo
         MutableStateFlow(folders.values.toList())
 
     override suspend fun deleteOlderTombstones(uid: String, threshold: Long) = 0
+}
+
+private class FakeSharedMemberDao : SharedMemberDao {
+    val byNote = linkedMapOf<String, List<SharedMemberEntity>>()
+
+    override fun observeForNote(noteId: String): Flow<List<SharedMemberEntity>> =
+        MutableStateFlow(byNote[noteId].orEmpty())
+
+    override suspend fun getForNote(noteId: String): List<SharedMemberEntity> = byNote[noteId].orEmpty()
+
+    override suspend fun upsertAll(members: List<SharedMemberEntity>) {
+        members.groupBy { it.noteId }.forEach { (noteId, rows) ->
+            byNote[noteId] = (byNote[noteId].orEmpty() + rows).distinctBy { it.uid }
+        }
+    }
+
+    override suspend fun deleteForNote(noteId: String) {
+        byNote.remove(noteId)
+    }
+}
+
+private class FakeRemoteSharedNotesDataSource : RemoteSharedNotesDataSource {
+    private val notes = linkedMapOf<String, RemoteSharedNote>()
+    private val flow = MutableStateFlow(emptyList<RemoteSharedNote>())
+    val pushed = linkedMapOf<String, RemoteSharedNote>()
+
+    fun store(note: RemoteSharedNote) {
+        notes[note.id] = note
+    }
+
+    fun emit(remote: List<RemoteSharedNote>) {
+        flow.value = remote
+    }
+
+    override suspend fun shareNote(ownerUid: String, note: RemoteSharedNote) {
+        notes[note.id] = note
+    }
+
+    override suspend fun unshareNote(ownerUid: String, privateNote: RemoteNote) {
+        notes.remove(privateNote.id)
+    }
+
+    override suspend fun addMember(noteId: String, uid: String, member: RemoteShareMember) = Unit
+    override suspend fun updateRole(noteId: String, uid: String, role: String) = Unit
+    override suspend fun removeMember(noteId: String, uid: String) = Unit
+    override suspend fun leaveNote(noteId: String, myUid: String) = Unit
+
+    override suspend fun pushSharedNote(note: RemoteSharedNote) {
+        pushed[note.id] = note
+        // Mirror the real client: content fields only, membership preserved.
+        val existing = notes[note.id]
+        notes[note.id] =
+            existing?.copy(
+                title = note.title,
+                content = note.content,
+                tags = note.tags,
+                isPinned = note.isPinned,
+                isArchived = note.isArchived,
+                updatedAt = note.updatedAt,
+                deletedAt = note.deletedAt,
+            ) ?: note
+    }
+
+    override suspend fun fetchAll(uid: String): List<RemoteSharedNote> =
+        notes.values.filter { uid in it.memberIds }
+
+    override fun observeSharedNotes(uid: String): Flow<List<RemoteSharedNote>> = flow
 }

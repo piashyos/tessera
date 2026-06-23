@@ -83,6 +83,10 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE syncedAt IS NULL")
     suspend fun getPendingSync(): List<NoteEntity>
 
+    /** All locally-cached shared notes, used to detect notes removed from the remote member set. */
+    @Query("SELECT * FROM notes WHERE shareState = 'SHARED'")
+    suspend fun getSharedNotes(): List<NoteEntity>
+
     @Query("UPDATE notes SET syncedAt = :ts WHERE id = :id")
     suspend fun markSynced(id: String, ts: Long)
 
