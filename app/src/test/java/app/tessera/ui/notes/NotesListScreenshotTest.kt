@@ -14,7 +14,11 @@ import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.model.ShareMember
+import app.tessera.domain.model.ShareRole
+import app.tessera.domain.model.ShareState
 import app.tessera.domain.model.Tag
+import app.tessera.domain.model.UserId
 import app.tessera.ui.notes.components.NoteActionsSheet
 import app.tessera.ui.notes.components.TesseraNotesDrawer
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -94,6 +98,22 @@ class NotesListScreenshotTest {
 
     @Test fun drawerDark() = capture("notes_drawer_dark", darkTheme = true) { openDrawer() }
 
+    @Test fun drawerSharedLight() = capture("notes_drawer_shared_light", darkTheme = false) {
+        openDrawer(showSharedSection = true)
+    }
+
+    @Test fun drawerSharedDark() = capture("notes_drawer_shared_dark", darkTheme = true) {
+        openDrawer(showSharedSection = true)
+    }
+
+    @Test fun sharedContentLight() = capture("notes_shared_content_light", darkTheme = false) {
+        screen(sharedContentState())
+    }
+
+    @Test fun sharedContentDark() = capture("notes_shared_content_dark", darkTheme = true) {
+        screen(sharedContentState())
+    }
+
     @Test fun noteActionsSheetLight() = captureSheet("notes_actions_sheet_light", darkTheme = false)
 
     @Test fun noteActionsSheetDark() = captureSheet("notes_actions_sheet_dark", darkTheme = true)
@@ -123,12 +143,13 @@ class NotesListScreenshotTest {
     }
 
     @androidx.compose.runtime.Composable
-    private fun openDrawer() {
+    private fun openDrawer(showSharedSection: Boolean = false) {
         TesseraNotesDrawer(
             drawerState = rememberDrawerState(DrawerValue.Open),
             folderTree = sampleFolderTree(),
             selectedFolderId = null,
-            selectedSystemKey = "all",
+            selectedSystemKey = if (showSharedSection) "shared" else "all",
+            showSharedSection = showSharedSection,
             onSystemSelect = {},
             onFolderSelect = {},
             onCreateRootFolder = {},
@@ -140,6 +161,64 @@ class NotesListScreenshotTest {
         }
     }
 }
+
+private fun sharedContentState() =
+    NotesListState.Content(
+        notes = listOf(
+            sharedPreviewNote(
+                id = "shared-1",
+                title = "Team retro",
+                content = "Notes from the sprint retro, shared with the squad.",
+                members = listOf(
+                    shareMember("me", "You", ShareRole.OWNER),
+                    shareMember("alex", "Alex", ShareRole.EDITOR),
+                    shareMember("sam", "Sam", ShareRole.VIEWER),
+                    shareMember("kim", "Kim", ShareRole.VIEWER),
+                ),
+            ),
+            sharedPreviewNote(
+                id = "shared-2",
+                title = "Shopping plan",
+                content = "Split the grocery run for the weekend.",
+                members = listOf(
+                    shareMember("me", "You", ShareRole.OWNER),
+                    shareMember("alex", "Alex", ShareRole.EDITOR),
+                ),
+            ),
+        ),
+        pinnedCount = 0,
+        query = "",
+        selection = emptySet(),
+        selectionMode = false,
+        availableTags = emptyList(),
+        selectedTags = emptySet(),
+        viewMode = NotesViewMode.Tiles,
+        currentUserId = UserId("me"),
+        folders = sampleFolders(),
+        folderTree = sampleFolderTree(),
+        isSharedView = true,
+        hasSharedNotes = true,
+    )
+
+private fun shareMember(uid: String, name: String, role: ShareRole) =
+    ShareMember(
+        uid = UserId(uid),
+        displayName = name,
+        email = "$uid@example.com",
+        photoUrl = null,
+        role = role,
+        joinedAt = 1L,
+    )
+
+private fun sharedPreviewNote(
+    id: String,
+    title: String,
+    content: String,
+    members: List<ShareMember>,
+): Note =
+    previewNote(id = id, title = title, content = content).copy(
+        shareState = ShareState.Shared(members = members, myRole = ShareRole.OWNER),
+    )
 
 private fun emptyState() =
     NotesListState.Empty(

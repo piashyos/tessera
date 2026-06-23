@@ -40,6 +40,7 @@ import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.Users
 
 @Composable
 fun TesseraNotesDrawer(
@@ -47,6 +48,7 @@ fun TesseraNotesDrawer(
   folderTree: List<FolderTreeNode>,
   selectedFolderId: FolderId?,
   selectedSystemKey: String,
+  showSharedSection: Boolean,
   onSystemSelect: (String) -> Unit,
   onFolderSelect: (FolderId?) -> Unit,
   onCreateRootFolder: () -> Unit,
@@ -83,6 +85,14 @@ fun TesseraNotesDrawer(
         onClick = { onSystemSelect("trash") },
         leadingIcon = { Icon(Lucide.Trash2, contentDescription = null) },
       )
+      if (showSharedSection) {
+        TesseraDrawerItem(
+          label = stringResource(R.string.drawer_shared),
+          selected = selectedSystemKey == "shared",
+          onClick = { onSystemSelect("shared") },
+          leadingIcon = { Icon(Lucide.Users, contentDescription = null) },
+        )
+      }
       Row(
         modifier = Modifier
           .fillMaxWidth()

@@ -50,12 +50,15 @@ import app.tessera.core.ui.tessera.TesseraBottomActionBar
 import app.tessera.core.ui.tessera.TesseraChip
 import app.tessera.core.ui.tessera.TesseraChipRow
 import app.tessera.core.ui.tessera.TesseraDialog
+import app.tessera.core.ui.tessera.MemberAvatarStack
 import app.tessera.core.ui.tessera.TesseraTopBar
 import app.tessera.core.ui.tessera.TesseraTopBarIconButton
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.model.ShareState
+import app.tessera.domain.model.UserId
 import app.tessera.ui.notes.components.FolderNamePopup
 import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.components.FolderPickerPopup
@@ -119,6 +122,7 @@ fun NotesListScreen(
     onAddTagToNote: (NoteId, String) -> Unit = { _, _ -> },
     onShowArchive: () -> Unit = {},
     onShowTrash: () -> Unit = {},
+    onShowShared: () -> Unit = {},
     onShowAllNotes: () -> Unit = {},
     isRefreshing: Boolean = false,
 ) {
@@ -143,6 +147,7 @@ fun NotesListScreen(
     val selectionMode = state.selectionActive()
     val selection = state.selectedIds()
     val visibleNotes = (state as? NotesListState.Content)?.notes.orEmpty()
+    val currentUserId = (state as? NotesListState.Content)?.currentUserId
     val allSelected = visibleNotes.isNotEmpty() && selection.size >= visibleNotes.size
     val tagChips = state.toTesseraChips()
 
@@ -179,10 +184,12 @@ fun NotesListScreen(
     val allNotesLabel = stringResource(R.string.notes_all_notes)
     val archiveLabel = stringResource(R.string.notes_archive)
     val trashLabel = stringResource(R.string.drawer_trash)
+    val sharedLabel = stringResource(R.string.drawer_shared)
     val headerTitle = when {
         selectionMode -> stringResource(R.string.notes_selection_count, selection.size)
         state.isTrashView -> trashLabel
         state.isArchiveView -> archiveLabel
+        state.isSharedView -> sharedLabel
         state.selectedFolderId != null ->
             state.folders.firstOrNull { it.id == state.selectedFolderId }?.name ?: allNotesLabel
         else -> allNotesLabel
@@ -193,12 +200,14 @@ fun NotesListScreen(
         folderTree = state.folderTree,
         selectedFolderId = state.selectedFolderId,
         selectedSystemKey = selectedSystemKey,
+        showSharedSection = state.hasSharedNotes,
         onSystemSelect = { key ->
             selectedSystemKey = key
             when (key) {
                 "all" -> onShowAllNotes()
                 "archive" -> onShowArchive()
                 "trash" -> onShowTrash()
+                "shared" -> onShowShared()
             }
             scope.launch { drawerState.close() }
         },
@@ -318,6 +327,7 @@ fun NotesListScreen(
                     selection = selection,
                     selectionMode = selectionMode,
                     onToggleSelection = onToggleSelection,
+                    currentUserId = currentUserId,
                 )
                 TesseraBottomActionBar(
                     modifier = Modifier.align(Alignment.BottomCenter),
@@ -381,6 +391,7 @@ fun NotesListScreen(
                         selection = emptySet(),
                         selectionMode = false,
                         onToggleSelection = {},
+                        currentUserId = currentUserId,
                     )
                 },
             )
@@ -531,6 +542,7 @@ private fun NotesBody(
     selection: Set<NoteId>,
     selectionMode: Boolean,
     onToggleSelection: (NoteId) -> Unit,
+    currentUserId: UserId? = null,
 ) {
     when (state) {
         NotesListState.Loading ->
@@ -580,6 +592,7 @@ private fun NotesBody(
                     }
                     items(items = section.notes, key = { it.id.value }) { note ->
                         val preview = markdownBodyPreviewPlainText(note.content)
+                        val shareState = note.shareState
                         TesseraSwipeableNoteCard(
                             modifier = Modifier
                                 .padding(horizontal = 16.dp)
@@ -597,6 +610,16 @@ private fun NotesBody(
                             onArchive = { onArchive(note) },
                             onDelete = { onDeleteNote(note) },
                             selected = selectionMode && note.id in selection,
+                            avatars = if (shareState is ShareState.Shared) {
+                                {
+                                    MemberAvatarStack(
+                                        members = shareState.members,
+                                        currentUserId = currentUserId,
+                                    )
+                                }
+                            } else {
+                                null
+                            },
                         )
                     }
                 }

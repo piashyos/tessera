@@ -127,6 +127,7 @@
     <string name="notes_archive">Archive</string>
     <string name="drawer_pinned">Pinned</string>
     <string name="drawer_trash">Trash</string>
+    <string name="drawer_shared">Shared</string>
     <string name="drawer_folders_section">Folders</string>
     <string name="folders_create">Create folder</string>
     <string name="folders_create_subfolder">Create subfolder</string>

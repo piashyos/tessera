@@ -128,6 +128,7 @@
     <string name="notes_archive">Архив</string>
     <string name="drawer_pinned">Закреплённые</string>
     <string name="drawer_trash">Корзина</string>
+    <string name="drawer_shared">Общие</string>
     <string name="drawer_folders_section">Папки</string>
     <string name="folders_create">Создать папку</string>
     <string name="folders_create_subfolder">Создать подпапку</string>

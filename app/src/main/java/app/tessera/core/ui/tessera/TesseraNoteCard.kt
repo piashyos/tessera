@@ -50,6 +50,7 @@ fun TesseraNoteCard(
   onLongClick: () -> Unit,
   modifier: Modifier = Modifier,
   selected: Boolean = false,
+  avatars: (@Composable () -> Unit)? = null,
 ) {
   Surface(
     color = if (selected) MaterialTheme.colorScheme.secondaryContainer
@@ -120,6 +121,10 @@ fun TesseraNoteCard(
               )
             }
           }
+        }
+        if (avatars != null) {
+          Spacer(modifier = Modifier.padding(top = 2.dp))
+          avatars()
         }
       }
       Spacer(modifier = Modifier.width(TesseraSpacing.md))

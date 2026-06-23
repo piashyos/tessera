@@ -8,6 +8,9 @@ import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.model.UserId
+import app.tessera.domain.model.isShared
+import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.usecase.ArchiveNoteUseCase
 import app.tessera.domain.usecase.CreateFolderUseCase
 import app.tessera.domain.usecase.CreateNoteUseCase
@@ -83,6 +86,7 @@ class NotesListViewModel @Inject constructor(
     private val deleteFolderUseCase: DeleteFolderUseCase,
     private val moveNoteToFolderUseCase: MoveNoteToFolderUseCase,
     private val userPreferences: UserPreferences,
+    authRepository: AuthRepository,
 ) : ViewModel() {
     private val query = MutableStateFlow("")
     private val selectedTags = MutableStateFlow<Set<String>>(emptySet())
@@ -92,16 +96,26 @@ class NotesListViewModel @Inject constructor(
     private val searchExpanded = MutableStateFlow(false)
     private val showArchive = MutableStateFlow(false)
     private val showTrash = MutableStateFlow(false)
+    private val showShared = MutableStateFlow(false)
     private val datePeriod = MutableStateFlow(DatePeriod.All)
 
+    private val currentUserId: StateFlow<UserId?> = authRepository.currentUser
+
     private val systemView: Flow<SystemView> =
-        combine(showArchive, showTrash) { archive, trash ->
+        combine(showArchive, showTrash, showShared) { archive, trash, shared ->
             when {
                 trash -> SystemView.Trash
                 archive -> SystemView.Archive
+                shared -> SystemView.Shared
                 else -> SystemView.Notes
             }
         }
+
+    /** Whether the user has any shared notes at all — drives the drawer "Shared" section. */
+    private val hasSharedNotes: Flow<Boolean> =
+        observeNotesUseCase()
+            .map { notes -> notes.any(Note::isShared) }
+            .distinctUntilChanged()
 
     private val eventsChannel = Channel<NotesListEvent>(Channel.BUFFERED)
     val events: Flow<NotesListEvent> = eventsChannel.receiveAsFlow()
@@ -127,6 +141,7 @@ class NotesListViewModel @Inject constructor(
                 when {
                     view == SystemView.Trash -> observeDeletedNotesUseCase()
                     view == SystemView.Archive -> observeArchivedNotesUseCase()
+                    view == SystemView.Shared -> observeNotesUseCase()
                     value.isNotBlank() -> searchNotesUseCase(value)
                     folderId != null -> observeNotesInFolderUseCase(folderId)
                     else -> observeNotesUseCase()
@@ -150,11 +165,13 @@ class NotesListViewModel @Inject constructor(
             combine(
                 selectedFolderId,
                 searchExpanded,
-                systemView,
+                combine(systemView, hasSharedNotes, currentUserId) { view, hasShared, uid ->
+                    ViewMeta(view, hasShared, uid)
+                },
                 datePeriod,
                 userPreferences.recentSearches,
-            ) { fid, expanded, view, period, recents ->
-                SearchExtras(fid, expanded, view, period, recents)
+            ) { fid, expanded, viewMeta, period, recents ->
+                SearchExtras(fid, expanded, viewMeta, period, recents)
             },
         ) { inputs, notes, folders, folderTree, extras ->
             notes.toUiState(
@@ -167,8 +184,11 @@ class NotesListViewModel @Inject constructor(
                 folderTree = folderTree,
                 selectedFolderId = extras.folderId,
                 searchExpanded = extras.searchExpanded,
-                isArchiveView = extras.view == SystemView.Archive,
-                isTrashView = extras.view == SystemView.Trash,
+                isArchiveView = extras.viewMeta.view == SystemView.Archive,
+                isTrashView = extras.viewMeta.view == SystemView.Trash,
+                isSharedView = extras.viewMeta.view == SystemView.Shared,
+                hasSharedNotes = extras.viewMeta.hasSharedNotes,
+                currentUserId = extras.viewMeta.currentUserId,
                 datePeriod = extras.datePeriod,
                 recentSearches = extras.recentSearches,
             )
@@ -334,6 +354,7 @@ class NotesListViewModel @Inject constructor(
     fun selectFolder(folderId: FolderId?) {
         showArchive.value = false
         showTrash.value = false
+        showShared.value = false
         selectedFolderId.value = folderId
     }
 
@@ -343,6 +364,7 @@ class NotesListViewModel @Inject constructor(
         searchExpanded.value = false
         datePeriod.value = DatePeriod.All
         showTrash.value = false
+        showShared.value = false
         showArchive.value = true
     }
 
@@ -352,12 +374,24 @@ class NotesListViewModel @Inject constructor(
         searchExpanded.value = false
         datePeriod.value = DatePeriod.All
         showArchive.value = false
+        showShared.value = false
         showTrash.value = true
+    }
+
+    fun showSharedNotes() {
+        selectedFolderId.value = null
+        query.value = ""
+        searchExpanded.value = false
+        datePeriod.value = DatePeriod.All
+        showArchive.value = false
+        showTrash.value = false
+        showShared.value = true
     }
 
     fun showAllNotes() {
         showArchive.value = false
         showTrash.value = false
+        showShared.value = false
         selectedFolderId.value = null
     }
 
@@ -428,12 +462,18 @@ private data class StateInputs(
     val viewMode: NotesViewMode,
 )
 
-private enum class SystemView { Notes, Archive, Trash }
+private enum class SystemView { Notes, Archive, Trash, Shared }
+
+private data class ViewMeta(
+    val view: SystemView,
+    val hasSharedNotes: Boolean,
+    val currentUserId: UserId?,
+)
 
 private data class SearchExtras(
     val folderId: FolderId?,
     val searchExpanded: Boolean,
-    val view: SystemView,
+    val viewMeta: ViewMeta,
     val datePeriod: DatePeriod,
     val recentSearches: List<String>,
 )
@@ -450,14 +490,18 @@ private fun List<Note>.toUiState(
     searchExpanded: Boolean,
     isArchiveView: Boolean,
     isTrashView: Boolean,
+    isSharedView: Boolean,
+    hasSharedNotes: Boolean,
+    currentUserId: UserId?,
     datePeriod: DatePeriod,
     recentSearches: List<String>,
 ): NotesListState {
-    val availableTags = flatMap { note -> note.tags.map { tag -> tag.name } }.distinct().sorted()
+    val scoped = if (isSharedView) filter(Note::isShared) else this
+    val availableTags = scoped.flatMap { note -> note.tags.map { tag -> tag.name } }.distinct().sorted()
     val periodFiltered = datePeriod.windowMillis?.let { window ->
         val cutoff = System.currentTimeMillis() - window
-        filter { note -> note.updatedAt >= cutoff }
-    } ?: this
+        scoped.filter { note -> note.updatedAt >= cutoff }
+    } ?: scoped
     val visibleNotes =
         if (selectedTags.isEmpty()) {
             periodFiltered
@@ -480,6 +524,8 @@ private fun List<Note>.toUiState(
             searchExpanded = searchExpanded,
             isArchiveView = isArchiveView,
             isTrashView = isTrashView,
+            isSharedView = isSharedView,
+            hasSharedNotes = hasSharedNotes,
             recentSearches = recentSearches,
             datePeriod = datePeriod,
         )
@@ -494,12 +540,15 @@ private fun List<Note>.toUiState(
         availableTags = availableTags,
         selectedTags = selectedTags,
         viewMode = viewMode,
+        currentUserId = currentUserId,
         folders = folders,
         folderTree = folderTree,
         selectedFolderId = selectedFolderId,
         searchExpanded = searchExpanded,
         isArchiveView = isArchiveView,
         isTrashView = isTrashView,
+        isSharedView = isSharedView,
+        hasSharedNotes = hasSharedNotes,
         recentSearches = recentSearches,
         datePeriod = datePeriod,
     )

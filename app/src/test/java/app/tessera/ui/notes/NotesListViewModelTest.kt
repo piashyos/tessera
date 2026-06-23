@@ -182,6 +182,32 @@ class NotesListViewModelTest {
         }
 
     @Test
+    fun `shared view shows only shared notes and exposes hasSharedNotes`() =
+        runTest(dispatcher.scheduler) {
+            val repository =
+                FakeNotesRepository(
+                    initialNotes = listOf(
+                        sampleNote("private-1"),
+                        sampleSharedNote("shared-1"),
+                    ),
+                )
+            val viewModel = repository.createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Loading
+                val all = awaitItem() as NotesListState.Content
+                assertEquals(2, all.notes.size)
+                assertTrue(all.hasSharedNotes)
+                assertTrue(!all.isSharedView)
+
+                viewModel.showSharedNotes()
+                val shared = awaitItem() as NotesListState.Content
+                assertTrue(shared.isSharedView)
+                assertEquals(listOf("shared-1"), shared.notes.map { it.id.value })
+            }
+        }
+
+    @Test
     fun `clearing query returns to observe flow without debounce`() =
         runTest(dispatcher.scheduler) {
             val repository =
@@ -314,6 +340,7 @@ private class FakeNotesRepository(
             deleteFolderUseCase = app.tessera.domain.usecase.DeleteFolderUseCase(folderRepo),
             moveNoteToFolderUseCase = app.tessera.domain.usecase.MoveNoteToFolderUseCase(folderRepo),
             userPreferences = FakeUserPreferences(),
+            authRepository = FakeAuthRepository(),
         )
     }
 }
@@ -388,4 +415,21 @@ private fun sampleNote(
         deletedAt = null,
         syncedAt = null,
         ownerId = null,
+    )
+
+private fun sampleSharedNote(id: String): Note =
+    sampleNote(id).copy(
+        shareState = app.tessera.domain.model.ShareState.Shared(
+            members = listOf(
+                app.tessera.domain.model.ShareMember(
+                    uid = UserId("owner"),
+                    displayName = "Owner",
+                    email = "owner@example.com",
+                    photoUrl = null,
+                    role = app.tessera.domain.model.ShareRole.OWNER,
+                    joinedAt = 1L,
+                ),
+            ),
+            myRole = app.tessera.domain.model.ShareRole.OWNER,
+        ),
     )

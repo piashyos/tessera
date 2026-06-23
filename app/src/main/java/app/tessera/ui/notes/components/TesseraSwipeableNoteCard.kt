@@ -41,6 +41,7 @@ fun TesseraSwipeableNoteCard(
   onDelete: () -> Unit,
   modifier: Modifier = Modifier,
   selected: Boolean = false,
+  avatars: (@androidx.compose.runtime.Composable () -> Unit)? = null,
 ) {
   val state = rememberSwipeToDismissBoxState(
     confirmValueChange = { value ->
@@ -89,6 +90,7 @@ fun TesseraSwipeableNoteCard(
       onClick = onClick,
       onLongClick = onLongClick,
       selected = selected,
+      avatars = avatars,
     )
   }
 }

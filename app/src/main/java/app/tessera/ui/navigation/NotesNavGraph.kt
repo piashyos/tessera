@@ -132,6 +132,7 @@ private fun NavGraphBuilder.notesListDestination(
                 onAddTagToNote = viewModel::addTagToNote,
                 onShowArchive = viewModel::showArchivedNotes,
                 onShowTrash = viewModel::showTrashNotes,
+                onShowShared = viewModel::showSharedNotes,
                 onShowAllNotes = viewModel::showAllNotes,
             )
         }
