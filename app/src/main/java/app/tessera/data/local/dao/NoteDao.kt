@@ -23,6 +23,13 @@ interface NoteDao {
     )
     fun observeArchived(): Flow<List<NoteEntity>>
 
+    @Query(
+        "SELECT * FROM notes " +
+            "WHERE deletedAt IS NOT NULL " +
+            "ORDER BY deletedAt DESC",
+    )
+    fun observeDeleted(): Flow<List<NoteEntity>>
+
     @Query("SELECT * FROM notes WHERE id = :id")
     fun observeById(id: String): Flow<NoteEntity?>
 

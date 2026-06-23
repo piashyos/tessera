@@ -265,6 +265,10 @@ private class FakeRemoteNotesDataSource : RemoteNotesDataSource {
         stale.forEach { notes.remove(it) }
         return stale.size
     }
+
+    override suspend fun deleteByIds(uid: String, ids: List<String>) {
+        ids.forEach { notes.remove(it) }
+    }
 }
 
 private class SyncFakeNoteDao : NoteDao {
@@ -274,6 +278,8 @@ private class SyncFakeNoteDao : NoteDao {
     override fun observeActive(): Flow<List<NoteEntity>> = activeFlow
 
     override fun observeArchived(): Flow<List<NoteEntity>> = MutableStateFlow(emptyList())
+
+    override fun observeDeleted(): Flow<List<NoteEntity>> = MutableStateFlow(emptyList())
 
     override fun observeById(id: String): Flow<NoteEntity?> = MutableStateFlow(notes[id])
 

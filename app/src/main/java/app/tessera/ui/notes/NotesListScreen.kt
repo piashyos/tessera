@@ -3,8 +3,11 @@ package app.tessera.ui.notes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +22,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -45,25 +49,27 @@ import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.tessera.TesseraBottomActionBar
 import app.tessera.core.ui.tessera.TesseraChip
 import app.tessera.core.ui.tessera.TesseraChipRow
+import app.tessera.core.ui.tessera.TesseraDialog
 import app.tessera.core.ui.tessera.TesseraTopBar
 import app.tessera.core.ui.tessera.TesseraTopBarIconButton
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
-import app.tessera.ui.notes.components.ExpandedSearchBar
 import app.tessera.ui.notes.components.FolderNamePopup
 import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.components.FolderPickerPopup
 import app.tessera.ui.notes.components.NoteActionsSheet
+import app.tessera.ui.notes.components.SearchOption
+import app.tessera.ui.notes.components.SearchOptionPopup
+import app.tessera.ui.notes.components.SearchScreen
 import app.tessera.ui.notes.components.TesseraNotesDrawer
 import app.tessera.ui.notes.components.TesseraSwipeableNoteCard
 import com.composables.icons.lucide.FolderInput
-import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Menu
 import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.Rows3
+import com.composables.icons.lucide.Tag
 import com.composables.icons.lucide.Trash2
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
@@ -81,6 +87,8 @@ fun NotesListScreen(
     onNoteClick: (NoteId) -> Unit = {},
     onTogglePin: (NoteId) -> Unit = {},
     onDeleteNote: (Note) -> Unit = {},
+    onPermanentlyDelete: (Note) -> Unit = {},
+    onRestoreNote: (NoteId) -> Unit = {},
     onUndoDelete: (NoteId) -> Unit = {},
     onRefresh: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
@@ -94,16 +102,23 @@ fun NotesListScreen(
     onToggleSelection: (NoteId) -> Unit = {},
     onToggleSelectAll: () -> Unit = {},
     onDeleteSelected: () -> List<NoteId> = { emptyList() },
+    onPermanentlyDeleteSelected: () -> Unit = {},
     onMoveSelectedToFolder: (FolderId?) -> Unit = {},
     onRestoreNotes: (List<NoteId>) -> Unit = {},
     onExpandSearch: () -> Unit = {},
     onCollapseSearch: () -> Unit = {},
+    onSetDatePeriod: (DatePeriod) -> Unit = {},
+    onSetTagFilter: (String?) -> Unit = {},
+    onAddRecentSearch: (String) -> Unit = {},
+    onRemoveRecentSearch: (String) -> Unit = {},
+    onClearRecentSearches: () -> Unit = {},
     onCreateSubfolder: (FolderId, String) -> Unit = { _, _ -> },
     onMoveFolder: (FolderId, FolderId?) -> Unit = { _, _ -> },
     onDuplicateNote: (NoteId) -> Unit = {},
     onArchiveNote: (NoteId, Boolean) -> Unit = { _, _ -> },
     onAddTagToNote: (NoteId, String) -> Unit = { _, _ -> },
     onShowArchive: () -> Unit = {},
+    onShowTrash: () -> Unit = {},
     onShowAllNotes: () -> Unit = {},
     isRefreshing: Boolean = false,
 ) {
@@ -118,12 +133,18 @@ fun NotesListScreen(
     var tagPickerNote by remember { mutableStateOf<Note?>(null) }
     var selectionMovePickerVisible by remember { mutableStateOf(false) }
     var subfolderParent by remember { mutableStateOf<FolderId?>(null) }
+    var folderPendingDelete by remember { mutableStateOf<Folder?>(null) }
     var selectedSystemKey by remember { mutableStateOf("all") }
+    var tagsVisible by remember { mutableStateOf(false) }
+    var searchFolderPickerVisible by remember { mutableStateOf(false) }
+    var searchTagPickerVisible by remember { mutableStateOf(false) }
+    var searchPeriodPickerVisible by remember { mutableStateOf(false) }
 
     val selectionMode = state.selectionActive()
     val selection = state.selectedIds()
     val visibleNotes = (state as? NotesListState.Content)?.notes.orEmpty()
     val allSelected = visibleNotes.isNotEmpty() && selection.size >= visibleNotes.size
+    val tagChips = state.toTesseraChips()
 
     val deletedMessage = stringResource(R.string.note_deleted)
     val undoLabel = stringResource(R.string.action_undo)
@@ -141,13 +162,26 @@ fun NotesListScreen(
         }
     }
 
+    val permanentlyDeletedMessage = stringResource(R.string.notes_permanently_deleted)
+    val handlePermanentDelete: (Note) -> Unit = { note ->
+        onPermanentlyDelete(note)
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                message = permanentlyDeletedMessage,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
+
     BackHandler(enabled = selectionMode) { onExitSelectionMode() }
     BackHandler(enabled = state.searchExpanded) { onCollapseSearch() }
 
     val allNotesLabel = stringResource(R.string.notes_all_notes)
     val archiveLabel = stringResource(R.string.notes_archive)
+    val trashLabel = stringResource(R.string.drawer_trash)
     val headerTitle = when {
         selectionMode -> stringResource(R.string.notes_selection_count, selection.size)
+        state.isTrashView -> trashLabel
         state.isArchiveView -> archiveLabel
         state.selectedFolderId != null ->
             state.folders.firstOrNull { it.id == state.selectedFolderId }?.name ?: allNotesLabel
@@ -164,6 +198,7 @@ fun NotesListScreen(
             when (key) {
                 "all" -> onShowAllNotes()
                 "archive" -> onShowArchive()
+                "trash" -> onShowTrash()
             }
             scope.launch { drawerState.close() }
         },
@@ -176,45 +211,65 @@ fun NotesListScreen(
         onCreateSubfolder = { parentId ->
             subfolderParent = parentId
         },
+        onDeleteFolder = { id ->
+            folderPendingDelete = state.folders.firstOrNull { it.id == id }
+        },
         onSettingsClick = {
             scope.launch { drawerState.close() }
             onOpenSettings()
         },
     ) {
+      Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = modifier
                 .fillMaxSize()
                 .testTag(UiTestTags.NotesListRoot),
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                TesseraTopBar(
-                    title = { Text(headerTitle) },
-                    navigationIcon = {
-                        TesseraTopBarIconButton(
-                            onClick = { scope.launch { drawerState.open() } },
-                            contentDescription = stringResource(R.string.folders_open_drawer),
-                        ) {
-                            Icon(Lucide.Menu, contentDescription = null)
-                        }
-                    },
-                    actions = {
-                        if (selectionMode) {
-                            IconButton(onClick = { selectionMovePickerVisible = true }) {
-                                Icon(
-                                    Lucide.FolderInput,
-                                    contentDescription = stringResource(R.string.note_action_move),
-                                )
+                Column {
+                    TesseraTopBar(
+                        title = { Text(headerTitle) },
+                        navigationIcon = {
+                            TesseraTopBarIconButton(
+                                onClick = { scope.launch { drawerState.open() } },
+                                contentDescription = stringResource(R.string.folders_open_drawer),
+                            ) {
+                                Icon(Lucide.Menu, contentDescription = null)
+                            }
+                        },
+                        actions = {
+                            if (selectionMode) {
+                            if (!state.isTrashView) {
+                                IconButton(onClick = { selectionMovePickerVisible = true }) {
+                                    Icon(
+                                        Lucide.FolderInput,
+                                        contentDescription = stringResource(R.string.note_action_move),
+                                    )
+                                }
                             }
                             IconButton(onClick = {
-                                val ids = onDeleteSelected()
-                                if (ids.isNotEmpty()) {
-                                    scope.launch {
-                                        val r = snackbarHostState.showSnackbar(
-                                            message = selectionDeletedMessage,
-                                            actionLabel = undoLabel,
-                                            duration = SnackbarDuration.Short,
-                                        )
-                                        if (r == SnackbarResult.ActionPerformed) onRestoreNotes(ids)
+                                if (state.isTrashView) {
+                                    val count = selection.size
+                                    onPermanentlyDeleteSelected()
+                                    if (count > 0) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = permanentlyDeletedMessage,
+                                                duration = SnackbarDuration.Short,
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    val ids = onDeleteSelected()
+                                    if (ids.isNotEmpty()) {
+                                        scope.launch {
+                                            val r = snackbarHostState.showSnackbar(
+                                                message = selectionDeletedMessage,
+                                                actionLabel = undoLabel,
+                                                duration = SnackbarDuration.Short,
+                                            )
+                                            if (r == SnackbarResult.ActionPerformed) onRestoreNotes(ids)
+                                        }
                                     }
                                 }
                             }) {
@@ -224,33 +279,42 @@ fun NotesListScreen(
                                     tint = MaterialTheme.colorScheme.error,
                                 )
                             }
-                        } else {
-                            val (toggleIcon, toggleDesc) = if (state.viewMode() == NotesViewMode.Tiles) {
-                                Lucide.Rows3 to stringResource(R.string.notes_view_mode_list)
-                            } else {
-                                Lucide.LayoutGrid to stringResource(R.string.notes_view_mode_tiles)
+                            } else if (tagChips.isNotEmpty()) {
+                                IconButton(
+                                    onClick = { tagsVisible = !tagsVisible },
+                                    modifier = Modifier.testTag(UiTestTags.TagFilterToggle),
+                                ) {
+                                    Icon(
+                                        Lucide.Tag,
+                                        contentDescription = stringResource(R.string.notes_toggle_tags),
+                                        tint = if (tagsVisible) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            LocalContentColor.current
+                                        },
+                                    )
+                                }
                             }
-                            IconButton(
-                                onClick = onToggleViewMode,
-                                modifier = Modifier.testTag(UiTestTags.ViewModeToggle),
-                            ) {
-                                Icon(toggleIcon, contentDescription = toggleDesc)
-                            }
-                        }
-                    },
-                )
+                        },
+                    )
+                    AnimatedVisibility(
+                        visible = tagsVisible && tagChips.isNotEmpty() && !selectionMode,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        TesseraChipRow(chips = tagChips, onChipClick = onTagToggle)
+                    }
+                }
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                 NotesBody(
                     state = state,
-                    onQueryChange = onQueryChange,
-                    onTagToggle = onTagToggle,
                     onNoteClick = onNoteClick,
                     onLongClickNote = { sheetNote = it },
-                    onArchive = { handleDelete(it) },
-                    onDeleteNote = { handleDelete(it) },
+                    onArchive = { if (state.isTrashView) onRestoreNote(it.id) else handleDelete(it) },
+                    onDeleteNote = { if (state.isTrashView) handlePermanentDelete(it) else handleDelete(it) },
                     selection = selection,
                     selectionMode = selectionMode,
                     onToggleSelection = onToggleSelection,
@@ -269,20 +333,59 @@ fun NotesListScreen(
                     },
                     showFab = !state.searchExpanded && !selectionMode,
                 )
-                AnimatedVisibility(
-                    visible = state.searchExpanded,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.TopStart),
-                ) {
-                    ExpandedSearchBar(
-                        query = state.query(),
-                        onQueryChange = onQueryChange,
-                        onCollapse = onCollapseSearch,
-                    )
-                }
             }
         }
+
+        // Full-screen search surface that overlays the list while search is expanded.
+        val searchQuery = state.query()
+        val selectedTag = state.selectedTags().firstOrNull()
+        val showResults = searchQuery.isNotBlank() ||
+            state.selectedTags().isNotEmpty() ||
+            state.datePeriod != DatePeriod.All ||
+            state.selectedFolderId != null
+        AnimatedVisibility(
+            visible = state.searchExpanded,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(180)),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            SearchScreen(
+                query = searchQuery,
+                onQueryChange = onQueryChange,
+                onSubmitQuery = { if (searchQuery.isNotBlank()) onAddRecentSearch(searchQuery) },
+                onCollapse = onCollapseSearch,
+                showResults = showResults,
+                folderValue = state.folders.firstOrNull { it.id == state.selectedFolderId }?.name
+                    ?: stringResource(R.string.search_filter_all_folders),
+                tagValue = selectedTag?.let { "#$it" } ?: stringResource(R.string.search_filter_none),
+                periodValue = stringResource(state.datePeriod.labelRes()),
+                recentSearches = state.recentSearches,
+                popularTags = state.availableTags(),
+                onPickFolder = { searchFolderPickerVisible = true },
+                onPickTag = { searchTagPickerVisible = true },
+                onPickPeriod = { searchPeriodPickerVisible = true },
+                onRecentClick = { entry ->
+                    onQueryChange(entry)
+                    onAddRecentSearch(entry)
+                },
+                onRecentRemove = onRemoveRecentSearch,
+                onClearHistory = onClearRecentSearches,
+                onPopularTagClick = { tag -> onSetTagFilter(tag) },
+                resultsContent = {
+                    NotesBody(
+                        state = state,
+                        onNoteClick = onNoteClick,
+                        onLongClickNote = { sheetNote = it },
+                        onArchive = { handleDelete(it) },
+                        onDeleteNote = { handleDelete(it) },
+                        selection = emptySet(),
+                        selectionMode = false,
+                        onToggleSelection = {},
+                    )
+                },
+            )
+        }
+      }
     }
 
     sheetNote?.let { note ->
@@ -291,11 +394,12 @@ fun NotesListScreen(
             isPinned = note.isPinned,
             isArchived = note.isArchived,
             onPinToggle = { onTogglePin(note.id) },
+            onSelect = { onEnterSelectionMode(note.id) },
             onMoveToFolder = { folderPickerNote = note },
             onAddTags = { tagPickerNote = note },
             onDuplicate = { onDuplicateNote(note.id) },
             onArchiveToggle = { onArchiveNote(note.id, !note.isArchived) },
-            onDelete = { handleDelete(note) },
+            onDelete = { if (state.isTrashView) handlePermanentDelete(note) else handleDelete(note) },
             onDismiss = { sheetNote = null },
         )
     }
@@ -344,6 +448,7 @@ fun NotesListScreen(
         },
         onDismiss = { folderPickerNote = null },
         hazeState = hazeState,
+        onDeleteFolder = onDeleteFolder,
     )
 
     FolderPickerPopup(
@@ -352,6 +457,7 @@ fun NotesListScreen(
         onPick = { folderId -> onMoveSelectedToFolder(folderId) },
         onDismiss = { selectionMovePickerVisible = false },
         hazeState = hazeState,
+        onDeleteFolder = onDeleteFolder,
     )
 
     val tagNote = tagPickerNote
@@ -365,13 +471,59 @@ fun NotesListScreen(
         onDismiss = { tagPickerNote = null },
         hazeState = hazeState,
     )
+
+    FolderPickerPopup(
+        visible = searchFolderPickerVisible,
+        folders = state.folders,
+        onPick = { folderId ->
+            if (folderId == null) onShowAllNotes() else onSelectFolder(folderId)
+        },
+        onDismiss = { searchFolderPickerVisible = false },
+        hazeState = hazeState,
+        onDeleteFolder = onDeleteFolder,
+    )
+
+    SearchOptionPopup(
+        visible = searchTagPickerVisible,
+        title = stringResource(R.string.search_filter_tag),
+        options = listOf(SearchOption("", stringResource(R.string.search_filter_none))) +
+            state.availableTags().map { SearchOption(it, "#$it") },
+        selectedKey = state.selectedTags().firstOrNull() ?: "",
+        onPick = { key -> onSetTagFilter(key.ifEmpty { null }) },
+        onDismiss = { searchTagPickerVisible = false },
+        hazeState = hazeState,
+    )
+
+    SearchOptionPopup(
+        visible = searchPeriodPickerVisible,
+        title = stringResource(R.string.search_filter_period),
+        options = DatePeriod.values().map { SearchOption(it.name, stringResource(it.labelRes())) },
+        selectedKey = state.datePeriod.name,
+        onPick = { key -> onSetDatePeriod(DatePeriod.valueOf(key)) },
+        onDismiss = { searchPeriodPickerVisible = false },
+        hazeState = hazeState,
+    )
+
+    val deleteFolderTarget = folderPendingDelete
+    if (deleteFolderTarget != null) {
+        TesseraDialog(
+            onDismissRequest = { folderPendingDelete = null },
+            title = stringResource(R.string.folders_delete_confirm_title),
+            text = stringResource(R.string.folders_delete_confirm_message, deleteFolderTarget.name),
+            confirmLabel = stringResource(R.string.folders_delete),
+            onConfirm = {
+                onDeleteFolder(deleteFolderTarget.id)
+                folderPendingDelete = null
+            },
+            dismissLabel = stringResource(R.string.folders_cancel),
+            destructive = true,
+        )
+    }
 }
 
 @Composable
 private fun NotesBody(
     state: NotesListState,
-    onQueryChange: (String) -> Unit,
-    onTagToggle: (String) -> Unit,
     onNoteClick: (NoteId) -> Unit,
     onLongClickNote: (Note) -> Unit,
     onArchive: (Note) -> Unit,
@@ -415,7 +567,6 @@ private fun NotesBody(
 
         is NotesListState.Content -> {
             val sections = groupNotesByDate(state.notes)
-            val chips = state.toTesseraChips()
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -423,11 +574,6 @@ private fun NotesBody(
                 contentPadding = PaddingValues(bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (chips.isNotEmpty()) {
-                    item(key = "chip-row") {
-                        TesseraChipRow(chips = chips, onChipClick = onTagToggle)
-                    }
-                }
                 sections.forEach { section ->
                     item(key = "header-${section.group}") {
                         SectionHeader(group = section.group)
@@ -450,6 +596,7 @@ private fun NotesBody(
                             onLongClick = { onLongClickNote(note) },
                             onArchive = { onArchive(note) },
                             onDelete = { onDeleteNote(note) },
+                            selected = selectionMode && note.id in selection,
                         )
                     }
                 }
@@ -493,6 +640,13 @@ private fun NotesListState.toTesseraChips(): List<TesseraChip> {
     }
 }
 
+private fun DatePeriod.labelRes(): Int = when (this) {
+    DatePeriod.All -> R.string.search_period_all
+    DatePeriod.Today -> R.string.search_period_today
+    DatePeriod.Week -> R.string.search_period_week
+    DatePeriod.Month -> R.string.search_period_month
+}
+
 private fun NotesListState.query(): String =
     when (this) {
         NotesListState.Loading -> ""
@@ -512,13 +666,6 @@ private fun NotesListState.selectedTags(): Set<String> =
         NotesListState.Loading -> emptySet()
         is NotesListState.Empty -> selectedTags
         is NotesListState.Content -> selectedTags
-    }
-
-private fun NotesListState.viewMode(): NotesViewMode =
-    when (this) {
-        NotesListState.Loading -> NotesViewMode.Tiles
-        is NotesListState.Empty -> viewMode
-        is NotesListState.Content -> viewMode
     }
 
 private fun NotesListState.selectionActive(): Boolean =

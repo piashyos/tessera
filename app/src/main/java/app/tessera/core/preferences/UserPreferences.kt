@@ -14,7 +14,16 @@ interface UserPreferences {
     val cachedThemeMode: ThemeMode
     val languageTag: Flow<String>
     val notesViewMode: Flow<NotesViewMode>
+
+    /** Most-recent-first list of committed search queries. */
+    val recentSearches: Flow<List<String>>
+
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setLanguageTag(tag: String)
     suspend fun setNotesViewMode(mode: NotesViewMode)
+
+    /** Adds [query] to the top of the recent list (de-duplicated, capped). */
+    suspend fun addRecentSearch(query: String)
+    suspend fun removeRecentSearch(query: String)
+    suspend fun clearRecentSearches()
 }

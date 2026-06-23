@@ -108,6 +108,7 @@ class NotesListScreenshotTest {
                     isPinned = true,
                     isArchived = false,
                     onPinToggle = {},
+                    onSelect = {},
                     onMoveToFolder = {},
                     onAddTags = {},
                     onDuplicate = {},
@@ -132,6 +133,7 @@ class NotesListScreenshotTest {
             onFolderSelect = {},
             onCreateRootFolder = {},
             onCreateSubfolder = {},
+            onDeleteFolder = {},
             onSettingsClick = {},
         ) {
             Surface(modifier = Modifier.fillMaxSize()) {}

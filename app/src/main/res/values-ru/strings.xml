@@ -48,6 +48,7 @@
     <string name="note_action_unpin">Открепить</string>
     <string name="note_action_delete">Удалить</string>
     <string name="note_deleted">Заметка удалена</string>
+    <string name="notes_permanently_deleted">Удалено навсегда</string>
     <string name="action_undo">Отменить</string>
     <!-- Note list section headers -->
     <string name="note_group_pinned">Закреплённые</string>
@@ -115,6 +116,9 @@
     <string name="notes_selection_deselect_all">Снять выделение</string>
     <string name="notes_selection_deleted">Заметки удалены</string>
     <string name="folder_picker_none">Без папки</string>
+    <string name="folders_delete_confirm_title">Удалить папку?</string>
+    <string name="folders_delete_confirm_message">«%1$s» будет удалена. Заметки внутри неё не будут удалены.</string>
+    <string name="notes_toggle_tags">Показать теги</string>
     <!-- Note action sheet -->
     <string name="note_action_add_tags">Добавить теги</string>
     <string name="note_action_duplicate">Дублировать</string>
@@ -129,6 +133,21 @@
     <string name="folders_create_subfolder">Создать подпапку</string>
     <!-- Search bar -->
     <string name="search_close">Закрыть поиск</string>
+    <!-- Search landing -->
+    <string name="search_filters_header">Фильтры</string>
+    <string name="search_filter_folder">В папке</string>
+    <string name="search_filter_tag">С тегом</string>
+    <string name="search_filter_period">За период</string>
+    <string name="search_filter_all_folders">Все</string>
+    <string name="search_filter_none">—</string>
+    <string name="search_period_all">Всё время</string>
+    <string name="search_period_today">Сегодня</string>
+    <string name="search_period_week">7 дней</string>
+    <string name="search_period_month">30 дней</string>
+    <string name="search_recent_header">Недавнее</string>
+    <string name="search_recent_remove">Убрать из истории</string>
+    <string name="search_clear_history">Очистить историю</string>
+    <string name="search_popular_tags">Популярные теги</string>
     <!-- Tag picker -->
     <string name="editor_existing_tags">Существующие теги</string>
     <!-- Table block editor -->

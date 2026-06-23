@@ -64,6 +64,14 @@ class FirestoreNotesClient @Inject constructor(
         return stale.size
     }
 
+    override suspend fun deleteByIds(uid: String, ids: List<String>) {
+        if (ids.isEmpty()) return
+        val collection = notesCollection(uid)
+        val batch = firestore.batch()
+        ids.forEach { id -> batch.delete(collection.document(id)) }
+        batch.commit().await()
+    }
+
     private companion object {
         const val USERS = "users"
         const val NOTES = "notes"

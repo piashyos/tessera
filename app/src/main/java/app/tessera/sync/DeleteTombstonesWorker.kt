@@ -29,5 +29,6 @@ class DeleteTombstonesWorker @AssistedInject constructor(
     companion object {
         const val KEY_UID = "uid"
         const val UNIQUE_NAME = "tessera-tombstone-purge"
+        const val ONE_TIME_NAME = "tessera-tombstone-purge-once"
     }
 }

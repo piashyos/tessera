@@ -17,10 +17,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,7 +27,6 @@ import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.ui.tessera.TesseraBottomSheet
 import app.tessera.core.ui.theme.TesseraShapes
 import app.tessera.core.ui.theme.TesseraSpacing
-import app.tessera.core.ui.theme.TesseraTheme
 
 /** The three user-facing theme options, mapped onto the underlying [ThemeMode] enum. */
 enum class ThemeChoice { System, Light, Dark }
@@ -67,45 +62,37 @@ fun ThemePickerSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Track the choice locally and apply it globally only on dismiss. Applying live would
-    // recompose the root theme while the sheet is open, which makes the ModalBottomSheet
-    // re-settle and visibly jump in height. The preview card reflects the pending choice instead.
-    var pending by remember { mutableStateOf(selected) }
-    val choice = pending.toThemeChoice()
-    val dynamic = pending.isDynamicColor()
+    // Apply each change immediately so the whole app re-themes live while the sheet is open.
+    val choice = selected.toThemeChoice()
+    val dynamic = selected.isDynamicColor()
 
     TesseraBottomSheet(
-        onDismissRequest = {
-            if (pending != selected) onSelect(pending)
-            onDismiss()
-        },
+        onDismissRequest = onDismiss,
         modifier = modifier,
         header = { Text(stringResource(R.string.settings_theme_sheet_title)) },
     ) {
-        TesseraTheme(themeMode = pending) {
-            ThemePreviewCard(
-                modifier = Modifier.padding(
-                    start = TesseraSpacing.xxl,
-                    end = TesseraSpacing.xxl,
-                    bottom = TesseraSpacing.lg,
-                ),
-            )
-        }
+        ThemePreviewCard(
+            modifier = Modifier.padding(
+                start = TesseraSpacing.xxl,
+                end = TesseraSpacing.xxl,
+                bottom = TesseraSpacing.lg,
+            ),
+        )
 
         ThemeRadioRow(
             label = stringResource(R.string.settings_theme_system),
             selected = choice == ThemeChoice.System,
-            onClick = { pending = themeModeOf(ThemeChoice.System, dynamic) },
+            onClick = { onSelect(themeModeOf(ThemeChoice.System, dynamic)) },
         )
         ThemeRadioRow(
             label = stringResource(R.string.settings_theme_light),
             selected = choice == ThemeChoice.Light,
-            onClick = { pending = themeModeOf(ThemeChoice.Light, dynamic) },
+            onClick = { onSelect(themeModeOf(ThemeChoice.Light, dynamic)) },
         )
         ThemeRadioRow(
             label = stringResource(R.string.settings_theme_dark),
             selected = choice == ThemeChoice.Dark,
-            onClick = { pending = themeModeOf(ThemeChoice.Dark, dynamic) },
+            onClick = { onSelect(themeModeOf(ThemeChoice.Dark, dynamic)) },
         )
 
         if (dynamicColorSupported) {
@@ -115,7 +102,7 @@ fun ThemePickerSheet(
                 title = stringResource(R.string.settings_dynamic_color),
                 subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
                 onClick = if (dynamicEnabled) {
-                    { pending = themeModeOf(choice, !dynamic) }
+                    { onSelect(themeModeOf(choice, !dynamic)) }
                 } else {
                     null
                 },
@@ -123,7 +110,7 @@ fun ThemePickerSheet(
                     Switch(
                         checked = dynamic,
                         onCheckedChange = if (dynamicEnabled) {
-                            { pending = themeModeOf(choice, it) }
+                            { onSelect(themeModeOf(choice, it)) }
                         } else {
                             null
                         },

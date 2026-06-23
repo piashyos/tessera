@@ -204,9 +204,13 @@ private class FakeEditorRepository(
     override suspend fun deleteNote(id: NoteId) {
         deleteCalls += id
     }
+    override suspend fun permanentlyDeleteNote(id: NoteId) {
+        deleteCalls += id
+    }
     override suspend fun restoreNote(id: NoteId) {}
     override suspend fun togglePin(id: NoteId) {}
     override fun observeArchivedNotes(): Flow<List<Note>> = flowOf(emptyList())
+    override fun observeDeletedNotes(): Flow<List<Note>> = flowOf(emptyList())
     override suspend fun setArchived(id: NoteId, archived: Boolean) {}
 
     fun createViewModel(noteId: String): NoteEditorViewModel {

@@ -19,10 +19,12 @@ import app.tessera.domain.usecase.GetNoteUseCase
 import app.tessera.domain.usecase.MoveFolderUseCase
 import app.tessera.domain.usecase.MoveNoteToFolderUseCase
 import app.tessera.domain.usecase.ObserveArchivedNotesUseCase
+import app.tessera.domain.usecase.ObserveDeletedNotesUseCase
 import app.tessera.domain.usecase.ObserveFolderTreeUseCase
 import app.tessera.domain.usecase.ObserveFoldersUseCase
 import app.tessera.domain.usecase.ObserveNotesInFolderUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
+import app.tessera.domain.usecase.PermanentlyDeleteNoteUseCase
 import app.tessera.domain.usecase.RenameFolderUseCase
 import app.tessera.domain.usecase.RestoreNoteUseCase
 import app.tessera.domain.usecase.SearchNotesUseCase
@@ -62,6 +64,7 @@ class NotesListViewModel @Inject constructor(
     private val searchNotesUseCase: SearchNotesUseCase,
     private val createNoteUseCase: CreateNoteUseCase,
     private val deleteNoteUseCase: DeleteNoteUseCase,
+    private val permanentlyDeleteNoteUseCase: PermanentlyDeleteNoteUseCase,
     private val restoreNoteUseCase: RestoreNoteUseCase,
     private val togglePinUseCase: TogglePinUseCase,
     private val getNoteUseCase: GetNoteUseCase,
@@ -69,6 +72,7 @@ class NotesListViewModel @Inject constructor(
     private val duplicateNoteUseCase: DuplicateNoteUseCase,
     private val archiveNoteUseCase: ArchiveNoteUseCase,
     private val observeArchivedNotesUseCase: ObserveArchivedNotesUseCase,
+    private val observeDeletedNotesUseCase: ObserveDeletedNotesUseCase,
     private val observeFoldersUseCase: ObserveFoldersUseCase,
     private val observeFolderTreeUseCase: ObserveFolderTreeUseCase,
     private val observeNotesInFolderUseCase: ObserveNotesInFolderUseCase,
@@ -87,6 +91,17 @@ class NotesListViewModel @Inject constructor(
     private val selectedFolderId = MutableStateFlow<FolderId?>(null)
     private val searchExpanded = MutableStateFlow(false)
     private val showArchive = MutableStateFlow(false)
+    private val showTrash = MutableStateFlow(false)
+    private val datePeriod = MutableStateFlow(DatePeriod.All)
+
+    private val systemView: Flow<SystemView> =
+        combine(showArchive, showTrash) { archive, trash ->
+            when {
+                trash -> SystemView.Trash
+                archive -> SystemView.Archive
+                else -> SystemView.Notes
+            }
+        }
 
     private val eventsChannel = Channel<NotesListEvent>(Channel.BUFFERED)
     val events: Flow<NotesListEvent> = eventsChannel.receiveAsFlow()
@@ -105,12 +120,13 @@ class NotesListViewModel @Inject constructor(
             }
 
     private val notesFlow =
-        combine(effectiveQuery, selectedFolderId, showArchive) { value, folderId, archive ->
-            Triple(value, folderId, archive)
+        combine(effectiveQuery, selectedFolderId, systemView) { value, folderId, view ->
+            Triple(value, folderId, view)
         }
-            .flatMapLatest { (value, folderId, archive) ->
+            .flatMapLatest { (value, folderId, view) ->
                 when {
-                    archive -> observeArchivedNotesUseCase()
+                    view == SystemView.Trash -> observeDeletedNotesUseCase()
+                    view == SystemView.Archive -> observeArchivedNotesUseCase()
                     value.isNotBlank() -> searchNotesUseCase(value)
                     folderId != null -> observeNotesInFolderUseCase(folderId)
                     else -> observeNotesUseCase()
@@ -131,11 +147,16 @@ class NotesListViewModel @Inject constructor(
             notesFlow,
             observeFoldersUseCase(),
             observeFolderTreeUseCase(),
-            combine(selectedFolderId, searchExpanded, showArchive) { fid, expanded, archive ->
-                Triple(fid, expanded, archive)
+            combine(
+                selectedFolderId,
+                searchExpanded,
+                systemView,
+                datePeriod,
+                userPreferences.recentSearches,
+            ) { fid, expanded, view, period, recents ->
+                SearchExtras(fid, expanded, view, period, recents)
             },
-        ) { inputs, notes, folders, folderTree, folderSearchArchive ->
-            val (folderId, expanded, archive) = folderSearchArchive
+        ) { inputs, notes, folders, folderTree, extras ->
             notes.toUiState(
                 query = inputs.query,
                 selectedTags = inputs.tags,
@@ -144,9 +165,12 @@ class NotesListViewModel @Inject constructor(
                 viewMode = inputs.viewMode,
                 folders = folders,
                 folderTree = folderTree,
-                selectedFolderId = folderId,
-                searchExpanded = expanded,
-                isArchiveView = archive,
+                selectedFolderId = extras.folderId,
+                searchExpanded = extras.searchExpanded,
+                isArchiveView = extras.view == SystemView.Archive,
+                isTrashView = extras.view == SystemView.Trash,
+                datePeriod = extras.datePeriod,
+                recentSearches = extras.recentSearches,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -165,6 +189,28 @@ class NotesListViewModel @Inject constructor(
     fun collapseSearch() {
         searchExpanded.value = false
         query.value = ""
+        datePeriod.value = DatePeriod.All
+    }
+
+    fun setDatePeriod(period: DatePeriod) {
+        datePeriod.value = period
+    }
+
+    /** Replaces the active tag filter with [tag], or clears it when null. */
+    fun setSingleTagFilter(tag: String?) {
+        selectedTags.value = if (tag == null) emptySet() else setOf(tag)
+    }
+
+    fun addRecentSearch(value: String) {
+        viewModelScope.launch { userPreferences.addRecentSearch(value) }
+    }
+
+    fun removeRecentSearch(value: String) {
+        viewModelScope.launch { userPreferences.removeRecentSearch(value) }
+    }
+
+    fun clearRecentSearches() {
+        viewModelScope.launch { userPreferences.clearRecentSearches() }
     }
 
     fun onTagToggle(tag: String) {
@@ -220,6 +266,15 @@ class NotesListViewModel @Inject constructor(
         return ids
     }
 
+    /** Permanently removes the selected notes (used from Trash). Irreversible, no undo. */
+    fun permanentlyDeleteSelected() {
+        val ids = selection.value.toList()
+        viewModelScope.launch {
+            permanentlyDeleteNoteUseCase(ids)
+        }
+        exitSelectionMode()
+    }
+
     fun moveSelectedToFolder(folderId: FolderId?) {
         val ids = selection.value.toList()
         viewModelScope.launch {
@@ -263,6 +318,13 @@ class NotesListViewModel @Inject constructor(
         }
     }
 
+    fun permanentlyDeleteNote(id: NoteId) {
+        viewModelScope.launch {
+            selection.update { it - id }
+            permanentlyDeleteNoteUseCase(id)
+        }
+    }
+
     fun restoreNote(id: NoteId) {
         viewModelScope.launch {
             restoreNoteUseCase(id)
@@ -271,6 +333,7 @@ class NotesListViewModel @Inject constructor(
 
     fun selectFolder(folderId: FolderId?) {
         showArchive.value = false
+        showTrash.value = false
         selectedFolderId.value = folderId
     }
 
@@ -278,11 +341,23 @@ class NotesListViewModel @Inject constructor(
         selectedFolderId.value = null
         query.value = ""
         searchExpanded.value = false
+        datePeriod.value = DatePeriod.All
+        showTrash.value = false
         showArchive.value = true
+    }
+
+    fun showTrashNotes() {
+        selectedFolderId.value = null
+        query.value = ""
+        searchExpanded.value = false
+        datePeriod.value = DatePeriod.All
+        showArchive.value = false
+        showTrash.value = true
     }
 
     fun showAllNotes() {
         showArchive.value = false
+        showTrash.value = false
         selectedFolderId.value = null
     }
 
@@ -353,6 +428,16 @@ private data class StateInputs(
     val viewMode: NotesViewMode,
 )
 
+private enum class SystemView { Notes, Archive, Trash }
+
+private data class SearchExtras(
+    val folderId: FolderId?,
+    val searchExpanded: Boolean,
+    val view: SystemView,
+    val datePeriod: DatePeriod,
+    val recentSearches: List<String>,
+)
+
 private fun List<Note>.toUiState(
     query: String,
     selectedTags: Set<String>,
@@ -364,13 +449,20 @@ private fun List<Note>.toUiState(
     selectedFolderId: FolderId?,
     searchExpanded: Boolean,
     isArchiveView: Boolean,
+    isTrashView: Boolean,
+    datePeriod: DatePeriod,
+    recentSearches: List<String>,
 ): NotesListState {
     val availableTags = flatMap { note -> note.tags.map { tag -> tag.name } }.distinct().sorted()
+    val periodFiltered = datePeriod.windowMillis?.let { window ->
+        val cutoff = System.currentTimeMillis() - window
+        filter { note -> note.updatedAt >= cutoff }
+    } ?: this
     val visibleNotes =
         if (selectedTags.isEmpty()) {
-            this
+            periodFiltered
         } else {
-            filter { note ->
+            periodFiltered.filter { note ->
                 val noteTags = note.tags.map { tag -> tag.name }.toSet()
                 selectedTags.all(noteTags::contains)
             }
@@ -387,6 +479,9 @@ private fun List<Note>.toUiState(
             selectedFolderId = selectedFolderId,
             searchExpanded = searchExpanded,
             isArchiveView = isArchiveView,
+            isTrashView = isTrashView,
+            recentSearches = recentSearches,
+            datePeriod = datePeriod,
         )
     }
 
@@ -404,5 +499,8 @@ private fun List<Note>.toUiState(
         selectedFolderId = selectedFolderId,
         searchExpanded = searchExpanded,
         isArchiveView = isArchiveView,
+        isTrashView = isTrashView,
+        recentSearches = recentSearches,
+        datePeriod = datePeriod,
     )
 }

@@ -326,6 +326,9 @@ private class FakeNoteDao : NoteDao {
 
     override fun observeArchived(): Flow<List<NoteEntity>> = archivedFlow
 
+    private val deletedFlow = MutableStateFlow(emptyList<NoteEntity>())
+    override fun observeDeleted(): Flow<List<NoteEntity>> = deletedFlow
+
     override fun observeById(id: String): Flow<NoteEntity?> =
         noteFlows.getOrPut(id) { MutableStateFlow(notes[id]) }
 

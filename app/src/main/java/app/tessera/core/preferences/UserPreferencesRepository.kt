@@ -19,6 +19,10 @@ private val Context.userPrefsDataStore by preferencesDataStore(name = "user_pref
 private val KEY_THEME = stringPreferencesKey("theme_mode")
 private val KEY_LANG = stringPreferencesKey("language_tag")
 private val KEY_VIEW_MODE = stringPreferencesKey("notes_view_mode")
+private val KEY_RECENT_SEARCHES = stringPreferencesKey("recent_searches")
+
+private const val RECENT_SEARCHES_LIMIT = 8
+private const val RECENT_SEARCHES_DELIMITER = "\n"
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
@@ -41,6 +45,13 @@ class UserPreferencesRepository @Inject constructor(
         p[KEY_VIEW_MODE]?.let { runCatching { NotesViewMode.valueOf(it) }.getOrNull() } ?: NotesViewMode.List
     }
 
+    override val recentSearches: Flow<List<String>> = store.data.map { p ->
+        p[KEY_RECENT_SEARCHES]
+            ?.split(RECENT_SEARCHES_DELIMITER)
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+    }
+
     override suspend fun setThemeMode(mode: ThemeMode) {
         store.edit { it[KEY_THEME] = mode.name }
     }
@@ -51,5 +62,33 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun setNotesViewMode(mode: NotesViewMode) {
         store.edit { it[KEY_VIEW_MODE] = mode.name }
+    }
+
+    override suspend fun addRecentSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return
+        store.edit { prefs ->
+            val current = prefs[KEY_RECENT_SEARCHES]
+                ?.split(RECENT_SEARCHES_DELIMITER)
+                ?.filter { it.isNotBlank() }
+                .orEmpty()
+            val updated = (listOf(trimmed) + current.filterNot { it.equals(trimmed, ignoreCase = true) })
+                .take(RECENT_SEARCHES_LIMIT)
+            prefs[KEY_RECENT_SEARCHES] = updated.joinToString(RECENT_SEARCHES_DELIMITER)
+        }
+    }
+
+    override suspend fun removeRecentSearch(query: String) {
+        store.edit { prefs ->
+            val updated = prefs[KEY_RECENT_SEARCHES]
+                ?.split(RECENT_SEARCHES_DELIMITER)
+                ?.filter { it.isNotBlank() && !it.equals(query, ignoreCase = true) }
+                .orEmpty()
+            prefs[KEY_RECENT_SEARCHES] = updated.joinToString(RECENT_SEARCHES_DELIMITER)
+        }
+    }
+
+    override suspend fun clearRecentSearches() {
+        store.edit { it.remove(KEY_RECENT_SEARCHES) }
     }
 }

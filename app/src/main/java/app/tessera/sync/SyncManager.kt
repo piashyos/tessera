@@ -64,6 +64,8 @@ class SyncManager @Inject constructor(
     fun start() {
         if (started) return
         started = true
+        // Clean expired trash locally on every launch, even for signed-out / local-only users.
+        scope.launch { syncRepository.purgeLocalTombstones() }
         scope.launch {
             authRepository.currentUser.collectLatest { user ->
                 if (user != null) onSignedIn(user) else onSignedOut()
@@ -81,6 +83,20 @@ class SyncManager @Inject constructor(
                 .setInputData(data)
                 .build()
         workManager.enqueueUniqueWork(SyncWorker.UNIQUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, syncRequest)
+
+        // Run a purge now (at launch / sign-in) so 30-day-old trash is removed everywhere,
+        // including Firebase, without waiting for the periodic worker's deferred first run.
+        val purgeNowRequest =
+            OneTimeWorkRequestBuilder<DeleteTombstonesWorker>()
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setInputData(workDataOf(DeleteTombstonesWorker.KEY_UID to uid.value))
+                .build()
+        workManager.enqueueUniqueWork(
+            DeleteTombstonesWorker.ONE_TIME_NAME,
+            ExistingWorkPolicy.REPLACE,
+            purgeNowRequest,
+        )
 
         val purgeRequest =
             PeriodicWorkRequestBuilder<DeleteTombstonesWorker>(1, TimeUnit.DAYS)
@@ -108,6 +124,7 @@ class SyncManager @Inject constructor(
         remoteJob = null
         workManager.cancelUniqueWork(SyncWorker.UNIQUE_NAME)
         workManager.cancelUniqueWork(DeleteTombstonesWorker.UNIQUE_NAME)
+        workManager.cancelUniqueWork(DeleteTombstonesWorker.ONE_TIME_NAME)
     }
 
     private companion object {

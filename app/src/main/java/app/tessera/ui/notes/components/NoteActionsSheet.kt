@@ -13,6 +13,7 @@ import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Folder
+import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.Tag
@@ -24,6 +25,7 @@ fun NoteActionsSheet(
   isPinned: Boolean,
   isArchived: Boolean,
   onPinToggle: () -> Unit,
+  onSelect: () -> Unit,
   onMoveToFolder: () -> Unit,
   onAddTags: () -> Unit,
   onDuplicate: () -> Unit,
@@ -35,6 +37,11 @@ fun NoteActionsSheet(
     onDismissRequest = onDismiss,
     header = { Text(noteTitle, style = MaterialTheme.typography.titleMedium) },
   ) {
+    TesseraSheetItem(
+      label = stringResource(R.string.note_action_select),
+      leadingIcon = { Icon(Lucide.ListChecks, contentDescription = null) },
+      onClick = { onSelect(); onDismiss() },
+    )
     TesseraSheetItem(
       label = stringResource(if (isPinned) R.string.note_action_unpin else R.string.note_action_pin),
       leadingIcon = { Icon(Lucide.Pin, contentDescription = null) },

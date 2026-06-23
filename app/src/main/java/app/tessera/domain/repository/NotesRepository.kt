@@ -14,6 +14,8 @@ interface NotesRepository {
 
     fun observeArchivedNotes(): Flow<List<Note>>
 
+    fun observeDeletedNotes(): Flow<List<Note>>
+
     suspend fun getNote(id: NoteId): Note?
 
     suspend fun createNote(ownerId: UserId? = null): Note
@@ -21,6 +23,9 @@ interface NotesRepository {
     suspend fun updateNote(note: Note): Note
 
     suspend fun deleteNote(id: NoteId)
+
+    /** Irreversibly removes a note (used to empty items from Trash). */
+    suspend fun permanentlyDeleteNote(id: NoteId)
 
     suspend fun restoreNote(id: NoteId)
 

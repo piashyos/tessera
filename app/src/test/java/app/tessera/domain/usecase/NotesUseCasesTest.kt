@@ -174,6 +174,10 @@ private class FakeNotesRepository : NotesRepository {
         lastDeletedId = id
     }
 
+    override suspend fun permanentlyDeleteNote(id: NoteId) {
+        lastDeletedId = id
+    }
+
     override suspend fun restoreNote(id: NoteId) {
         lastRestoredId = id
     }
@@ -183,6 +187,8 @@ private class FakeNotesRepository : NotesRepository {
     }
 
     override fun observeArchivedNotes(): Flow<List<Note>> = MutableStateFlow(emptyList())
+
+    override fun observeDeletedNotes(): Flow<List<Note>> = MutableStateFlow(emptyList())
 
     override suspend fun setArchived(id: NoteId, archived: Boolean) {}
 }

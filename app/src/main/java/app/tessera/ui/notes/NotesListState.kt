@@ -12,6 +12,9 @@ sealed interface NotesListState {
     val selectedFolderId: FolderId?
     val searchExpanded: Boolean
     val isArchiveView: Boolean
+    val isTrashView: Boolean
+    val recentSearches: List<String>
+    val datePeriod: DatePeriod
 
     data object Loading : NotesListState {
         override val folders: List<Folder> = emptyList()
@@ -19,6 +22,9 @@ sealed interface NotesListState {
         override val selectedFolderId: FolderId? = null
         override val searchExpanded: Boolean = false
         override val isArchiveView: Boolean = false
+        override val isTrashView: Boolean = false
+        override val recentSearches: List<String> = emptyList()
+        override val datePeriod: DatePeriod = DatePeriod.All
     }
 
     data class Empty(
@@ -31,6 +37,9 @@ sealed interface NotesListState {
         override val selectedFolderId: FolderId? = null,
         override val searchExpanded: Boolean = false,
         override val isArchiveView: Boolean = false,
+        override val isTrashView: Boolean = false,
+        override val recentSearches: List<String> = emptyList(),
+        override val datePeriod: DatePeriod = DatePeriod.All,
     ) : NotesListState
 
     data class Content(
@@ -47,5 +56,8 @@ sealed interface NotesListState {
         override val selectedFolderId: FolderId? = null,
         override val searchExpanded: Boolean = false,
         override val isArchiveView: Boolean = false,
+        override val isTrashView: Boolean = false,
+        override val recentSearches: List<String> = emptyList(),
+        override val datePeriod: DatePeriod = DatePeriod.All,
     ) : NotesListState
 }

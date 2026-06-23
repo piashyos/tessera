@@ -14,6 +14,7 @@ import app.tessera.data.remote.RemoteFolder
 import app.tessera.data.remote.RemoteFoldersDataSource
 import app.tessera.data.remote.RemoteNote
 import app.tessera.data.remote.RemoteNotesDataSource
+import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.SyncRepository
 import java.util.UUID
@@ -56,6 +57,25 @@ class SyncRepositoryImpl @Inject constructor(
             folderDao.purgeOldTombstones(threshold)
             remote.deleteOlderTombstones(uid.value, threshold)
             remoteFolders.deleteOlderTombstones(uid.value, threshold)
+        }
+
+    override suspend fun purgeLocalTombstones(): Result<Unit> =
+        runCatching {
+            val threshold = clock.nowMs() - TOMBSTONE_RETENTION_MS
+            noteDao.purgeOldTombstones(threshold)
+            folderDao.purgeOldTombstones(threshold)
+        }
+
+    override suspend fun permanentlyDelete(uid: UserId, ids: List<NoteId>): Result<Unit> =
+        runCatching {
+            if (ids.isEmpty()) return@runCatching
+            val raw = ids.map { it.value }
+            // Remove the cloud docs first so the live snapshot / next pull can't resurrect them.
+            remote.deleteByIds(uid.value, raw)
+            raw.forEach { id ->
+                tagDao.clearTagsForNote(id)
+                noteDao.hardDelete(id)
+            }
         }
 
     override fun observeRemote(uid: UserId): Flow<Unit> {
