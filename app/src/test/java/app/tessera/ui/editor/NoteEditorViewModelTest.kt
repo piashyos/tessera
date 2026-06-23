@@ -417,6 +417,32 @@ class NoteEditorViewModelTest {
             assertEquals(null, state.myRole)
         }
 
+    @Test
+    fun `canUnshare is true only for the owner of a shared note`() =
+        runTest(dispatcher.scheduler) {
+            // Owner of a shared note → can make it private again.
+            val ownerRepo = FakeEditorRepository(notes = listOf(sampleNote("o-1")))
+            ownerRepo.membersFlow.value =
+                listOf(member("me", ShareRole.OWNER), member("bob", ShareRole.EDITOR))
+            val ownerVm = ownerRepo.createViewModel(noteId = "o-1", currentUser = "me")
+            runCurrent()
+            assertTrue(ownerVm.state.value.canUnshare, "owner can unshare")
+
+            // Editor of a shared note → cannot unshare.
+            val editorRepo = FakeEditorRepository(notes = listOf(sampleNote("e-1")))
+            editorRepo.membersFlow.value =
+                listOf(member("alice", ShareRole.OWNER), member("me", ShareRole.EDITOR))
+            val editorVm = editorRepo.createViewModel(noteId = "e-1", currentUser = "me")
+            runCurrent()
+            assertFalse(editorVm.state.value.canUnshare, "editor cannot unshare")
+
+            // Private note (no members) → not shared → cannot unshare.
+            val privateRepo = FakeEditorRepository(notes = listOf(sampleNote("p-1")))
+            val privateVm = privateRepo.createViewModel(noteId = "p-1", currentUser = "me")
+            runCurrent()
+            assertFalse(privateVm.state.value.canUnshare, "private note cannot unshare")
+        }
+
     private fun kotlinx.coroutines.test.TestScope.inviteWith(result: InviteResult): NoteEditorState {
         val note = sharedNote("inv", ShareRole.OWNER, owner = "me")
         val repo = FakeEditorRepository(notes = listOf(note))

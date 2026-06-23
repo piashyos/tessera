@@ -68,6 +68,7 @@ import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.formatNoteDate
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
@@ -91,6 +92,7 @@ fun NoteEditorScreen(
     modifier: Modifier = Modifier,
     onMakeShared: () -> Unit = {},
     onManageAccess: () -> Unit = {},
+    onUnshare: () -> Unit = {},
     onLeave: () -> Unit = {},
     onDeleteForAll: () -> Unit = {},
     onInvite: (String, app.tessera.domain.model.ShareRole) -> Unit = { _, _ -> },
@@ -138,6 +140,7 @@ fun NoteEditorScreen(
     var overflowVisible by remember { mutableStateOf(false) }
     var leaveConfirmVisible by remember { mutableStateOf(false) }
     var deleteForAllConfirmVisible by remember { mutableStateOf(false) }
+    var unshareConfirmVisible by remember { mutableStateOf(false) }
     // Live formats at the editor's caret, pushed from RichNoteBody on selection/text/toggle
     // changes. Drives the toolbar highlight so buttons no longer stay lit after the caret
     // leaves the formatted span.
@@ -203,7 +206,7 @@ fun NoteEditorScreen(
                             }
                         }
                         val hasOverflow = state.canMakeShared || state.canManageAccess ||
-                            state.canLeave || state.canDeleteForAll
+                            state.canUnshare || state.canLeave || state.canDeleteForAll
                         if (hasOverflow) {
                             Box {
                                 TesseraTopBarIconButton(
@@ -234,6 +237,16 @@ fun NoteEditorScreen(
                                             text = { Text(stringResource(R.string.editor_manage_access)) },
                                             leadingIcon = { Icon(Lucide.Users, contentDescription = null) },
                                             onClick = { overflowVisible = false; onManageAccess() },
+                                        )
+                                    }
+                                    if (state.canUnshare) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.editor_make_private)) },
+                                            leadingIcon = { Icon(Lucide.Lock, contentDescription = null) },
+                                            onClick = {
+                                                overflowVisible = false
+                                                unshareConfirmVisible = true
+                                            },
                                         )
                                     }
                                     if (state.canLeave) {
@@ -414,6 +427,17 @@ fun NoteEditorScreen(
                 destructive = true,
                 onConfirm = { deleteForAllConfirmVisible = false; onDeleteForAll() },
                 onDismiss = { deleteForAllConfirmVisible = false },
+            )
+        }
+
+        if (unshareConfirmVisible) {
+            ConfirmDialog(
+                title = stringResource(R.string.unshare_confirm_title),
+                message = stringResource(R.string.unshare_confirm_message),
+                confirmLabel = stringResource(R.string.unshare_confirm_action),
+                destructive = true,
+                onConfirm = { unshareConfirmVisible = false; onUnshare() },
+                onDismiss = { unshareConfirmVisible = false },
             )
         }
 

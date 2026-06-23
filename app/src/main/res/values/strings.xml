@@ -28,6 +28,7 @@
     <string name="editor_more">More options</string>
     <string name="editor_make_shared">Make shared</string>
     <string name="editor_manage_access">Manage access</string>
+    <string name="editor_make_private">Make private</string>
     <string name="editor_leave">Leave note</string>
     <string name="editor_delete_for_all">Delete for everyone</string>
     <!-- Sharing: members sheet -->
@@ -54,6 +55,9 @@
     <string name="delete_all_confirm_title">Delete for everyone?</string>
     <string name="delete_all_confirm_message">This note will be removed for all members.</string>
     <string name="delete_all_confirm_action">Delete</string>
+    <string name="unshare_confirm_title">Make private?</string>
+    <string name="unshare_confirm_message">This note will leave the shared space and other members will lose access.</string>
+    <string name="unshare_confirm_action">Make private</string>
     <string name="share_failed_title">Sharing failed</string>
     <string name="share_failed_message">This action couldn\'t be completed. Check your connection and try again.</string>
     <string name="share_failed_ok">OK</string>

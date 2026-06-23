@@ -28,6 +28,7 @@
     <string name="editor_more">Ещё</string>
     <string name="editor_make_shared">Сделать общей</string>
     <string name="editor_manage_access">Управление доступом</string>
+    <string name="editor_make_private">Сделать приватной</string>
     <string name="editor_leave">Выйти из заметки</string>
     <string name="editor_delete_for_all">Удалить для всех</string>
     <!-- Sharing: members sheet -->
@@ -54,6 +55,9 @@
     <string name="delete_all_confirm_title">Удалить для всех?</string>
     <string name="delete_all_confirm_message">Заметка будет удалена у всех участников.</string>
     <string name="delete_all_confirm_action">Удалить</string>
+    <string name="unshare_confirm_title">Сделать приватной?</string>
+    <string name="unshare_confirm_message">Заметка покинет общий доступ, остальные участники потеряют к ней доступ.</string>
+    <string name="unshare_confirm_action">Сделать приватной</string>
     <string name="share_failed_title">Не удалось поделиться</string>
     <string name="share_failed_message">Действие не выполнено. Проверьте подключение и повторите попытку.</string>
     <string name="share_failed_ok">ОК</string>

@@ -251,6 +251,7 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                 onDelete = deleteAction,
                 onMakeShared = viewModel::makeShared,
                 onManageAccess = viewModel::openMembersSheet,
+                onUnshare = viewModel::unshare,
                 onLeave = leaveAction,
                 onDeleteForAll = deleteAction,
                 onInvite = viewModel::invite,

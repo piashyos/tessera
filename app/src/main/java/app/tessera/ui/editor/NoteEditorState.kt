@@ -49,4 +49,7 @@ data class NoteEditorState(
 
     /** Owner/Manager → can delete the note for every member. */
     val canDeleteForAll: Boolean get() = isShared && (myRole?.canDeleteForAll == true)
+
+    /** Only the owner can pull the note back out of sharing (make it private again). */
+    val canUnshare: Boolean get() = isShared && myRole == ShareRole.OWNER
 }
