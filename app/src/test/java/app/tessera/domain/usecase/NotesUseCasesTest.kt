@@ -1,7 +1,10 @@
 package app.tessera.domain.usecase
 
+import app.tessera.domain.model.InviteResult
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.model.ShareMember
+import app.tessera.domain.model.ShareRole
 import app.tessera.domain.model.Tag
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.NotesRepository
@@ -191,4 +194,20 @@ private class FakeNotesRepository : NotesRepository {
     override fun observeDeletedNotes(): Flow<List<Note>> = MutableStateFlow(emptyList())
 
     override suspend fun setArchived(id: NoteId, archived: Boolean) {}
+
+    override suspend fun shareNote(id: NoteId): Result<Unit> = Result.success(Unit)
+
+    override suspend fun inviteByEmail(id: NoteId, email: String, role: ShareRole): Result<InviteResult> =
+        Result.success(InviteResult.Added)
+
+    override suspend fun changeRole(id: NoteId, uid: UserId, role: ShareRole): Result<Unit> =
+        Result.success(Unit)
+
+    override suspend fun removeMember(id: NoteId, uid: UserId): Result<Unit> = Result.success(Unit)
+
+    override suspend fun leaveSharedNote(id: NoteId): Result<Unit> = Result.success(Unit)
+
+    override suspend fun unshareNote(id: NoteId): Result<Unit> = Result.success(Unit)
+
+    override fun observeMembers(id: NoteId): Flow<List<ShareMember>> = MutableStateFlow(emptyList())
 }

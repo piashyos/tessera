@@ -53,6 +53,7 @@ class NotesRepositoryTagSyncTest {
                 NoteMapper(),
                 IncrementingClock(),
                 FakeSyncScheduler(),
+                FakeSharedNotesGateway(),
             )
     }
 

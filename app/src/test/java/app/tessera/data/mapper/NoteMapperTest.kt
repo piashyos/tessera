@@ -4,10 +4,14 @@ import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.remote.RemoteNote
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.model.ShareMember
+import app.tessera.domain.model.ShareRole
+import app.tessera.domain.model.ShareState
 import app.tessera.domain.model.Tag
 import app.tessera.domain.model.UserId
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class NoteMapperTest {
@@ -93,6 +97,79 @@ class NoteMapperTest {
         val roundTrip = mapper.toEntity(mapper.toDomain(entity, listOf("tag-b", "tag-a")))
 
         assertEquals(entity, roundTrip)
+    }
+
+    @Test
+    fun `toDomain maps a private entity to Private share state`() {
+        val entity =
+            NoteEntity(
+                id = "p1",
+                title = "T",
+                content = "B",
+                isPinned = false,
+                createdAt = 1L,
+                updatedAt = 1L,
+                deletedAt = null,
+                syncedAt = null,
+                ownerId = "u1",
+            )
+
+        val note = mapper.toDomain(entity, emptyList())
+
+        assertEquals(ShareState.Private, note.shareState)
+    }
+
+    @Test
+    fun `toDomain builds Shared share state with members and current role`() {
+        val entity =
+            NoteEntity(
+                id = "s1",
+                title = "T",
+                content = "B",
+                isPinned = false,
+                createdAt = 1L,
+                updatedAt = 1L,
+                deletedAt = null,
+                syncedAt = null,
+                ownerId = "owner",
+                shareState = NoteEntity.SHARE_STATE_SHARED,
+                myRole = "EDITOR",
+            )
+        val members =
+            listOf(
+                ShareMember(UserId("owner"), "Owner", "o@x.com", null, ShareRole.OWNER, 1L),
+                ShareMember(UserId("me"), "Me", "m@x.com", null, ShareRole.EDITOR, 2L),
+            )
+
+        val note = mapper.toDomain(entity, emptyList(), members)
+
+        val shared = note.shareState as ShareState.Shared
+        assertEquals(ShareRole.EDITOR, shared.myRole)
+        assertEquals(members, shared.members)
+    }
+
+    @Test
+    fun `toEntity round-trips Shared share state into shareState and myRole columns`() {
+        val entity =
+            NoteEntity(
+                id = "s2",
+                title = "T",
+                content = "B",
+                isPinned = false,
+                createdAt = 1L,
+                updatedAt = 1L,
+                deletedAt = null,
+                syncedAt = null,
+                ownerId = "owner",
+                shareState = NoteEntity.SHARE_STATE_SHARED,
+                myRole = "MANAGER",
+            )
+
+        val rebuilt = mapper.toEntity(mapper.toDomain(entity, emptyList(), emptyList()))
+
+        assertEquals(NoteEntity.SHARE_STATE_SHARED, rebuilt.shareState)
+        assertEquals("MANAGER", rebuilt.myRole)
+        assertTrue(rebuilt.copy(shareState = entity.shareState, myRole = entity.myRole) == entity)
     }
 
     @Test

@@ -4,14 +4,22 @@ import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.remote.RemoteNote
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.model.ShareMember
+import app.tessera.domain.model.ShareRole
+import app.tessera.domain.model.ShareState
 import app.tessera.domain.model.Tag
 import app.tessera.domain.model.UserId
 import javax.inject.Inject
 
 class NoteMapper @Inject constructor() {
+    /**
+     * Maps a local note row to the domain model. [members] is the note's mirrored member list,
+     * required to build [ShareState.Shared]; it is ignored (and may be empty) for private notes.
+     */
     fun toDomain(
         entity: NoteEntity,
         tagNames: List<String>,
+        members: List<ShareMember> = emptyList(),
     ): Note =
         Note(
             id = NoteId(entity.id),
@@ -25,6 +33,7 @@ class NoteMapper @Inject constructor() {
             syncedAt = entity.syncedAt,
             ownerId = entity.ownerId?.let(::UserId),
             isArchived = entity.isArchived,
+            shareState = shareState(entity, members),
         )
 
     fun toEntity(note: Note): NoteEntity =
@@ -39,6 +48,13 @@ class NoteMapper @Inject constructor() {
             syncedAt = note.syncedAt,
             ownerId = note.ownerId?.value,
             isArchived = note.isArchived,
+            shareState =
+                if (note.shareState is ShareState.Shared) {
+                    NoteEntity.SHARE_STATE_SHARED
+                } else {
+                    NoteEntity.SHARE_STATE_PRIVATE
+                },
+            myRole = (note.shareState as? ShareState.Shared)?.myRole?.name,
         )
 
     fun toRemote(
@@ -76,6 +92,16 @@ class NoteMapper @Inject constructor() {
             ownerId = ownerId,
             isArchived = remote.isArchived,
         )
+
+    private fun shareState(
+        entity: NoteEntity,
+        members: List<ShareMember>,
+    ): ShareState =
+        if (entity.shareState == NoteEntity.SHARE_STATE_SHARED) {
+            ShareState.Shared(members = members, myRole = ShareRole.fromWire(entity.myRole))
+        } else {
+            ShareState.Private
+        }
 
     fun normalizeTags(tags: List<Tag>): List<Tag> =
         normalizeTagNames(tags.map(Tag::name)).map(::Tag)

@@ -4,7 +4,9 @@ import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.local.entity.SharedMemberEntity
 import app.tessera.data.remote.RemoteShareMember
 import app.tessera.data.remote.RemoteSharedNote
+import app.tessera.domain.model.ShareMember
 import app.tessera.domain.model.ShareRole
+import app.tessera.domain.model.UserId
 import javax.inject.Inject
 
 /**
@@ -64,6 +66,17 @@ class SharedNoteMapper @Inject constructor() {
             createdAt = entity.createdAt,
             updatedAt = entity.updatedAt,
             deletedAt = entity.deletedAt,
+        )
+
+    /** Projects a locally-mirrored member row into the domain model. */
+    fun toDomainMember(entity: SharedMemberEntity): ShareMember =
+        ShareMember(
+            uid = UserId(entity.uid),
+            displayName = entity.displayName,
+            email = entity.email,
+            photoUrl = entity.photoUrl,
+            role = ShareRole.fromWire(entity.role),
+            joinedAt = entity.joinedAt,
         )
 
     /** Converts a local member row back to its remote map entry (used when first sharing a note). */

@@ -31,7 +31,7 @@ class NotesRepositoryImplTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
             val clock = MutableClock(111L)
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler(), FakeSharedNotesGateway())
 
             val note = repository.createNote(ownerId = UserId("user-1"))
 
@@ -49,7 +49,7 @@ class NotesRepositoryImplTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
             val clock = MutableClock(10L)
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler(), FakeSharedNotesGateway())
             val created = repository.createNote()
 
             clock.now = 25L
@@ -76,7 +76,7 @@ class NotesRepositoryImplTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
             val clock = MutableClock(10L)
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler(), FakeSharedNotesGateway())
             val created = repository.createNote()
 
             repository.updateNote(
@@ -104,7 +104,7 @@ class NotesRepositoryImplTest {
         runTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(1L), FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(1L), FakeSyncScheduler(), FakeSharedNotesGateway())
             val created = repository.createNote()
             repository.updateNote(created.copy(title = "Keep", content = "Body"))
 
@@ -126,7 +126,7 @@ class NotesRepositoryImplTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
             val clock = MutableClock(10L)
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler(), FakeSharedNotesGateway())
             val created = repository.createNote()
 
             clock.now = 77L
@@ -144,7 +144,7 @@ class NotesRepositoryImplTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
             val clock = MutableClock(10L)
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler(), FakeSharedNotesGateway())
             val created = repository.createNote()
             repository.updateNote(created.copy(title = "Pinned", content = "later"))
 
@@ -163,7 +163,7 @@ class NotesRepositoryImplTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
             val clock = MutableClock(10L)
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler(), FakeSharedNotesGateway())
             val first = repository.createNote()
             val second = repository.createNote()
 
@@ -194,7 +194,7 @@ class NotesRepositoryImplTest {
         runTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler(), FakeSharedNotesGateway())
             val draft = repository.createNote()
 
             assertTrue(repository.observeNotes().first().isEmpty())
@@ -207,7 +207,7 @@ class NotesRepositoryImplTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
             val clock = MutableClock(10L)
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, FakeSyncScheduler(), FakeSharedNotesGateway())
             val created = repository.createNote()
             repository.updateNote(created.copy(title = "Live", content = "Body"))
 
@@ -228,7 +228,7 @@ class NotesRepositoryImplTest {
         runTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler(), FakeSharedNotesGateway())
             val draft = repository.createNote()
 
             repository.togglePin(draft.id)
@@ -243,7 +243,7 @@ class NotesRepositoryImplTest {
         runTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler(), FakeSharedNotesGateway())
             val created = repository.createNote()
             repository.updateNote(created.copy(title = "Pin", content = "me", tags = listOf(Tag("keep"))))
 
@@ -257,7 +257,7 @@ class NotesRepositoryImplTest {
         runTest {
             val noteDao = FakeNoteDao()
             val tagDao = FakeTagDao()
-            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler())
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler(), FakeSharedNotesGateway())
             val created = repository.createNote()
             repository.updateNote(created.copy(title = "Hello", content = "World"))
 
@@ -280,7 +280,7 @@ class NotesRepositoryImplTest {
         val tagDao = FakeTagDao()
         val clock = MutableClock(1L)
         val scheduler = FakeSyncScheduler()
-        val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, scheduler)
+        val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), clock, scheduler, FakeSharedNotesGateway())
 
         val note = repository.createNote(ownerId = UserId("u1"))
         assertEquals(1, scheduler.requestCount, "createNote should request sync")

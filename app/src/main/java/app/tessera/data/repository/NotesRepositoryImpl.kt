@@ -7,8 +7,12 @@ import app.tessera.data.local.dao.TagDao
 import app.tessera.data.local.entity.NoteTagCrossRef
 import app.tessera.data.local.entity.TagEntity
 import app.tessera.data.mapper.NoteMapper
+import app.tessera.data.local.entity.NoteEntity
+import app.tessera.domain.model.InviteResult
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
+import app.tessera.domain.model.ShareMember
+import app.tessera.domain.model.ShareRole
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.repository.SyncScheduler
@@ -26,6 +30,7 @@ class NotesRepositoryImpl @Inject constructor(
     private val noteMapper: NoteMapper,
     private val clock: Clock,
     private val syncScheduler: SyncScheduler,
+    private val sharedNotes: SharedNotesGateway,
 ) : NotesRepository {
     override fun observeNotes(): Flow<List<Note>> =
         combine(noteDao.observeActive(), tagDao.observeAllCrossRefs()) { notes, _ -> notes }
@@ -127,8 +132,37 @@ class NotesRepositoryImpl @Inject constructor(
         syncScheduler.requestSync()
     }
 
-    private suspend fun toDomain(entity: app.tessera.data.local.entity.NoteEntity): Note =
-        noteMapper.toDomain(entity, tagDao.tagsForNote(entity.id))
+    override suspend fun shareNote(id: NoteId): Result<Unit> = sharedNotes.shareNote(id)
+
+    override suspend fun inviteByEmail(
+        id: NoteId,
+        email: String,
+        role: ShareRole,
+    ): Result<InviteResult> = sharedNotes.inviteByEmail(id, email, role)
+
+    override suspend fun changeRole(id: NoteId, uid: UserId, role: ShareRole): Result<Unit> =
+        sharedNotes.changeRole(id, uid, role)
+
+    override suspend fun removeMember(id: NoteId, uid: UserId): Result<Unit> =
+        sharedNotes.removeMember(id, uid)
+
+    override suspend fun leaveSharedNote(id: NoteId): Result<Unit> =
+        sharedNotes.leaveSharedNote(id)
+
+    override suspend fun unshareNote(id: NoteId): Result<Unit> = sharedNotes.unshareNote(id)
+
+    override fun observeMembers(id: NoteId): Flow<List<ShareMember>> =
+        sharedNotes.observeMembers(id)
+
+    private suspend fun toDomain(entity: NoteEntity): Note {
+        val members =
+            if (entity.shareState == NoteEntity.SHARE_STATE_SHARED) {
+                sharedNotes.membersForNote(NoteId(entity.id))
+            } else {
+                emptyList()
+            }
+        return noteMapper.toDomain(entity, tagDao.tagsForNote(entity.id), members)
+    }
 
     private suspend fun replaceTags(note: Note) {
         val tagNames = note.tags.map { it.name }

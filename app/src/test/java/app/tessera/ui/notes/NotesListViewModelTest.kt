@@ -265,6 +265,25 @@ private class FakeNotesRepository(
         archivedCalls += id to archived
     }
 
+    override suspend fun shareNote(id: NoteId): Result<Unit> = Result.success(Unit)
+    override suspend fun inviteByEmail(
+        id: NoteId,
+        email: String,
+        role: app.tessera.domain.model.ShareRole,
+    ): Result<app.tessera.domain.model.InviteResult> =
+        Result.success(app.tessera.domain.model.InviteResult.Added)
+    override suspend fun changeRole(
+        id: NoteId,
+        uid: app.tessera.domain.model.UserId,
+        role: app.tessera.domain.model.ShareRole,
+    ): Result<Unit> = Result.success(Unit)
+    override suspend fun removeMember(id: NoteId, uid: app.tessera.domain.model.UserId): Result<Unit> =
+        Result.success(Unit)
+    override suspend fun leaveSharedNote(id: NoteId): Result<Unit> = Result.success(Unit)
+    override suspend fun unshareNote(id: NoteId): Result<Unit> = Result.success(Unit)
+    override fun observeMembers(id: NoteId): Flow<List<app.tessera.domain.model.ShareMember>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
+
     fun createViewModel(): NotesListViewModel {
         val folderRepo = app.tessera.test.fakes.FakeFolderRepository()
         return NotesListViewModel(
