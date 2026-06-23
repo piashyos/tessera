@@ -149,18 +149,36 @@ class SyncRepositoryImpl @Inject constructor(
 
     /**
      * Pushes content edits to `sharedNotes`. A note is pushed only when the current user may edit
-     * content (their role permits it); otherwise the local edit is left pending and will be rolled
-     * back to the remote state on the next merge (see [mergeRemoteShared]).
+     * content (their stale local role permits it); otherwise the local edit is left pending and will
+     * be rolled back to the remote state on the next merge (see [mergeRemoteShared]).
+     *
+     * The local role check is only a cheap optimization — it can be stale (e.g. the user was
+     * downgraded to VIEWER remotely but hasn't merged yet). The authoritative guard is the server's
+     * security rules, which reject a content write from a non-editor. Such a rejection is handled
+     * per-note: we log a warning and leave the note pending (no [NoteDao.markSynced]) so the
+     * [mergeRemoteShared] call later in the same `syncNow` reconciles the role and rolls the edit
+     * back. One note's push failure must never abort the whole sync.
      */
     private suspend fun pushPendingShared(pending: List<NoteEntity>) {
         if (pending.isEmpty()) return
         val now = clock.nowMs()
         for (entity in pending) {
             if (!ShareRole.fromWire(entity.myRole).canEditContent) continue
-            remoteShared.pushSharedNote(
-                sharedMapper.toRemoteContent(entity, tagDao.tagsForNote(entity.id)),
-            )
-            noteDao.markSynced(entity.id, now)
+            try {
+                remoteShared.pushSharedNote(
+                    sharedMapper.toRemoteContent(entity, tagDao.tagsForNote(entity.id)),
+                )
+                noteDao.markSynced(entity.id, now)
+            } catch (e: Exception) {
+                // The role may have been downgraded server-side; the push is rejected by rules.
+                // Leave the note pending so the upcoming mergeRemoteShared rolls it back / refreshes
+                // the role, instead of aborting the entire sync.
+                Log.w(
+                    TAG,
+                    "Shared push rejected for ${entity.id}; leaving pending for merge reconciliation",
+                    e,
+                )
+            }
         }
     }
 
