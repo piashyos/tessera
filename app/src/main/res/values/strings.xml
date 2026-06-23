@@ -24,6 +24,36 @@
     <string name="editor_pin">Pin note</string>
     <string name="editor_unpin">Unpin note</string>
     <string name="editor_delete">Delete note</string>
+    <!-- Sharing: editor overflow menu -->
+    <string name="editor_more">More options</string>
+    <string name="editor_make_shared">Make shared</string>
+    <string name="editor_manage_access">Manage access</string>
+    <string name="editor_leave">Leave note</string>
+    <string name="editor_delete_for_all">Delete for everyone</string>
+    <!-- Sharing: members sheet -->
+    <string name="members_title">Members</string>
+    <string name="members_owner_badge">Owner</string>
+    <string name="members_role_owner">Owner</string>
+    <string name="members_role_manager">Manager</string>
+    <string name="members_role_editor">Editor</string>
+    <string name="members_role_viewer">Viewer</string>
+    <string name="members_change_role">Change role</string>
+    <string name="members_remove">Remove member</string>
+    <string name="members_invite_label">Invite by email</string>
+    <string name="members_invite_hint">name@example.com</string>
+    <string name="members_invite_action">Invite</string>
+    <string name="members_invite_added">Invitation sent</string>
+    <string name="members_invite_not_found">No registered user with that email</string>
+    <string name="members_invite_already">Already a member</string>
+    <string name="members_invite_error">Couldn\'t invite — check your connection</string>
+    <!-- Sharing: confirmation dialogs -->
+    <string name="share_cancel">Cancel</string>
+    <string name="leave_confirm_title">Leave this note?</string>
+    <string name="leave_confirm_message">You\'ll lose access until someone invites you again.</string>
+    <string name="leave_confirm_action">Leave</string>
+    <string name="delete_all_confirm_title">Delete for everyone?</string>
+    <string name="delete_all_confirm_message">This note will be removed for all members.</string>
+    <string name="delete_all_confirm_action">Delete</string>
     <string name="toolbar_bold">Bold</string>
     <string name="toolbar_bullet">Bullet list</string>
     <string name="toolbar_checklist">Checklist item</string>

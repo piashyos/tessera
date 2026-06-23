@@ -24,6 +24,36 @@
     <string name="editor_pin">Закрепить заметку</string>
     <string name="editor_unpin">Открепить заметку</string>
     <string name="editor_delete">Удалить заметку</string>
+    <!-- Sharing: editor overflow menu -->
+    <string name="editor_more">Ещё</string>
+    <string name="editor_make_shared">Сделать общей</string>
+    <string name="editor_manage_access">Управление доступом</string>
+    <string name="editor_leave">Выйти из заметки</string>
+    <string name="editor_delete_for_all">Удалить для всех</string>
+    <!-- Sharing: members sheet -->
+    <string name="members_title">Участники</string>
+    <string name="members_owner_badge">Владелец</string>
+    <string name="members_role_owner">Владелец</string>
+    <string name="members_role_manager">Менеджер</string>
+    <string name="members_role_editor">Редактор</string>
+    <string name="members_role_viewer">Читатель</string>
+    <string name="members_change_role">Изменить роль</string>
+    <string name="members_remove">Исключить участника</string>
+    <string name="members_invite_label">Пригласить по email</string>
+    <string name="members_invite_hint">name@example.com</string>
+    <string name="members_invite_action">Пригласить</string>
+    <string name="members_invite_added">Приглашение отправлено</string>
+    <string name="members_invite_not_found">Нет зарегистрированного пользователя с таким email</string>
+    <string name="members_invite_already">Уже участник</string>
+    <string name="members_invite_error">Не удалось пригласить — проверьте соединение</string>
+    <!-- Sharing: confirmation dialogs -->
+    <string name="share_cancel">Отмена</string>
+    <string name="leave_confirm_title">Выйти из заметки?</string>
+    <string name="leave_confirm_message">Вы потеряете доступ, пока вас не пригласят снова.</string>
+    <string name="leave_confirm_action">Выйти</string>
+    <string name="delete_all_confirm_title">Удалить для всех?</string>
+    <string name="delete_all_confirm_message">Заметка будет удалена у всех участников.</string>
+    <string name="delete_all_confirm_action">Удалить</string>
     <string name="toolbar_bold">Жирный</string>
     <string name="toolbar_bullet">Список</string>
     <string name="toolbar_checklist">Пункт чеклиста</string>

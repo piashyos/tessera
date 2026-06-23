@@ -22,6 +22,7 @@ object UiTestTags {
     const val EditorBack = "editor_back"
     const val EditorPin = "editor_pin"
     const val EditorDelete = "editor_delete"
+    const val EditorOverflow = "editor_overflow"
     const val EditorTagToggle = "editor_tag_toggle"
     const val EditorFormatMenuTrigger = "editor_format_menu_trigger"
 

@@ -182,6 +182,7 @@ fun RichNoteBody(
     modifier: Modifier = Modifier,
     onFocusChanged: (Boolean) -> Unit = {},
     onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit = {},
+    editable: Boolean = true,
 ) {
     if (LocalInspectionMode.current) {
         // Aztec cannot instantiate in Compose preview — show a placeholder
@@ -296,8 +297,15 @@ fun RichNoteBody(
             reapplySerifH1()
             editorRef.value = editor
 
-            editor.isFocusable = true
-            editor.isFocusableInTouchMode = true
+            editor.isFocusable = editable
+            editor.isFocusableInTouchMode = editable
+            if (!editable) {
+                // Read-only (Viewer role): keep the styled content fully rendered and scrollable,
+                // but reject all input so the IME never opens and the text can't be mutated.
+                editor.keyListener = null
+                editor.setTextIsSelectable(false)
+                editor.isCursorVisible = false
+            }
             // Report focus so the screen knows which text block the cursor is in — the
             // "insert table" action uses this to place the table at the cursor, not the end.
             editor.setOnFocusChangeListener { _, hasFocus -> currentOnFocusChanged(hasFocus) }

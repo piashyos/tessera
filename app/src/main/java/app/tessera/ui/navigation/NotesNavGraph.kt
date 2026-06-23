@@ -220,6 +220,13 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                     navController.popBackStack()
                 }
             }
+            val leaveAction: () -> Unit = remember(viewModel, navController, view) {
+                {
+                    hideKeyboard()
+                    viewModel.leave()
+                    navController.popBackStack()
+                }
+            }
 
             BackHandler { backAction() }
 
@@ -232,6 +239,15 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                 onTogglePin = viewModel::onTogglePin,
                 onBack = backAction,
                 onDelete = deleteAction,
+                onMakeShared = viewModel::makeShared,
+                onManageAccess = viewModel::openMembersSheet,
+                onLeave = leaveAction,
+                onDeleteForAll = deleteAction,
+                onInvite = viewModel::invite,
+                onChangeRole = viewModel::changeRole,
+                onRemoveMember = viewModel::removeMember,
+                onInviteInputChanged = viewModel::onInviteInputChanged,
+                onDismissMembers = viewModel::dismissMembersSheet,
             )
         }
     }

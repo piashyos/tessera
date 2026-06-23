@@ -23,11 +23,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +52,7 @@ import app.tessera.core.text.markdownblocks.joinBlocksIntoMarkdown
 import app.tessera.core.text.markdownblocks.splitMarkdownIntoBlocks
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.rememberHaptics
+import app.tessera.core.ui.tessera.MembersSheet
 import app.tessera.core.ui.tessera.TesseraTopBar
 import app.tessera.core.ui.tessera.TesseraTopBarIconButton
 import app.tessera.core.ui.theme.TesseraMotion
@@ -61,9 +67,12 @@ import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.formatNoteDate
 import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.Users
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import org.wordpress.aztec.AztecTextFormat
@@ -80,6 +89,15 @@ fun NoteEditorScreen(
     onBack: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    onMakeShared: () -> Unit = {},
+    onManageAccess: () -> Unit = {},
+    onLeave: () -> Unit = {},
+    onDeleteForAll: () -> Unit = {},
+    onInvite: (String, app.tessera.domain.model.ShareRole) -> Unit = { _, _ -> },
+    onChangeRole: (app.tessera.domain.model.UserId, app.tessera.domain.model.ShareRole) -> Unit = { _, _ -> },
+    onRemoveMember: (app.tessera.domain.model.UserId) -> Unit = {},
+    onInviteInputChanged: () -> Unit = {},
+    onDismissMembers: () -> Unit = {},
 ) {
     val haptics = rememberHaptics()
     val converter = remember { MarkdownHtmlConverter() }
@@ -116,6 +134,9 @@ fun NoteEditorScreen(
     val hazeState = remember { HazeState() }
     var tagPickerVisible by remember { mutableStateOf(false) }
     var formatMenuVisible by remember { mutableStateOf(false) }
+    var overflowVisible by remember { mutableStateOf(false) }
+    var leaveConfirmVisible by remember { mutableStateOf(false) }
+    var deleteForAllConfirmVisible by remember { mutableStateOf(false) }
     // Live formats at the editor's caret, pushed from RichNoteBody on selection/text/toggle
     // changes. Drives the toolbar highlight so buttons no longer stay lit after the caret
     // leaves the formatted span.
@@ -143,42 +164,114 @@ fun NoteEditorScreen(
                         }
                     },
                     actions = {
-                        TesseraTopBarIconButton(
-                            onClick = { haptics.tick(); onTogglePin() },
-                            contentDescription = stringResource(
-                                if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
-                            ),
-                            modifier = Modifier.testTag(UiTestTags.EditorPin),
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Pin,
-                                contentDescription = null,
-                                tint = if (state.isPinned) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                modifier = Modifier.size(20.dp),
-                            )
+                        // Pinning is a content edit — viewers can't pin.
+                        if (state.canEditContent) {
+                            TesseraTopBarIconButton(
+                                onClick = { haptics.tick(); onTogglePin() },
+                                contentDescription = stringResource(
+                                    if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
+                                ),
+                                modifier = Modifier.testTag(UiTestTags.EditorPin),
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Pin,
+                                    contentDescription = null,
+                                    tint = if (state.isPinned) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
-                        TesseraTopBarIconButton(
-                            onClick = { haptics.tick(); onDelete() },
-                            contentDescription = stringResource(R.string.editor_delete),
-                            modifier = Modifier.testTag(UiTestTags.EditorDelete),
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Trash2,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp),
-                            )
+                        // Trash deletes a private note directly. For shared notes, deletion is
+                        // "delete for everyone" and lives in the overflow menu (owner/manager only).
+                        if (!state.isShared) {
+                            TesseraTopBarIconButton(
+                                onClick = { haptics.tick(); onDelete() },
+                                contentDescription = stringResource(R.string.editor_delete),
+                                modifier = Modifier.testTag(UiTestTags.EditorDelete),
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Trash2,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        val hasOverflow = state.canMakeShared || state.canManageAccess ||
+                            state.canLeave || state.canDeleteForAll
+                        if (hasOverflow) {
+                            Box {
+                                TesseraTopBarIconButton(
+                                    onClick = { haptics.tick(); overflowVisible = true },
+                                    contentDescription = stringResource(R.string.editor_more),
+                                    modifier = Modifier.testTag(UiTestTags.EditorOverflow),
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.EllipsisVertical,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = overflowVisible,
+                                    onDismissRequest = { overflowVisible = false },
+                                ) {
+                                    if (state.canMakeShared) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.editor_make_shared)) },
+                                            leadingIcon = { Icon(Lucide.Users, contentDescription = null) },
+                                            onClick = { overflowVisible = false; onMakeShared() },
+                                        )
+                                    }
+                                    if (state.canManageAccess) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.editor_manage_access)) },
+                                            leadingIcon = { Icon(Lucide.Users, contentDescription = null) },
+                                            onClick = { overflowVisible = false; onManageAccess() },
+                                        )
+                                    }
+                                    if (state.canLeave) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.editor_leave)) },
+                                            leadingIcon = { Icon(Lucide.LogOut, contentDescription = null) },
+                                            onClick = { overflowVisible = false; leaveConfirmVisible = true },
+                                        )
+                                    }
+                                    if (state.canDeleteForAll) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    stringResource(R.string.editor_delete_for_all),
+                                                    color = MaterialTheme.colorScheme.error,
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Lucide.Trash2,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                )
+                                            },
+                                            onClick = {
+                                                overflowVisible = false
+                                                deleteForAllConfirmVisible = true
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                         }
                     },
                 )
             },
             bottomBar = {
                 AnimatedVisibility(
-                    visible = imeVisible,
+                    visible = imeVisible && !state.isReadOnly,
                     enter = slideInVertically(
                         animationSpec = tween(TesseraMotion.DurShort4Ms, easing = TesseraMotion.EaseDecelerate),
                     ) { it },
@@ -245,6 +338,7 @@ fun NoteEditorScreen(
                         onActionsReady = { actions = wrapActions(it) },
                         onBlockFocused = { lastFocusedBlock = it },
                         onActiveFormatsChanged = { activeFormats = it },
+                        editable = !state.isReadOnly,
                     )
 
                     // Tap target below the content forwards focus to the editor body and
@@ -284,7 +378,72 @@ fun NoteEditorScreen(
             onDismiss = { tagPickerVisible = false },
             hazeState = hazeState,
         )
+
+        // Members management sheet (shared notes).
+        if (state.membersSheetVisible && state.myRole != null) {
+            MembersSheet(
+                members = state.members,
+                myRole = state.myRole,
+                currentUserId = state.currentUserId?.let { app.tessera.domain.model.UserId(it) },
+                inviteState = state.inviteState,
+                onChangeRole = onChangeRole,
+                onRemoveMember = onRemoveMember,
+                onInvite = onInvite,
+                onInviteInputChanged = onInviteInputChanged,
+                onDismiss = onDismissMembers,
+            )
+        }
+
+        if (leaveConfirmVisible) {
+            ConfirmDialog(
+                title = stringResource(R.string.leave_confirm_title),
+                message = stringResource(R.string.leave_confirm_message),
+                confirmLabel = stringResource(R.string.leave_confirm_action),
+                destructive = true,
+                onConfirm = { leaveConfirmVisible = false; onLeave() },
+                onDismiss = { leaveConfirmVisible = false },
+            )
+        }
+
+        if (deleteForAllConfirmVisible) {
+            ConfirmDialog(
+                title = stringResource(R.string.delete_all_confirm_title),
+                message = stringResource(R.string.delete_all_confirm_message),
+                confirmLabel = stringResource(R.string.delete_all_confirm_action),
+                destructive = true,
+                onConfirm = { deleteForAllConfirmVisible = false; onDeleteForAll() },
+                onDismiss = { deleteForAllConfirmVisible = false },
+            )
+        }
     }
+}
+
+@Composable
+private fun ConfirmDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    destructive: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    confirmLabel,
+                    color = if (destructive) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.share_cancel)) }
+        },
+    )
 }
 
 /**
@@ -303,6 +462,7 @@ private fun EditorBody(
     onActionsReady: (RichBodyActions) -> Unit,
     onBlockFocused: (Int) -> Unit,
     onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit,
+    editable: Boolean = true,
 ) {
     if (!hasTable) {
         // FAST PATH — preserves behavior for notes without tables (the majority).
@@ -314,6 +474,7 @@ private fun EditorBody(
             onActionsReady = onActionsReady,
             onFocusChanged = { if (it) onBlockFocused(0) },
             onActiveFormatsChanged = onActiveFormatsChanged,
+            editable = editable,
             modifier = Modifier.fillMaxWidth(),
         )
         return
@@ -340,6 +501,7 @@ private fun EditorBody(
                         onActionsReady = onActionsReady,
                         onFocusChanged = { if (it) onBlockFocused(idx) },
                         onActiveFormatsChanged = onActiveFormatsChanged,
+                        editable = editable,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
