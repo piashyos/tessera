@@ -31,6 +31,7 @@ import app.tessera.domain.usecase.PermanentlyDeleteNoteUseCase
 import app.tessera.domain.usecase.RenameFolderUseCase
 import app.tessera.domain.usecase.RestoreNoteUseCase
 import app.tessera.domain.usecase.SearchNotesUseCase
+import app.tessera.domain.usecase.ShareNoteUseCase
 import app.tessera.domain.usecase.TogglePinUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
 import app.tessera.domain.model.Tag
@@ -85,6 +86,7 @@ class NotesListViewModel @Inject constructor(
     private val moveFolderUseCase: MoveFolderUseCase,
     private val deleteFolderUseCase: DeleteFolderUseCase,
     private val moveNoteToFolderUseCase: MoveNoteToFolderUseCase,
+    private val shareNoteUseCase: ShareNoteUseCase,
     private val userPreferences: UserPreferences,
     authRepository: AuthRepository,
 ) : ViewModel() {
@@ -451,6 +453,19 @@ class NotesListViewModel @Inject constructor(
 
     fun moveNoteToFolder(noteId: NoteId, folderId: FolderId?) {
         viewModelScope.launch { moveNoteToFolderUseCase(noteId, folderId) }
+    }
+
+    /** Promotes a private note to shared from the list; surfaces a snackbar with the outcome. */
+    fun shareNote(id: NoteId) {
+        viewModelScope.launch {
+            val message =
+                shareNoteUseCase(id)
+                    .fold(
+                        onSuccess = { "Note is now shared" },
+                        onFailure = { e -> e.message ?: "Couldn't share this note" },
+                    )
+            eventsChannel.send(NotesListEvent.ShowSnackbar(message))
+        }
     }
 }
 

@@ -85,6 +85,15 @@ private fun NavGraphBuilder.notesListDestination(
             val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
             val scope = rememberCoroutineScope()
 
+            androidx.compose.runtime.LaunchedEffect(viewModel, snackbarHostState) {
+                viewModel.events.collect { event ->
+                    when (event) {
+                        is app.tessera.ui.notes.NotesListEvent.ShowSnackbar ->
+                            snackbarHostState.showSnackbar(event.message)
+                    }
+                }
+            }
+
             NotesListScreen(
                 state = state,
                 snackbarHostState = snackbarHostState,
@@ -134,6 +143,7 @@ private fun NavGraphBuilder.notesListDestination(
                 onShowTrash = viewModel::showTrashNotes,
                 onShowShared = viewModel::showSharedNotes,
                 onShowAllNotes = viewModel::showAllNotes,
+                onMakeShared = viewModel::shareNote,
             )
         }
     }

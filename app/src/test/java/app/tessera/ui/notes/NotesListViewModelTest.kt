@@ -208,6 +208,36 @@ class NotesListViewModelTest {
         }
 
     @Test
+    fun `shareNote success emits a snackbar event`() =
+        runTest(dispatcher.scheduler) {
+            val repository = FakeNotesRepository(initialNotes = listOf(sampleNote("n1")))
+            val viewModel = repository.createViewModel(currentUser = UserId("me"))
+
+            viewModel.events.test {
+                viewModel.shareNote(NoteId("n1"))
+                val event = awaitItem() as NotesListEvent.ShowSnackbar
+                assertTrue(event.message.isNotBlank())
+            }
+        }
+
+    @Test
+    fun `shareNote failure emits a snackbar event`() =
+        runTest(dispatcher.scheduler) {
+            val repository =
+                FakeNotesRepository(
+                    initialNotes = listOf(sampleNote("n1")),
+                    shareResult = Result.failure(IllegalStateException("nope")),
+                )
+            val viewModel = repository.createViewModel(currentUser = UserId("me"))
+
+            viewModel.events.test {
+                viewModel.shareNote(NoteId("n1"))
+                val event = awaitItem() as NotesListEvent.ShowSnackbar
+                assertTrue(event.message.isNotBlank())
+            }
+        }
+
+    @Test
     fun `clearing query returns to observe flow without debounce`() =
         runTest(dispatcher.scheduler) {
             val repository =
@@ -245,6 +275,7 @@ class NotesListViewModelTest {
 private class FakeNotesRepository(
     initialNotes: List<Note>,
     private val searchResults: Map<String, List<Note>> = emptyMap(),
+    private val shareResult: Result<Unit> = Result.success(Unit),
 ) : NotesRepository {
     private val notesFlow = MutableStateFlow(initialNotes)
     val archivedFlow = MutableStateFlow<List<Note>>(emptyList())
@@ -291,7 +322,7 @@ private class FakeNotesRepository(
         archivedCalls += id to archived
     }
 
-    override suspend fun shareNote(id: NoteId): Result<Unit> = Result.success(Unit)
+    override suspend fun shareNote(id: NoteId): Result<Unit> = shareResult
     override suspend fun inviteByEmail(
         id: NoteId,
         email: String,
@@ -310,8 +341,9 @@ private class FakeNotesRepository(
     override fun observeMembers(id: NoteId): Flow<List<app.tessera.domain.model.ShareMember>> =
         kotlinx.coroutines.flow.flowOf(emptyList())
 
-    fun createViewModel(): NotesListViewModel {
+    fun createViewModel(currentUser: UserId? = null): NotesListViewModel {
         val folderRepo = app.tessera.test.fakes.FakeFolderRepository()
+        val authRepository = FakeAuthRepository().apply { this.currentUser.value = currentUser }
         return NotesListViewModel(
             observeNotesUseCase = ObserveNotesUseCase(this),
             searchNotesUseCase = SearchNotesUseCase(this),
@@ -339,8 +371,9 @@ private class FakeNotesRepository(
             moveFolderUseCase = app.tessera.domain.usecase.MoveFolderUseCase(folderRepo),
             deleteFolderUseCase = app.tessera.domain.usecase.DeleteFolderUseCase(folderRepo),
             moveNoteToFolderUseCase = app.tessera.domain.usecase.MoveNoteToFolderUseCase(folderRepo),
+            shareNoteUseCase = app.tessera.domain.usecase.ShareNoteUseCase(this, authRepository),
             userPreferences = FakeUserPreferences(),
-            authRepository = FakeAuthRepository(),
+            authRepository = authRepository,
         )
     }
 }

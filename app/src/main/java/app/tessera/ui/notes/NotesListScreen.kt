@@ -124,6 +124,7 @@ fun NotesListScreen(
     onShowTrash: () -> Unit = {},
     onShowShared: () -> Unit = {},
     onShowAllNotes: () -> Unit = {},
+    onMakeShared: (NoteId) -> Unit = {},
     isRefreshing: Boolean = false,
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -412,6 +413,14 @@ fun NotesListScreen(
             onArchiveToggle = { onArchiveNote(note.id, !note.isArchived) },
             onDelete = { if (state.isTrashView) handlePermanentDelete(note) else handleDelete(note) },
             onDismiss = { sheetNote = null },
+            onMakeShared =
+                if (note.shareState is ShareState.Private &&
+                    !state.isTrashView && !state.isArchiveView && !state.isSharedView
+                ) {
+                    { onMakeShared(note.id) }
+                } else {
+                    null
+                },
         )
     }
 

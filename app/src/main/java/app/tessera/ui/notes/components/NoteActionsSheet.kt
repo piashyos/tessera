@@ -18,6 +18,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.Tag
 import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.Users
 
 @Composable
 fun NoteActionsSheet(
@@ -32,6 +33,7 @@ fun NoteActionsSheet(
   onArchiveToggle: () -> Unit,
   onDelete: () -> Unit,
   onDismiss: () -> Unit,
+  onMakeShared: (() -> Unit)? = null,
 ) {
   TesseraBottomSheet(
     onDismissRequest = onDismiss,
@@ -62,6 +64,13 @@ fun NoteActionsSheet(
       leadingIcon = { Icon(Lucide.Copy, contentDescription = null) },
       onClick = { onDuplicate(); onDismiss() },
     )
+    if (onMakeShared != null) {
+      TesseraSheetItem(
+        label = stringResource(R.string.note_action_make_shared),
+        leadingIcon = { Icon(Lucide.Users, contentDescription = null) },
+        onClick = { onMakeShared(); onDismiss() },
+      )
+    }
     TesseraSheetItem(
       label = stringResource(if (isArchived) R.string.note_action_unarchive else R.string.note_action_archive),
       leadingIcon = {

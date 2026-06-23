@@ -154,6 +154,7 @@
     <!-- Note action sheet -->
     <string name="note_action_add_tags">Add tags</string>
     <string name="note_action_duplicate">Duplicate</string>
+    <string name="note_action_make_shared">Make shared</string>
     <string name="note_action_archive">Archive</string>
     <string name="note_action_unarchive">Unarchive</string>
     <!-- Drawer -->

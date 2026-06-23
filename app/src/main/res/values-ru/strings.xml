@@ -155,6 +155,7 @@
     <!-- Note action sheet -->
     <string name="note_action_add_tags">Добавить теги</string>
     <string name="note_action_duplicate">Дублировать</string>
+    <string name="note_action_make_shared">Сделать общей</string>
     <string name="note_action_archive">Архивировать</string>
     <string name="note_action_unarchive">Разархивировать</string>
     <!-- Drawer -->
