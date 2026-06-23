@@ -59,6 +59,8 @@ import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.ShareState
 import app.tessera.domain.model.UserId
+import app.tessera.domain.model.canDeleteForAll
+import app.tessera.domain.model.myRole
 import app.tessera.ui.notes.components.FolderNamePopup
 import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.components.FolderPickerPopup
@@ -412,6 +414,7 @@ fun NotesListScreen(
             onDuplicate = { onDuplicateNote(note.id) },
             onArchiveToggle = { onArchiveNote(note.id, !note.isArchived) },
             onDelete = { if (state.isTrashView) handlePermanentDelete(note) else handleDelete(note) },
+            showDelete = state.isTrashView || note.canDeleteFromList(),
             onDismiss = { sheetNote = null },
             onMakeShared =
                 if (note.shareState is ShareState.Private &&
@@ -618,6 +621,7 @@ private fun NotesBody(
                             onLongClick = { onLongClickNote(note) },
                             onArchive = { onArchive(note) },
                             onDelete = { onDeleteNote(note) },
+                            swipeToDeleteEnabled = state.isTrashView || note.canDeleteFromList(),
                             selected = selectionMode && note.id in selection,
                             avatars = if (shareState is ShareState.Shared) {
                                 {
@@ -705,3 +709,14 @@ private fun NotesListState.selectionActive(): Boolean =
 
 private fun NotesListState.selectedIds(): Set<NoteId> =
     (this as? NotesListState.Content)?.selection ?: emptySet()
+
+/**
+ * Whether the current user may delete this note from the list. Deleting a shared note is a
+ * delete-for-all (it writes a `deletedAt` tombstone to every member), which only owner/manager may
+ * do. Private notes are always deletable by their single owner.
+ */
+private fun Note.canDeleteFromList(): Boolean =
+    when (shareState) {
+        is ShareState.Private -> true
+        is ShareState.Shared -> myRole?.canDeleteForAll == true
+    }

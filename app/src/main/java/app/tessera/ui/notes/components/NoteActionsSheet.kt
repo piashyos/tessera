@@ -34,6 +34,11 @@ fun NoteActionsSheet(
   onDelete: () -> Unit,
   onDismiss: () -> Unit,
   onMakeShared: (() -> Unit)? = null,
+  /**
+   * When false, the Delete action is hidden — used for shared notes the current user may not
+   * delete for everyone (only owner/manager can; deleting a shared note is a delete-for-all).
+   */
+  showDelete: Boolean = true,
 ) {
   TesseraBottomSheet(
     onDismissRequest = onDismiss,
@@ -78,12 +83,14 @@ fun NoteActionsSheet(
       },
       onClick = { onArchiveToggle(); onDismiss() },
     )
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    TesseraSheetItem(
-      label = stringResource(R.string.note_action_delete),
-      leadingIcon = { Icon(Lucide.Trash2, contentDescription = null) },
-      onClick = { onDelete(); onDismiss() },
-      destructive = true,
-    )
+    if (showDelete) {
+      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+      TesseraSheetItem(
+        label = stringResource(R.string.note_action_delete),
+        leadingIcon = { Icon(Lucide.Trash2, contentDescription = null) },
+        onClick = { onDelete(); onDismiss() },
+        destructive = true,
+      )
+    }
   }
 }

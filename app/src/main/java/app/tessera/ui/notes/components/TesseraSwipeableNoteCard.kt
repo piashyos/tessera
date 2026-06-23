@@ -41,13 +41,18 @@ fun TesseraSwipeableNoteCard(
   onDelete: () -> Unit,
   modifier: Modifier = Modifier,
   selected: Boolean = false,
+  /**
+   * When false, the swipe-to-delete (end-to-start) gesture is inert — used for shared notes the
+   * current user may not delete for everyone (only owner/manager can). Archive is unaffected.
+   */
+  swipeToDeleteEnabled: Boolean = true,
   avatars: (@androidx.compose.runtime.Composable () -> Unit)? = null,
 ) {
   val state = rememberSwipeToDismissBoxState(
     confirmValueChange = { value ->
       when (value) {
         SwipeToDismissBoxValue.StartToEnd -> { onArchive(); true }
-        SwipeToDismissBoxValue.EndToStart -> { onDelete(); true }
+        SwipeToDismissBoxValue.EndToStart -> if (swipeToDeleteEnabled) { onDelete(); true } else false
         SwipeToDismissBoxValue.Settled -> false
       }
     },
