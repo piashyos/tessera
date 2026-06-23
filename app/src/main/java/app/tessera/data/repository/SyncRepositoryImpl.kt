@@ -169,6 +169,9 @@ class SyncRepositoryImpl @Inject constructor(
                     sharedMapper.toRemoteContent(entity, tagDao.tagsForNote(entity.id)),
                 )
                 noteDao.markSynced(entity.id, now)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Never swallow structured-concurrency cancellation; let it unwind the coroutine.
+                throw e
             } catch (e: Exception) {
                 // The role may have been downgraded server-side; the push is rejected by rules.
                 // Leave the note pending so the upcoming mergeRemoteShared rolls it back / refreshes

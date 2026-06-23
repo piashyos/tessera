@@ -110,6 +110,11 @@ class TwoUserSharedNotesE2ETest {
 
     @Test
     fun `a viewer's local edit never reaches the shared document`() = runTest {
+        // Bob is invited directly as VIEWER, so this exercises the LOCAL `canEditContent`
+        // fast-path in pushPendingShared: the role guard short-circuits before the backend
+        // is ever hit. Server-side rejection of a stale-role push is covered separately by
+        // InMemorySharedBackendTest (pushSharedNote permission check) and by the
+        // `downgrade to viewer rolls back the invitee's unsynced edit` scenario above.
         val alice = device("alice")
         val bob = device("bob")
         alice.seedPrivate("n1", body = "owner-body")
@@ -175,5 +180,34 @@ class TwoUserSharedNotesE2ETest {
         assertEquals(NoteEntity.SHARE_STATE_PRIVATE, aliceNote.shareState)
         assertNull(aliceNote.myRole)
         assertNull(bob.noteDao.getById("n1")) // gone from the (former) member's device
+    }
+
+    @Test
+    fun `delete for all removes the note from every member`() = runTest {
+        val alice = device("alice")
+        val bob = device("bob")
+        alice.seedPrivate("n1")
+        alice.gateway.shareNote(NoteId("n1"))
+        alice.gateway.inviteByEmail(NoteId("n1"), "bob@x.io", ShareRole.EDITOR)
+        bob.syncNow()
+        assertNotNull(bob.noteDao.getById("n1"))
+
+        // "Удалить для всех": the editor screen's delete action routes through
+        // DeleteNoteUseCase -> NotesRepositoryImpl.deleteNote -> NoteDao.softDelete for a
+        // SHARED note (NotesRepositoryImpl isn't wired into this device harness, so we drive
+        // the same softDelete directly). The note stays shareState=SHARED with deletedAt set,
+        // so the next sync pushes the tombstone into the shared doc as a content edit.
+        alice.noteDao.softDelete("n1", ts = 50_000L)
+        alice.syncNow() // owner pushes the deletedAt tombstone to the shared document
+        bob.syncNow() // every member picks the tombstone up via mergeRemoteShared
+
+        // Designed behavior: delete-for-all is a soft-delete tombstone, not a hard removal.
+        // The note is gone from each member's active list (deletedAt != null) on BOTH devices.
+        val aliceNote = alice.noteDao.getById("n1")
+        assertNotNull(aliceNote)
+        assertNotNull(aliceNote?.deletedAt)
+        val bobNote = bob.noteDao.getById("n1")
+        assertNotNull(bobNote)
+        assertNotNull(bobNote?.deletedAt)
     }
 }
