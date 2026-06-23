@@ -9,6 +9,7 @@ import app.tessera.data.remote.RemoteSharedNotesDataSource
 import app.tessera.data.remote.UserDirectoryDataSource
 import app.tessera.data.remote.emailKey
 import app.tessera.domain.model.ShareRole
+import app.tessera.domain.model.canDeleteForAll
 import app.tessera.domain.model.UserId
 import app.tessera.domain.model.canEditContent
 import kotlinx.coroutines.flow.Flow
@@ -123,6 +124,11 @@ class InMemorySharedBackend {
             val callerRole = ShareRole.fromWire(existing.members[uid]?.role)
             check(existing.members.containsKey(uid) && callerRole.canEditContent) {
                 "permission denied: $uid may not edit ${note.id}"
+            }
+            // A tombstone (deletedAt) change is a delete-for-all — owner/manager only (mirrors rules).
+            val touchesDeletedAt = note.deletedAt != existing.deletedAt
+            check(!touchesDeletedAt || callerRole.canDeleteForAll) {
+                "permission denied: $uid may not delete ${note.id} for all"
             }
             sharedNotes[note.id] =
                 existing.copy(

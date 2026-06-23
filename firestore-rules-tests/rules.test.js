@@ -154,6 +154,46 @@ describe('sharedNotes content updates', () => {
     await seedNote();
     await assertFails(updateDoc(noteRef(STRANGER), { content: 'nope', updatedAt: 2 }));
   });
+
+  test('editor cannot soft-delete (set deletedAt) for all', async () => {
+    await seedNote();
+    await assertFails(updateDoc(noteRef(EDITOR), { deletedAt: 99, updatedAt: 2 }));
+  });
+
+  test('manager can soft-delete (set deletedAt) for all', async () => {
+    await seedNote();
+    await assertSucceeds(updateDoc(noteRef(MANAGER), { deletedAt: 99, updatedAt: 2 }));
+  });
+
+  test('owner can soft-delete (set deletedAt) for all', async () => {
+    await seedNote();
+    await assertSucceeds(updateDoc(noteRef(OWNER), { deletedAt: 99, updatedAt: 2 }));
+  });
+
+  test('editor cannot clear deletedAt (un-delete) for all', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(
+        doc(ctx.firestore(), 'sharedNotes', NOTE_ID),
+        {
+          ...sharedNoteData({
+            [OWNER]: member('OWNER'),
+            [MANAGER]: member('MANAGER'),
+            [EDITOR]: member('EDITOR'),
+            [VIEWER]: member('VIEWER'),
+          }),
+          deletedAt: 50,
+        },
+      );
+    });
+    await assertFails(updateDoc(noteRef(EDITOR), { deletedAt: null, updatedAt: 2 }));
+  });
+
+  test('editor ordinary content edit (no deletedAt change) still succeeds', async () => {
+    await seedNote();
+    await assertSucceeds(
+      updateDoc(noteRef(EDITOR), { title: 'renamed', content: 'edited', updatedAt: 2 }),
+    );
+  });
 });
 
 describe('sharedNotes membership updates', () => {

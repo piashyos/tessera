@@ -327,6 +327,77 @@ class SyncRepositoryImplTest {
         }
 
     @Test
+    fun `pushPending does not push an editor's tombstone (delete-for-all is manager-only)`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remoteShared = FakeRemoteSharedNotesDataSource()
+            val repo = create(noteDao = noteDao, remoteShared = remoteShared)
+            remoteShared.store(sharedRemote("s1", updatedAt = 1L, myRole = "EDITOR"))
+            noteDao.upsert(
+                entity("s1", updatedAt = 2L, deletedAt = 2L, syncedAt = null)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "EDITOR"),
+            )
+
+            repo.syncNow(uid)
+
+            // The editor's soft-delete must not propagate to all members; it stays pending so the
+            // merge can roll it back. (The merge that follows in syncNow refreshes from remote.)
+            assertTrue(remoteShared.pushed.isEmpty())
+        }
+
+    @Test
+    fun `pushPending pushes a manager's tombstone (delete-for-all)`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remoteShared = FakeRemoteSharedNotesDataSource()
+            val repo = create(noteDao = noteDao, remoteShared = remoteShared)
+            remoteShared.store(sharedRemote("s1", updatedAt = 1L, myRole = "MANAGER"))
+            noteDao.upsert(
+                entity("s1", updatedAt = 2L, deletedAt = 2L, syncedAt = null)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "MANAGER"),
+            )
+
+            repo.syncNow(uid)
+
+            assertTrue(remoteShared.pushed.containsKey("s1"))
+            assertEquals(2L, remoteShared.pushed["s1"]?.deletedAt)
+        }
+
+    @Test
+    fun `pushPending pushes an owner's tombstone (delete-for-all)`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remoteShared = FakeRemoteSharedNotesDataSource()
+            val repo = create(noteDao = noteDao, remoteShared = remoteShared)
+            remoteShared.store(sharedRemote("s1", updatedAt = 1L, myRole = "OWNER"))
+            noteDao.upsert(
+                entity("s1", updatedAt = 2L, deletedAt = 2L, syncedAt = null)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "OWNER"),
+            )
+
+            repo.syncNow(uid)
+
+            assertTrue(remoteShared.pushed.containsKey("s1"))
+        }
+
+    @Test
+    fun `pushPending still pushes an editor's ordinary content edit (no tombstone)`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remoteShared = FakeRemoteSharedNotesDataSource()
+            val repo = create(noteDao = noteDao, remoteShared = remoteShared)
+            remoteShared.store(sharedRemote("s1", updatedAt = 1L, myRole = "EDITOR"))
+            noteDao.upsert(
+                entity("s1", title = "edited", updatedAt = 2L, deletedAt = null, syncedAt = null)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "EDITOR"),
+            )
+
+            repo.syncNow(uid)
+
+            assertTrue(remoteShared.pushed.containsKey("s1"))
+        }
+
+    @Test
     fun `mergeRemoteShared evicts a non-owner note removed from the member set`() =
         runTest {
             val noteDao = SyncFakeNoteDao()

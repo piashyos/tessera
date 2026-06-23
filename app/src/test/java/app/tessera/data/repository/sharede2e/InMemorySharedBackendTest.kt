@@ -153,6 +153,57 @@ class InMemorySharedBackendTest {
     }
 
     @Test
+    fun `pushSharedNote tombstone is rejected for an editor (delete-for-all is manager-only)`() =
+        runTest {
+            backend.sharedFor("alice").shareNote("alice", sharedNote())
+            backend.sharedFor("alice").addMember(
+                "n1",
+                "bob",
+                RemoteShareMember(
+                    role = "EDITOR",
+                    displayName = "Bob",
+                    email = "bob@x.io",
+                    joinedAt = 2L,
+                ),
+            )
+
+            val tombstone = sharedNote().copy(deletedAt = 99L, updatedAt = 99L)
+            val error =
+                try {
+                    backend.sharedFor("bob").pushSharedNote(tombstone)
+                    null
+                } catch (e: IllegalStateException) {
+                    e
+                }
+            assertTrue("expected a permission-denied throw", error != null)
+
+            // The note must not be tombstoned by an editor.
+            val note = backend.sharedFor("alice").fetchAll("alice").single()
+            assertEquals(null, note.deletedAt)
+        }
+
+    @Test
+    fun `pushSharedNote tombstone succeeds for a manager (delete-for-all)`() = runTest {
+        backend.sharedFor("alice").shareNote("alice", sharedNote())
+        backend.sharedFor("alice").addMember(
+            "n1",
+            "bob",
+            RemoteShareMember(
+                role = "MANAGER",
+                displayName = "Bob",
+                email = "bob@x.io",
+                joinedAt = 2L,
+            ),
+        )
+
+        val tombstone = sharedNote().copy(deletedAt = 99L, updatedAt = 99L)
+        backend.sharedFor("bob").pushSharedNote(tombstone)
+
+        val note = backend.sharedFor("alice").fetchAll("alice").single()
+        assertEquals(99L, note.deletedAt)
+    }
+
+    @Test
     fun `removeMember hides the note from the removed user`() = runTest {
         backend.sharedFor("alice").shareNote("alice", sharedNote())
         backend.sharedFor("alice").addMember(

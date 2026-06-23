@@ -53,6 +53,11 @@ service cloud.firestore {
       function onlyContentChanged() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(contentKeys());
       }
+      // Удаление общей заметки «для всех» — это установка/снятие tombstone `deletedAt`.
+      // Это полномочие manager/owner; editor может менять остальной контент, но не deletedAt.
+      function touchesDeletedAt() {
+        return request.resource.data.deletedAt != resource.data.deletedAt;
+      }
       function membersChanged() {
         return request.resource.data.diff(resource.data)
                  .affectedKeys().hasAny(['members', 'memberIds']);
@@ -71,7 +76,10 @@ service cloud.firestore {
                     && request.resource.data.members[request.auth.uid].role == 'OWNER';
 
       allow update: if isMember() && (
-                       (onlyContentChanged() && myRole() in ['OWNER', 'MANAGER', 'EDITOR'])
+                       (onlyContentChanged()
+                         && (touchesDeletedAt()
+                               ? myRole() in ['OWNER', 'MANAGER']
+                               : myRole() in ['OWNER', 'MANAGER', 'EDITOR']))
                        || (membersChanged() && myRole() in ['OWNER', 'MANAGER'])
                        || leftSelf()
                      );

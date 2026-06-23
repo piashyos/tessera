@@ -22,6 +22,7 @@ import app.tessera.data.remote.RemoteSharedNotesDataSource
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.ShareRole
 import app.tessera.domain.model.UserId
+import app.tessera.domain.model.canDeleteForAll
 import app.tessera.domain.model.canEditContent
 import app.tessera.domain.repository.SyncRepository
 import java.util.UUID
@@ -163,7 +164,12 @@ class SyncRepositoryImpl @Inject constructor(
         if (pending.isEmpty()) return
         val now = clock.nowMs()
         for (entity in pending) {
-            if (!ShareRole.fromWire(entity.myRole).canEditContent) continue
+            val role = ShareRole.fromWire(entity.myRole)
+            if (!role.canEditContent) continue
+            // Deleting a shared note "for everyone" is a tombstone (deletedAt) — a manager/owner
+            // capability. An editor must not propagate a soft-delete to all members; withhold the
+            // tombstone push (mirrors firestore.rules) and leave it pending for merge rollback.
+            if (entity.deletedAt != null && !role.canDeleteForAll) continue
             try {
                 remoteShared.pushSharedNote(
                     sharedMapper.toRemoteContent(entity, tagDao.tagsForNote(entity.id)),
