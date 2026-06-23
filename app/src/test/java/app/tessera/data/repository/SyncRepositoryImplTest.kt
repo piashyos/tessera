@@ -496,6 +496,18 @@ private class SyncFakeNoteDao : NoteDao {
         emitActive()
     }
 
+    override suspend fun adoptOwnerAndShareState(
+        id: String,
+        ownerId: String,
+        shareState: String,
+        myRole: String?,
+    ) {
+        notes[id]?.let {
+            notes[id] = it.copy(ownerId = ownerId, shareState = shareState, myRole = myRole)
+        }
+        emitActive()
+    }
+
     override suspend fun purgeOldTombstones(threshold: Long): Int {
         val stale = notes.values.filter { it.deletedAt != null && it.deletedAt < threshold }.map { it.id }
         stale.forEach { notes.remove(it) }

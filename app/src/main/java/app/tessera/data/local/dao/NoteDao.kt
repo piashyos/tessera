@@ -74,6 +74,13 @@ interface NoteDao {
     @Query("UPDATE notes SET shareState = :shareState, myRole = :myRole WHERE id = :id")
     suspend fun setShareState(id: String, shareState: String, myRole: String?)
 
+    /**
+     * Promotes a note to shared and stamps a definite owner in one update — used when sharing a
+     * legacy/local note whose [NoteEntity.ownerId] was null. Leaves syncedAt/updatedAt untouched.
+     */
+    @Query("UPDATE notes SET ownerId = :ownerId, shareState = :shareState, myRole = :myRole WHERE id = :id")
+    suspend fun adoptOwnerAndShareState(id: String, ownerId: String, shareState: String, myRole: String?)
+
     @Query("DELETE FROM notes WHERE deletedAt IS NOT NULL AND deletedAt < :threshold")
     suspend fun purgeOldTombstones(threshold: Long): Int
 

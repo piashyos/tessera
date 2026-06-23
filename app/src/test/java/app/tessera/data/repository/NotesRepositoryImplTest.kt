@@ -385,6 +385,17 @@ private class FakeNoteDao : NoteDao {
         emitChanges(id)
     }
 
+    override suspend fun adoptOwnerAndShareState(
+        id: String,
+        ownerId: String,
+        shareState: String,
+        myRole: String?,
+    ) {
+        val current = notes[id] ?: return
+        notes[id] = current.copy(ownerId = ownerId, shareState = shareState, myRole = myRole)
+        emitChanges(id)
+    }
+
     override suspend fun purgeOldTombstones(threshold: Long): Int {
         val toDelete = notes.values.filter { it.deletedAt != null && it.deletedAt < threshold }
         toDelete.forEach { notes.remove(it.id) }

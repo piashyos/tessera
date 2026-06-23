@@ -38,6 +38,30 @@ class SharedNotesUseCasesTest {
         }
 
     @Test
+    fun `share succeeds for a null-owner note when signed in`() =
+        runTest {
+            val repo = FakeRepo(note = privateNote(owner = null))
+            val auth = FakeAuth(uid = "me")
+
+            val result = ShareNoteUseCase(repo, auth)(noteId)
+
+            assertTrue(result.isSuccess)
+            assertEquals(noteId, repo.sharedId)
+        }
+
+    @Test
+    fun `share is denied when signed out`() =
+        runTest {
+            val repo = FakeRepo(note = privateNote(owner = null))
+            val auth = FakeAuth(uid = null)
+
+            val result = ShareNoteUseCase(repo, auth)(noteId)
+
+            assertTrue(result.exceptionOrNull() is ShareAccessDeniedException)
+            assertNull(repo.sharedId)
+        }
+
+    @Test
     fun `share is denied when current user is not the owner`() =
         runTest {
             val repo = FakeRepo(note = privateNote(owner = "someone-else"))
@@ -155,8 +179,8 @@ class SharedNotesUseCasesTest {
 
     // --- helpers ---
 
-    private fun privateNote(owner: String) =
-        baseNote().copy(ownerId = UserId(owner), shareState = ShareState.Private)
+    private fun privateNote(owner: String?) =
+        baseNote().copy(ownerId = owner?.let(::UserId), shareState = ShareState.Private)
 
     private fun sharedNote(role: ShareRole) =
         baseNote().copy(
@@ -179,10 +203,10 @@ class SharedNotesUseCasesTest {
         )
 }
 
-private class FakeAuth(uid: String) : AuthRepository {
-    override val currentUser: StateFlow<UserId?> = MutableStateFlow(UserId(uid))
+private class FakeAuth(uid: String?) : AuthRepository {
+    override val currentUser: StateFlow<UserId?> = MutableStateFlow(uid?.let(::UserId))
     override val currentProfile: StateFlow<UserProfile?> =
-        MutableStateFlow(UserProfile(UserId(uid), "Name", "$uid@x.com", null))
+        MutableStateFlow(uid?.let { UserProfile(UserId(it), "Name", "$it@x.com", null) })
 
     override suspend fun signIn(): Result<UserId> = Result.success(currentUser.value!!)
 

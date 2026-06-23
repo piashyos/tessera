@@ -91,6 +91,23 @@ class SharedNotesGatewayImplTest {
         }
 
     @Test
+    fun `shareNote adopts the current user as owner on a null-owner note`() =
+        runTest {
+            database.noteDao().upsert(privateEntity(owner = "me").copy(ownerId = null))
+
+            val result = gateway.shareNote(noteId)
+
+            assertTrue(result.isSuccess)
+            val stored = database.noteDao().getById(noteId.value)!!
+            assertEquals("me", stored.ownerId)
+            assertEquals(NoteEntity.SHARE_STATE_SHARED, stored.shareState)
+            assertEquals(ShareRole.OWNER.name, stored.myRole)
+            val members = database.sharedMemberDao().getForNote(noteId.value)
+            assertEquals(listOf("me"), members.map { it.uid })
+            assertEquals("me", remote.sharedDocument?.ownerId)
+        }
+
+    @Test
     fun `inviteByEmail returns UserNotFound and adds nobody when the email is unknown`() =
         runTest {
             seedShared(myRole = ShareRole.OWNER)

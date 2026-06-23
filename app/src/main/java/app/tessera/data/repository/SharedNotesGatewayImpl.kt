@@ -57,7 +57,14 @@ class SharedNotesGatewayImpl @Inject constructor(
                 )
 
             remoteShared.shareNote(ownerUid, document)
-            noteDao.setShareState(id.value, NoteEntity.SHARE_STATE_SHARED, ShareRole.OWNER.name)
+            // Adopt the current user as the note's definite owner: legacy/local notes may have a
+            // null ownerId, which would otherwise leave the now-shared note ownerless locally.
+            noteDao.adoptOwnerAndShareState(
+                id.value,
+                ownerUid,
+                NoteEntity.SHARE_STATE_SHARED,
+                ShareRole.OWNER.name,
+            )
             sharedMemberDao.replaceForNote(id.value, listOf(ownerMember))
         }
 

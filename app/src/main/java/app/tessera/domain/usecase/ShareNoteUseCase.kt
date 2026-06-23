@@ -19,7 +19,9 @@ class ShareNoteUseCase @Inject constructor(
         val note =
             notesRepository.getNote(id)
                 ?: return Result.failure(NoteNotFoundException(id))
-        if (note.ownerId == null || note.ownerId != authRepository.currentUser.value) {
+        val me = authRepository.currentUser.value
+            ?: return Result.failure(ShareAccessDeniedException("Not signed in"))
+        if (note.ownerId != null && note.ownerId != me) {
             return Result.failure(ShareAccessDeniedException("Only the owner can share a note"))
         }
         return notesRepository.shareNote(id)
