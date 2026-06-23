@@ -144,6 +144,7 @@ class InMemorySharedBackend {
             notes.forEach { bucket[it.id] = it }
         }
 
+        // Not reactive: private-subtree observation is unused by the E2E scenarios (they drive sync via syncNow/fetchAll).
         override fun observeNotes(uid: String): Flow<List<RemoteNote>> =
             MutableStateFlow(privateBucket(uid).values.toList())
 
