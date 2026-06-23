@@ -91,6 +91,23 @@ class SyncRepositoryImplTest {
         }
 
     @Test
+    fun `pushPending uploads a note even when its ownerId is null`() =
+        runTest {
+            // A note created while the ownerId column was unset still syncs: the push routes by the
+            // signed-in uid from syncNow, not by the note's ownerId field.
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val clock = SyncTestClock(500L)
+            val repo = create(noteDao = noteDao, remote = remote, clock = clock)
+            noteDao.upsert(entity("orphan", syncedAt = null, ownerId = null))
+
+            repo.syncNow(uid)
+
+            assertEquals(setOf("orphan"), remote.uploaded.keys)
+            assertEquals(500L, noteDao.getById("orphan")?.syncedAt)
+        }
+
+    @Test
     fun `pull writes a brand-new remote note into Room with synced flag`() =
         runTest {
             val noteDao = SyncFakeNoteDao()

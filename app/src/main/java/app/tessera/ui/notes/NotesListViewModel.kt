@@ -320,7 +320,9 @@ class NotesListViewModel @Inject constructor(
     }
 
     suspend fun createNoteDraft(): NoteId {
-        val note = createNoteUseCase()
+        // Stamp the signed-in user as owner at creation so the note is shareable immediately
+        // (a null owner blocks the share gate). Null when signed out — adopted on next sign-in.
+        val note = createNoteUseCase(currentUserId.value)
         selectedFolderId.value?.let { folderId ->
             moveNoteToFolderUseCase(note.id, folderId)
         }

@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -238,6 +239,28 @@ class NotesListViewModelTest {
         }
 
     @Test
+    fun `createNoteDraft stamps the signed-in user as owner`() =
+        runTest(dispatcher.scheduler) {
+            val repository = FakeNotesRepository(initialNotes = emptyList())
+            val viewModel = repository.createViewModel(currentUser = UserId("me"))
+
+            viewModel.createNoteDraft()
+
+            assertEquals(UserId("me"), repository.lastCreateOwnerId)
+        }
+
+    @Test
+    fun `createNoteDraft leaves owner null when signed out`() =
+        runTest(dispatcher.scheduler) {
+            val repository = FakeNotesRepository(initialNotes = emptyList())
+            val viewModel = repository.createViewModel()
+
+            viewModel.createNoteDraft()
+
+            assertNull(repository.lastCreateOwnerId)
+        }
+
+    @Test
     fun `clearing query returns to observe flow without debounce`() =
         runTest(dispatcher.scheduler) {
             val repository =
@@ -298,7 +321,11 @@ private class FakeNotesRepository(
 
     override suspend fun getNote(id: NoteId): Note? = notesFlow.value.firstOrNull { it.id == id }
 
-    override suspend fun createNote(ownerId: UserId?): Note = sampleNote("created")
+    var lastCreateOwnerId: UserId? = null
+    override suspend fun createNote(ownerId: UserId?): Note {
+        lastCreateOwnerId = ownerId
+        return sampleNote("created")
+    }
 
     override suspend fun updateNote(note: Note): Note = note
 
