@@ -88,25 +88,45 @@ gains the data it needs to render the right buttons:
 Long-press `NoteActionsSheet` (bottom sheet) is unchanged — it already exposes
 archive/pin/delete/restore and remains the full-action surface.
 
-## Part B — Fix trash restore
+## Part B — Fix restore / undo
+
+**Updated signal (2026-07-03):** the failure is broader than trash — the
+**Snackbar "Undo" after a swipe/long-press delete also fails**. Both the Undo
+(`onUndoDelete`) and the trash "Restore" (`onRestoreNote`) resolve to the same
+path: `NotesListViewModel.restoreNote` → `RestoreNoteUseCase` →
+`NotesRepositoryImpl.restoreNote` → `NoteDao.restore` + `syncScheduler.requestSync()`.
+Delete is a **soft** delete (`NoteDao.softDelete`, `deletedAt = ts`), so the
+restore target row still exists. The bug therefore lives in this shared restore
+path (local Room state or the live `SyncRepositoryImpl.observeRemote` listener
+replaying the remote tombstone), **not** in the trash UI specifically.
 
 Follow systematic-debugging:
 
-1. **Reproduce.** Delete a **private** note → open Trash → Restore. Confirm
-   whether it (a) reappears in All Notes and (b) survives a sync cycle. Repeat
-   for a **shared** note.
+1. **Reproduce.** Two scenarios, each for a **private** and a **shared** note:
+   (a) delete → tap Snackbar "Undo"; (b) delete → open Trash → Restore. For each,
+   confirm whether the note reappears in its list and whether it survives a sync
+   cycle. Note whether it fails offline (pure Room) or only with sync active —
+   this bisects local-vs-sync root cause.
 2. **Locate root cause.** Candidate paths, in order of suspicion:
-   - `SyncRepositoryImpl.mergeRemoteShared` (lines ~278–293) upserts a remote
-     shared note even when it still carries a `deletedAt` tombstone, and
-     `remoteContentIsNewer` can re-delete a just-restored note.
-   - `mergeRemote` (lines ~239–249) last-write-wins vs. push ordering for
-     private notes.
-   - UI/VM wiring of `onRestoreNote` in the (new) swipe component.
-3. **Write failing tests** at the repository/DAO layer that encode "restore
-   then merge stale remote tombstone → note stays restored" for **both** the
-   private path (`mergeRemote`) and the shared path (`mergeRemoteShared`), then
-   make them pass. Add a UI-level check that Restore moves a note out of Trash
-   into active.
+   - Live listener replay: `SyncRepositoryImpl.observeRemote` (lines ~110–137)
+     fires `mergeRemote`/`mergeRemoteShared` on every remote snapshot,
+     concurrently with the restore push. If a stale snapshot (tombstone,
+     `updatedAt = T1`) is merged and the restore's local `updatedAt = T2` guard
+     (`local.updatedAt >= remote.updatedAt`, lines ~244 / ~282) does not hold —
+     e.g. equal timestamps from a coarse `Clock`, or the push not yet applied —
+     the tombstone is re-upserted and the note re-deleted.
+   - `mergeRemoteShared` (lines ~278–293) upserts a remote shared note even when
+     it still carries a `deletedAt` tombstone.
+   - Local-only failure: if it also fails offline, the bug is in
+     `NoteDao.restore` / `RestoreNoteUseCase` / VM wiring, not sync.
+3. **Write failing tests** that encode the reproduced root cause, then fix.
+   Expected coverage: a DAO test (`restore` clears `deletedAt` and the row
+   leaves `observeDeleted` / enters `observeActive`) and a `SyncRepositoryImpl`
+   test for the reproduced merge case ("restore then merge stale remote
+   tombstone → note stays restored") for whichever of the private
+   (`mergeRemote`) and shared (`mergeRemoteShared`) paths the reproduction
+   implicates. Add a UI-level check that both Undo and trash Restore move a note
+   back into its active list.
 
 ## Non-goals
 - No changes to the Firestore schema, the `deletedAt` soft-delete model, tombstone
