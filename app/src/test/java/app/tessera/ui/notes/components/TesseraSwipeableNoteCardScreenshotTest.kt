@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
@@ -58,7 +59,7 @@ class TesseraSwipeableNoteCardScreenshotTest {
     private fun capture(
         name: String,
         darkTheme: Boolean,
-        gesture: (composeRule: androidx.compose.ui.test.junit4.ComposeContentTestRule) -> Unit,
+        gesture: (composeRule: ComposeContentTestRule) -> Unit,
         revealedActionKey: String,
     ) {
         composeRule.setContent {
@@ -73,6 +74,7 @@ class TesseraSwipeableNoteCardScreenshotTest {
         // Guard: the revealed button must actually be laid out, otherwise we'd bake a Settled
         // capture as if it were revealed. captureRoboImage grabs the whole composition root.
         composeRule.onNodeWithTag(UiTestTags.swipeAction(noteId, revealedActionKey)).assertExists()
+        // No modal window — captureRoboImage on the composition root is sufficient (cf. NotesListScreenshotTest's captureScreenRoboImage for the modal sheet).
         composeRule.onRoot().captureRoboImage("ui/notes/components/$name.png")
     }
 
