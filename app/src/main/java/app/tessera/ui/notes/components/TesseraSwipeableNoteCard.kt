@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -103,10 +105,14 @@ fun TesseraSwipeableNoteCard(
   }
 
   // Outbound: report our settled open/closed state to the caller, guarding against a feedback loop.
+  // rememberUpdatedState keeps the long-lived (key = Unit) collector reading the latest values
+  // instead of the stale ones captured at first composition.
+  val currentIsOpen by rememberUpdatedState(isOpen)
+  val currentOnOpenChange by rememberUpdatedState(onOpenChange)
   LaunchedEffect(Unit) {
     snapshotFlow { state.settledValue }.collect { settled ->
       val open = settled != RevealAnchor.Settled
-      if (open != isOpen) onOpenChange(open)
+      if (open != currentIsOpen) currentOnOpenChange(open)
     }
   }
 
@@ -167,7 +173,7 @@ private fun SwipeActionsRow(
             .testTag(UiTestTags.swipeAction(noteId, action.key))
             .fillMaxHeight()
             .width(SwipeButtonWidth)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(action.container)
             .clickable {
               action.onClick()
