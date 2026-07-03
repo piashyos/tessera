@@ -45,9 +45,7 @@ object UiTestTags {
 
     fun noteCard(noteId: String): String = "note_card_$noteId"
 
+    fun swipeAction(noteId: String, key: String): String = "swipe_action_${key}_$noteId"
+
     fun sectionHeader(group: String): String = "section_header_$group"
-
-    fun revealPinAction(noteId: String): String = "pin_action_$noteId"
-
-    fun revealDeleteAction(noteId: String): String = "delete_action_$noteId"
 }
