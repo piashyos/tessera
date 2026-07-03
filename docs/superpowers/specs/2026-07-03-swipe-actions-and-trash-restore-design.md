@@ -42,38 +42,47 @@ LeftRevealed  <--  Settled  -->  RightRevealed
 
 ### Actions per view
 The buttons are context-aware, mirroring the existing dispatch in
-`NotesListScreen.kt` (lines ~369–376) and the pin-visibility rule (line ~473,
-pin only outside trash/archive/shared):
+`NotesListScreen.kt` (lines ~369–376). Two independent gates decide button
+presence:
+- **Pin** is gated *by view*, matching line ~473: shown only outside
+  trash/archive/**shared** views.
+- **Delete** is gated *by note*: `canDeleteFromList()` /
+  `swipeToDeleteEnabled` (shared notes the user can't delete for everyone).
 
-| View                         | Left panel (swipe right) | Right panel (swipe left)          |
-|------------------------------|--------------------------|-----------------------------------|
-| All / folder / search / pinned | **Archive**            | **Pin/Unpin** + **Delete**        |
-| Archive                      | **Unarchive**            | **Delete**                        |
-| Trash                        | **Restore**              | **Delete forever**                |
-| Shared (no delete rights)    | **Archive**              | **Pin/Unpin** only (Delete hidden)|
+| View                          | Left panel (swipe right) | Right panel (swipe left)            |
+|-------------------------------|--------------------------|-------------------------------------|
+| All / folder / search / pinned| **Archive**              | **Pin/Unpin** + **Delete***         |
+| Archive                       | **Unarchive**            | **Delete***                         |
+| Trash                         | **Restore**              | **Delete forever**                  |
+| Shared view                   | **Archive**              | **Delete*** (no pin — view-gated)   |
+
+\* Delete is hidden when `canDeleteFromList()` is false. If a right panel would
+end up with **zero** buttons (e.g. shared view + no delete rights), swipe-left
+reveals nothing and is inert for that card.
 
 - **Delete** = tap deletes to trash + Snackbar Undo (via existing
   `handleDelete`). **Delete forever** (trash) = tap → `handlePermanentDelete`
   (keeps its existing permanent-delete Snackbar; no undo, matching today).
 - **Pin/Unpin** toggles and collapses; the note re-sorts (pinned to top).
-- Delete button visibility keeps the current `canDeleteFromList()` /
-  `swipeToDeleteEnabled` gating for shared notes.
 
 ### Component shape
 `TesseraSwipeableNoteCard` keeps its call-site contract as far as possible but
 gains the data it needs to render the right buttons:
 
-- New/changed params: `onPin: () -> Unit` (nullable/absent when pin not
-  applicable), plus existing `onArchive`, `onDelete`. A small `leftAction` /
-  `rightActions` description (icon + label + enabled) derived at the call site
-  from the current view keeps the component dumb about views.
+- The call site passes an explicit list of actions to render, e.g.
+  `leftActions: List<SwipeAction>` and `rightActions: List<SwipeAction>` where
+  `SwipeAction` = (icon, label, container/tint colors, `onClick`). The call site
+  builds these from the current view, so the component stays dumb about views
+  and there is no per-action nullable-lambda ambiguity. An empty list = no panel
+  on that side.
 - Internal: `AnchoredDraggableState`, a background `Row` of buttons sized to the
   card height, and the foreground `TesseraNoteCard`. Reuse `TesseraShape` /
   `TesseraSpacing` and the existing `secondaryContainer` / `errorContainer`
   color language.
 - Collapse coordination: a single "currently open note id" hoisted into the
-  list (`NotesListScreen`) so opening one closes the rest; `LazyColumn` scroll
-  state observed to collapse on scroll.
+  list (`NotesListScreen`) so opening one closes the rest. Collapse the open
+  card when `listState.isScrollInProgress` becomes true, and on a tap of the
+  open card's body.
 
 ### Out of scope for Part A
 Long-press `NoteActionsSheet` (bottom sheet) is unchanged — it already exposes
@@ -93,10 +102,11 @@ Follow systematic-debugging:
    - `mergeRemote` (lines ~239–249) last-write-wins vs. push ordering for
      private notes.
    - UI/VM wiring of `onRestoreNote` in the (new) swipe component.
-3. **Write a failing test** at the repository/DAO layer that encodes
-   "restore then merge stale remote tombstone → note stays restored", then make
-   it pass. Add a UI-level check that Restore moves a note out of Trash into
-   active.
+3. **Write failing tests** at the repository/DAO layer that encode "restore
+   then merge stale remote tombstone → note stays restored" for **both** the
+   private path (`mergeRemote`) and the shared path (`mergeRemoteShared`), then
+   make them pass. Add a UI-level check that Restore moves a note out of Trash
+   into active.
 
 ## Non-goals
 - No changes to the Firestore schema, the `deletedAt` soft-delete model, tombstone
