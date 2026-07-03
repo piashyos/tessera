@@ -130,7 +130,7 @@ fun TesseraSwipeableNoteCard(
       )
     }
 
-    val open = state.settledValue != RevealAnchor.Settled
+    val open = state.targetValue != RevealAnchor.Settled
     TesseraNoteCard(
       title = title,
       preview = preview,
