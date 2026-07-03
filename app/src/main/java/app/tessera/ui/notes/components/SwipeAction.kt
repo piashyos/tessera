@@ -1,5 +1,6 @@
 package app.tessera.ui.notes.components
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -8,6 +9,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * dumb about views. [key] is stable per logical action ("archive", "pin", "delete", "restore",
  * "unarchive", "delete_forever") and is used for the test tag.
  */
+@Immutable
 data class SwipeAction(
     val key: String,
     val icon: ImageVector,
