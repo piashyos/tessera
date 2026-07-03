@@ -7,7 +7,9 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeLeft
 import app.tessera.core.ui.UiTestTags
 import app.tessera.domain.model.Note
@@ -84,6 +86,42 @@ class NotesListScreenTest {
             .getUnclippedBoundsInRoot().left
         assertTrue(
             "Card 'a' should collapse back to rest when 'b' opens " +
+                "(opened left=$openedLeft, collapsed left=$collapsedLeft)",
+            collapsedLeft > openedLeft,
+        )
+    }
+
+    @Test
+    fun scrollingCollapsesOpenCard() {
+        composeRule.setContent {
+            NotesListScreen(
+                state = contentState((1..30).map { note("n$it") }),
+                snackbarHostState = SnackbarHostState(),
+                onQueryChange = {},
+                onTagToggle = {},
+                onToggleViewMode = {},
+                onCreateNote = {},
+            )
+        }
+
+        // Open card "n1": it slides left to reveal its trailing (delete) action.
+        composeRule.onNodeWithTag(UiTestTags.noteCard("n1")).performTouchInput { swipeLeft() }
+        composeRule.onNodeWithTag(UiTestTags.swipeAction("n1", "delete")).assertIsDisplayed()
+        val openedLeft = composeRule.onNodeWithTag(UiTestTags.noteCard("n1"))
+            .getUnclippedBoundsInRoot().left
+
+        // Scroll the list a small amount so isScrollInProgress fires while "n1" stays on-screen
+        // and continuously composed (avoids racing a recycled card's AnchoredDraggable anchors).
+        // The scroll-to-collapse LaunchedEffect must slide "n1" back to its resting left edge.
+        composeRule.onNodeWithTag(UiTestTags.NotesGrid).performTouchInput {
+            swipe(start = center, end = center + Offset(0f, -40f), durationMillis = 200)
+        }
+        composeRule.waitForIdle()
+
+        val collapsedLeft = composeRule.onNodeWithTag(UiTestTags.noteCard("n1"))
+            .getUnclippedBoundsInRoot().left
+        assertTrue(
+            "Card 'n1' should collapse back to rest when the list scrolls " +
                 "(opened left=$openedLeft, collapsed left=$collapsedLeft)",
             collapsedLeft > openedLeft,
         )
