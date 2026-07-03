@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,6 +35,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +81,8 @@ import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.FolderInput
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Menu
+import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.PinOff
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Tag
 import com.composables.icons.lucide.Trash2
@@ -376,6 +380,7 @@ fun NotesListScreen(
                         }
                     },
                     onDeleteNote = { if (state.isTrashView) handlePermanentDelete(it) else handleDelete(it) },
+                    onTogglePin = onTogglePin,
                     selection = selection,
                     selectionMode = selectionMode,
                     onToggleSelection = onToggleSelection,
@@ -440,6 +445,7 @@ fun NotesListScreen(
                         onLongClickNote = { sheetNote = it },
                         onArchive = { handleArchive(it) },
                         onDeleteNote = { handleDelete(it) },
+                        onTogglePin = onTogglePin,
                         selection = emptySet(),
                         selectionMode = false,
                         onToggleSelection = {},
@@ -605,6 +611,7 @@ private fun NotesBody(
     onLongClickNote: (Note) -> Unit,
     onArchive: (Note) -> Unit,
     onDeleteNote: (Note) -> Unit,
+    onTogglePin: (NoteId) -> Unit,
     selection: Set<NoteId>,
     selectionMode: Boolean,
     onToggleSelection: (NoteId) -> Unit,
@@ -645,10 +652,19 @@ private fun NotesBody(
 
         is NotesListState.Content -> {
             val sections = groupNotesByDate(state.notes)
-            // Archive/trash views surface the start-to-end swipe as a "restore" affordance.
-            val startToEndIcon =
-                if (state.isArchiveView || state.isTrashView) Lucide.ArchiveRestore else Lucide.Archive
+            // Pin is a private-only affordance; it never appears in archive/trash/shared views.
+            val showPin = !state.isTrashView && !state.isArchiveView && !state.isSharedView
+
+            // Single-open coordination: at most one card is revealed at a time. Opening one card
+            // (or scrolling) collapses any other, because every card reads/writes this shared id.
+            var openNoteId by rememberSaveable { mutableStateOf<String?>(null) }
+            val listState = rememberLazyListState()
+            LaunchedEffect(listState.isScrollInProgress) {
+                if (listState.isScrollInProgress) openNoteId = null
+            }
+
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(UiTestTags.NotesGrid),
@@ -671,33 +687,71 @@ private fun NotesBody(
                     items(items = section.notes, key = { it.id.value }) { note ->
                         val preview = markdownBodyPreviewPlainText(note.content)
                         val shareState = note.shareState
-                        // TEMPORARY (Task 3 will hoist single-open tracking into NotesBody):
-                        // local per-row open state + action lists so the module keeps compiling.
-                        var open by rememberSaveable(note.id.value) { mutableStateOf(false) }
-                        val canDelete = state.isTrashView || note.canDeleteFromList()
-                        val leftActions = listOf(
-                            SwipeAction(
+
+                        // Left action (swipe right) is always a single archive/unarchive/restore
+                        // affordance whose meaning depends on the view; onArchive is view-aware.
+                        val leftAction = when {
+                            state.isTrashView -> SwipeAction(
+                                key = "restore",
+                                icon = Lucide.ArchiveRestore,
+                                label = stringResource(R.string.note_action_restore),
+                                container = MaterialTheme.colorScheme.secondaryContainer,
+                                content = MaterialTheme.colorScheme.onSecondaryContainer,
+                                onClick = { onArchive(note) },
+                            )
+                            state.isArchiveView -> SwipeAction(
+                                key = "unarchive",
+                                icon = Lucide.ArchiveRestore,
+                                label = stringResource(R.string.note_action_unarchive),
+                                container = MaterialTheme.colorScheme.secondaryContainer,
+                                content = MaterialTheme.colorScheme.onSecondaryContainer,
+                                onClick = { onArchive(note) },
+                            )
+                            else -> SwipeAction(
                                 key = "archive",
-                                icon = startToEndIcon,
+                                icon = Lucide.Archive,
                                 label = stringResource(R.string.note_action_archive),
                                 container = MaterialTheme.colorScheme.secondaryContainer,
                                 content = MaterialTheme.colorScheme.onSecondaryContainer,
                                 onClick = { onArchive(note) },
-                            ),
-                        )
-                        val rightActions = if (canDelete) {
-                            listOf(
-                                SwipeAction(
-                                    key = "delete",
-                                    icon = Lucide.Trash2,
-                                    label = stringResource(R.string.note_action_delete),
-                                    container = MaterialTheme.colorScheme.errorContainer,
-                                    content = MaterialTheme.colorScheme.onErrorContainer,
-                                    onClick = { onDeleteNote(note) },
-                                ),
                             )
-                        } else {
-                            emptyList()
+                        }
+
+                        // Right actions (swipe left): Pin/Unpin first (private views only), then
+                        // Delete (routes to permanent delete in trash). Both may be absent, leaving
+                        // the swipe-left direction inert (e.g. a shared note a viewer can't delete).
+                        val canDelete = state.isTrashView || note.canDeleteFromList()
+                        val rightActions = buildList {
+                            if (showPin) {
+                                add(
+                                    SwipeAction(
+                                        key = "pin",
+                                        icon = if (note.isPinned) Lucide.PinOff else Lucide.Pin,
+                                        label = stringResource(
+                                            if (note.isPinned) R.string.note_action_unpin
+                                            else R.string.note_action_pin,
+                                        ),
+                                        container = MaterialTheme.colorScheme.secondaryContainer,
+                                        content = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        onClick = { onTogglePin(note.id) },
+                                    ),
+                                )
+                            }
+                            if (canDelete) {
+                                add(
+                                    SwipeAction(
+                                        key = "delete",
+                                        icon = Lucide.Trash2,
+                                        label = stringResource(
+                                            if (state.isTrashView) R.string.note_action_delete_forever
+                                            else R.string.note_action_delete,
+                                        ),
+                                        container = MaterialTheme.colorScheme.errorContainer,
+                                        content = MaterialTheme.colorScheme.onErrorContainer,
+                                        onClick = { onDeleteNote(note) },
+                                    ),
+                                )
+                            }
                         }
                         TesseraSwipeableNoteCard(
                             modifier = Modifier
@@ -717,14 +771,14 @@ private fun NotesBody(
                             dateLabel = noteDateLabel(note.updatedAt),
                             tags = note.tags.map { it.name },
                             isPinned = note.isPinned,
-                            isOpen = open,
-                            onOpenChange = { open = it },
+                            isOpen = openNoteId == note.id.value,
+                            onOpenChange = { openNoteId = if (it) note.id.value else null },
                             onClick = {
                                 if (selectionMode) onToggleSelection(note.id)
                                 else onNoteClick(note.id)
                             },
                             onLongClick = { onLongClickNote(note) },
-                            leftActions = leftActions,
+                            leftActions = listOf(leftAction),
                             rightActions = rightActions,
                             selected = selectionMode && note.id in selection,
                             avatars = if (shareState is ShareState.Shared) {

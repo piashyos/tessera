@@ -84,7 +84,12 @@
     <string name="note_action_pin">Закрепить</string>
     <string name="note_action_unpin">Открепить</string>
     <string name="note_action_delete">Удалить</string>
+    <string name="note_action_delete_forever">Удалить навсегда</string>
     <string name="note_deleted">Заметка удалена</string>
+    <string name="note_archived">Заметка архивирована</string>
+    <string name="note_restored">Заметка восстановлена</string>
+    <string name="note_date_today">Сегодня</string>
+    <string name="note_date_yesterday">Вчера</string>
     <string name="notes_permanently_deleted">Удалено навсегда</string>
     <string name="action_undo">Отменить</string>
     <!-- Note list section headers -->
@@ -114,6 +119,11 @@
     <string name="sync_retry">Повторить</string>
     <string name="settings_section_appearance">Внешний вид</string>
     <string name="settings_theme_sheet_title">Тема</string>
+    <string name="settings_palette_section">Палитра акцента</string>
+    <string name="settings_palette_warm">Тёплая</string>
+    <string name="settings_palette_neutral">Нейтральная</string>
+    <string name="settings_palette_slate">Сине-серая</string>
+    <string name="settings_palette_sage">Шалфей</string>
     <string name="settings_theme_system">Системная</string>
     <string name="settings_theme_light">Светлая</string>
     <string name="settings_theme_dark">Тёмная</string>
@@ -126,8 +136,33 @@
     <string name="settings_language_ru">Русский</string>
     <string name="settings_section_data">Данные</string>
     <string name="settings_data_export">Экспорт заметок</string>
-    <string name="settings_data_import">Импорт…</string>
+    <string name="settings_data_export_subtitle">Сохранить все заметки в Markdown .zip</string>
     <string name="settings_data_empty_trash">Очистить корзину</string>
+    <string name="settings_data_empty_trash_empty">Корзина пуста</string>
+    <plurals name="settings_data_empty_trash_count">
+        <item quantity="one">%d заметка в корзине</item>
+        <item quantity="few">%d заметки в корзине</item>
+        <item quantity="many">%d заметок в корзине</item>
+        <item quantity="other">%d заметки в корзине</item>
+    </plurals>
+    <string name="settings_empty_trash_dialog_title">Очистить корзину?</string>
+    <plurals name="settings_empty_trash_dialog_message">
+        <item quantity="one">Будет безвозвратно удалена %d заметка. Это действие нельзя отменить.</item>
+        <item quantity="few">Будет безвозвратно удалено %d заметки. Это действие нельзя отменить.</item>
+        <item quantity="many">Будет безвозвратно удалено %d заметок. Это действие нельзя отменить.</item>
+        <item quantity="other">Будет безвозвратно удалено %d заметки. Это действие нельзя отменить.</item>
+    </plurals>
+    <string name="settings_empty_trash_confirm">Удалить всё</string>
+    <string name="settings_empty_trash_cancel">Отмена</string>
+    <string name="settings_trash_emptied">Корзина очищена</string>
+    <plurals name="settings_export_success">
+        <item quantity="one">Экспортирована %d заметка</item>
+        <item quantity="few">Экспортировано %d заметки</item>
+        <item quantity="many">Экспортировано %d заметок</item>
+        <item quantity="other">Экспортировано %d заметки</item>
+    </plurals>
+    <string name="settings_export_failed">Не удалось экспортировать</string>
+    <string name="settings_export_filename">tessera-notes.zip</string>
     <string name="settings_section_about">О приложении</string>
     <string name="settings_about">О приложении</string>
     <string name="settings_version">Tessera %1$s</string>
@@ -162,6 +197,7 @@
     <string name="note_action_make_shared">Сделать общей</string>
     <string name="note_action_archive">Архивировать</string>
     <string name="note_action_unarchive">Разархивировать</string>
+    <string name="note_action_restore">Восстановить</string>
     <!-- Drawer -->
     <string name="notes_archive">Архив</string>
     <string name="drawer_pinned">Закреплённые</string>
