@@ -1,101 +1,187 @@
 package app.tessera.ui.notes.components
 
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import com.composables.icons.lucide.Archive
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Trash2
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.tessera.TesseraNoteCard
-import app.tessera.core.ui.theme.TesseraShape
-import app.tessera.core.ui.theme.TesseraSpacing
+import kotlin.math.roundToInt
+
+private val SwipeButtonWidth = 72.dp
+
+private enum class RevealAnchor { LeftRevealed, Settled, RightRevealed }
 
 /**
- * [TesseraNoteCard] wrapped in [SwipeToDismissBox]:
- * - swipe start-to-end (right) → archive (secondaryContainer)
- * - swipe end-to-start (left)  → delete (errorContainer)
+ * [TesseraNoteCard] that reveals action buttons when swiped, instead of dismissing.
  *
- * Confirmation/undo are the caller's responsibility — host wires Snackbar restore.
+ * - Swipe start-to-end (right) reveals [leftActions] pinned to the leading edge.
+ * - Swipe end-to-start (left) reveals [rightActions] pinned to the trailing edge.
+ *
+ * Nothing mutates on swipe alone: an action only fires when its revealed button is tapped.
+ * A partial drag that doesn't cross an anchor settles back to center and reveals nothing.
+ * A side with an empty action list has no anchor, so that swipe direction is inert.
+ *
+ * Open/closed is hoisted via [isOpen]/[onOpenChange] so the caller can keep at most one card
+ * open at a time and collapse on external events.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TesseraSwipeableNoteCard(
+  noteId: String,
   title: String,
   preview: String,
   dateLabel: String,
   tags: List<String>,
   isPinned: Boolean,
+  isOpen: Boolean,
+  onOpenChange: (Boolean) -> Unit,
   onClick: () -> Unit,
   onLongClick: () -> Unit,
-  onArchive: () -> Unit,
-  onDelete: () -> Unit,
+  leftActions: List<SwipeAction>,
+  rightActions: List<SwipeAction>,
   modifier: Modifier = Modifier,
   selected: Boolean = false,
-  /**
-   * When false, the swipe-to-delete (end-to-start) gesture is inert — used for shared notes the
-   * current user may not delete for everyone (only owner/manager can). Archive is unaffected.
-   */
-  swipeToDeleteEnabled: Boolean = true,
-  avatars: (@androidx.compose.runtime.Composable () -> Unit)? = null,
+  avatars: (@Composable () -> Unit)? = null,
 ) {
-  val state = rememberSwipeToDismissBoxState(
-    confirmValueChange = { value ->
-      when (value) {
-        SwipeToDismissBoxValue.StartToEnd -> { onArchive(); true }
-        SwipeToDismissBoxValue.EndToStart -> if (swipeToDeleteEnabled) { onDelete(); true } else false
-        SwipeToDismissBoxValue.Settled -> false
-      }
-    },
-  )
-  LaunchedEffect(state.currentValue) {
-    if (state.currentValue != SwipeToDismissBoxValue.Settled) state.reset()
+  val density = LocalDensity.current
+  val state = remember {
+    AnchoredDraggableState(
+      initialValue = RevealAnchor.Settled,
+      positionalThreshold = { distance -> distance * 0.5f },
+      velocityThreshold = { with(density) { 125.dp.toPx() } },
+      snapAnimationSpec = tween(),
+      decayAnimationSpec = exponentialDecay(),
+    )
   }
-  SwipeToDismissBox(
-    state = state,
-    modifier = modifier,
-    backgroundContent = {
-      val isArchive = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-      val bg = if (isArchive) MaterialTheme.colorScheme.secondaryContainer
-               else MaterialTheme.colorScheme.errorContainer
-      val tint = if (isArchive) MaterialTheme.colorScheme.onSecondaryContainer
-                 else MaterialTheme.colorScheme.onErrorContainer
-      val align = if (isArchive) Alignment.CenterStart else Alignment.CenterEnd
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .clip(TesseraShape.noteCard)
-          .background(bg)
-          .padding(horizontal = TesseraSpacing.xl),
-        contentAlignment = align,
-      ) {
-        Icon(
-          imageVector = if (isArchive) Lucide.Archive else Lucide.Trash2,
-          contentDescription = null,
-          tint = tint,
-        )
+
+  val leftWidthPx = with(density) { (SwipeButtonWidth * leftActions.size).toPx() }
+  val rightWidthPx = with(density) { (SwipeButtonWidth * rightActions.size).toPx() }
+
+  // Rebuild anchors whenever the revealed widths change. A side with no actions gets no anchor,
+  // so that drag direction cannot open.
+  LaunchedEffect(leftWidthPx, rightWidthPx) {
+    state.updateAnchors(
+      DraggableAnchors {
+        RevealAnchor.Settled at 0f
+        if (leftActions.isNotEmpty()) RevealAnchor.LeftRevealed at leftWidthPx
+        if (rightActions.isNotEmpty()) RevealAnchor.RightRevealed at -rightWidthPx
       }
-    },
-  ) {
+    )
+  }
+
+  // Inbound: caller asked us to close and we are (or are settling) open -> animate back to center.
+  LaunchedEffect(isOpen) {
+    if (!isOpen && state.settledValue != RevealAnchor.Settled) {
+      state.animateTo(RevealAnchor.Settled)
+    }
+  }
+
+  // Outbound: report our settled open/closed state to the caller, guarding against a feedback loop.
+  LaunchedEffect(Unit) {
+    snapshotFlow { state.settledValue }.collect { settled ->
+      val open = settled != RevealAnchor.Settled
+      if (open != isOpen) onOpenChange(open)
+    }
+  }
+
+  Box(modifier = modifier) {
+    if (leftActions.isNotEmpty()) {
+      SwipeActionsRow(
+        noteId = noteId,
+        actions = leftActions,
+        onDismiss = { onOpenChange(false) },
+        modifier = Modifier.matchParentSize(),
+        alignment = Alignment.CenterStart,
+      )
+    }
+    if (rightActions.isNotEmpty()) {
+      SwipeActionsRow(
+        noteId = noteId,
+        actions = rightActions,
+        onDismiss = { onOpenChange(false) },
+        modifier = Modifier.matchParentSize(),
+        alignment = Alignment.CenterEnd,
+      )
+    }
+
+    val open = state.settledValue != RevealAnchor.Settled
     TesseraNoteCard(
       title = title,
       preview = preview,
       dateLabel = dateLabel,
       tags = tags,
       isPinned = isPinned,
-      onClick = onClick,
+      // Tapping the body while open collapses instead of navigating.
+      onClick = { if (open) onOpenChange(false) else onClick() },
       onLongClick = onLongClick,
       selected = selected,
       avatars = avatars,
+      modifier = Modifier
+        .testTag(UiTestTags.noteCard(noteId))
+        .fillMaxWidth()
+        .offset { IntOffset(state.requireOffset().roundToInt(), 0) }
+        .anchoredDraggable(state, Orientation.Horizontal),
     )
+  }
+}
+
+@Composable
+private fun SwipeActionsRow(
+  noteId: String,
+  actions: List<SwipeAction>,
+  onDismiss: () -> Unit,
+  alignment: Alignment,
+  modifier: Modifier = Modifier,
+) {
+  Box(modifier = modifier, contentAlignment = alignment) {
+    Row(modifier = Modifier.fillMaxHeight()) {
+      actions.forEach { action ->
+        Box(
+          modifier = Modifier
+            .testTag(UiTestTags.swipeAction(noteId, action.key))
+            .fillMaxHeight()
+            .width(SwipeButtonWidth)
+            .clip(RoundedCornerShape(12.dp))
+            .background(action.container)
+            .clickable {
+              action.onClick()
+              onDismiss()
+            },
+          contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+            imageVector = action.icon,
+            contentDescription = action.label,
+            tint = action.content,
+          )
+        }
+      }
+    }
   }
 }

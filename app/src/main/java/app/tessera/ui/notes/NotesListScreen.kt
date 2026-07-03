@@ -3,6 +3,8 @@ package app.tessera.ui.notes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -36,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,8 +71,11 @@ import app.tessera.ui.notes.components.NoteActionsSheet
 import app.tessera.ui.notes.components.SearchOption
 import app.tessera.ui.notes.components.SearchOptionPopup
 import app.tessera.ui.notes.components.SearchScreen
+import app.tessera.ui.notes.components.SwipeAction
 import app.tessera.ui.notes.components.TesseraNotesDrawer
 import app.tessera.ui.notes.components.TesseraSwipeableNoteCard
+import com.composables.icons.lucide.Archive
+import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.FolderInput
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Menu
@@ -125,6 +131,7 @@ fun NotesListScreen(
     onShowArchive: () -> Unit = {},
     onShowTrash: () -> Unit = {},
     onShowShared: () -> Unit = {},
+    onShowPinned: () -> Unit = {},
     onShowAllNotes: () -> Unit = {},
     onMakeShared: (NoteId) -> Unit = {},
     isRefreshing: Boolean = false,
@@ -181,6 +188,39 @@ fun NotesListScreen(
         }
     }
 
+    val archivedMessage = stringResource(R.string.note_archived)
+    val handleArchive: (Note) -> Unit = { note ->
+        onArchiveNote(note.id, true)
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = archivedMessage,
+                actionLabel = undoLabel,
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) onArchiveNote(note.id, false)
+        }
+    }
+
+    val restoredMessage = stringResource(R.string.note_restored)
+    val handleUnarchive: (Note) -> Unit = { note ->
+        onArchiveNote(note.id, false)
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                message = restoredMessage,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
+    val handleRestoreFromTrash: (Note) -> Unit = { note ->
+        onRestoreNote(note.id)
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                message = restoredMessage,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
+
     BackHandler(enabled = selectionMode) { onExitSelectionMode() }
     BackHandler(enabled = state.searchExpanded) { onCollapseSearch() }
 
@@ -188,11 +228,13 @@ fun NotesListScreen(
     val archiveLabel = stringResource(R.string.notes_archive)
     val trashLabel = stringResource(R.string.drawer_trash)
     val sharedLabel = stringResource(R.string.drawer_shared)
+    val pinnedLabel = stringResource(R.string.drawer_pinned)
     val headerTitle = when {
         selectionMode -> stringResource(R.string.notes_selection_count, selection.size)
         state.isTrashView -> trashLabel
         state.isArchiveView -> archiveLabel
         state.isSharedView -> sharedLabel
+        state.isPinnedView -> pinnedLabel
         state.selectedFolderId != null ->
             state.folders.firstOrNull { it.id == state.selectedFolderId }?.name ?: allNotesLabel
         else -> allNotesLabel
@@ -208,6 +250,7 @@ fun NotesListScreen(
             selectedSystemKey = key
             when (key) {
                 "all" -> onShowAllNotes()
+                "pinned" -> onShowPinned()
                 "archive" -> onShowArchive()
                 "trash" -> onShowTrash()
                 "shared" -> onShowShared()
@@ -325,7 +368,13 @@ fun NotesListScreen(
                     state = state,
                     onNoteClick = onNoteClick,
                     onLongClickNote = { sheetNote = it },
-                    onArchive = { if (state.isTrashView) onRestoreNote(it.id) else handleDelete(it) },
+                    onArchive = {
+                        when {
+                            state.isTrashView -> handleRestoreFromTrash(it)
+                            state.isArchiveView -> handleUnarchive(it)
+                            else -> handleArchive(it)
+                        }
+                    },
                     onDeleteNote = { if (state.isTrashView) handlePermanentDelete(it) else handleDelete(it) },
                     selection = selection,
                     selectionMode = selectionMode,
@@ -389,7 +438,7 @@ fun NotesListScreen(
                         state = state,
                         onNoteClick = onNoteClick,
                         onLongClickNote = { sheetNote = it },
-                        onArchive = { handleDelete(it) },
+                        onArchive = { handleArchive(it) },
                         onDeleteNote = { handleDelete(it) },
                         selection = emptySet(),
                         selectionMode = false,
@@ -414,6 +463,11 @@ fun NotesListScreen(
             onDuplicate = { onDuplicateNote(note.id) },
             onArchiveToggle = { onArchiveNote(note.id, !note.isArchived) },
             onDelete = { if (state.isTrashView) handlePermanentDelete(note) else handleDelete(note) },
+            onRestore = if (state.isTrashView) {
+                { handleRestoreFromTrash(note) }
+            } else {
+                null
+            },
             showDelete = state.isTrashView || note.canDeleteFromList(),
             onDismiss = { sheetNote = null },
             onMakeShared =
@@ -591,6 +645,9 @@ private fun NotesBody(
 
         is NotesListState.Content -> {
             val sections = groupNotesByDate(state.notes)
+            // Archive/trash views surface the start-to-end swipe as a "restore" affordance.
+            val startToEndIcon =
+                if (state.isArchiveView || state.isTrashView) Lucide.ArchiveRestore else Lucide.Archive
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -600,28 +657,75 @@ private fun NotesBody(
             ) {
                 sections.forEach { section ->
                     item(key = "header-${section.group}") {
-                        SectionHeader(group = section.group)
+                        SectionHeader(
+                            group = section.group,
+                            modifier = Modifier.animateItem(
+                                placementSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                                fadeOutSpec = tween(durationMillis = 200),
+                            ),
+                        )
                     }
                     items(items = section.notes, key = { it.id.value }) { note ->
                         val preview = markdownBodyPreviewPlainText(note.content)
                         val shareState = note.shareState
+                        // TEMPORARY (Task 3 will hoist single-open tracking into NotesBody):
+                        // local per-row open state + action lists so the module keeps compiling.
+                        var open by rememberSaveable(note.id.value) { mutableStateOf(false) }
+                        val canDelete = state.isTrashView || note.canDeleteFromList()
+                        val leftActions = listOf(
+                            SwipeAction(
+                                key = "archive",
+                                icon = startToEndIcon,
+                                label = stringResource(R.string.note_action_archive),
+                                container = MaterialTheme.colorScheme.secondaryContainer,
+                                content = MaterialTheme.colorScheme.onSecondaryContainer,
+                                onClick = { onArchive(note) },
+                            ),
+                        )
+                        val rightActions = if (canDelete) {
+                            listOf(
+                                SwipeAction(
+                                    key = "delete",
+                                    icon = Lucide.Trash2,
+                                    label = stringResource(R.string.note_action_delete),
+                                    container = MaterialTheme.colorScheme.errorContainer,
+                                    content = MaterialTheme.colorScheme.onErrorContainer,
+                                    onClick = { onDeleteNote(note) },
+                                ),
+                            )
+                        } else {
+                            emptyList()
+                        }
                         TesseraSwipeableNoteCard(
                             modifier = Modifier
-                                .padding(horizontal = 16.dp)
-                                .testTag(UiTestTags.noteCard(note.id.value)),
+                                // Collapse the removed row and glide neighbours up with a
+                                // bounce-free spring so deletes/archives never snap.
+                                .animateItem(
+                                    placementSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
+                                    fadeOutSpec = tween(durationMillis = 200),
+                                )
+                                .padding(horizontal = 16.dp),
+                            noteId = note.id.value,
                             title = note.title.ifBlank { stringResource(R.string.note_untitled) },
                             preview = preview,
-                            dateLabel = formatNoteDate(note.updatedAt),
+                            dateLabel = noteDateLabel(note.updatedAt),
                             tags = note.tags.map { it.name },
                             isPinned = note.isPinned,
+                            isOpen = open,
+                            onOpenChange = { open = it },
                             onClick = {
                                 if (selectionMode) onToggleSelection(note.id)
                                 else onNoteClick(note.id)
                             },
                             onLongClick = { onLongClickNote(note) },
-                            onArchive = { onArchive(note) },
-                            onDelete = { onDeleteNote(note) },
-                            swipeToDeleteEnabled = state.isTrashView || note.canDeleteFromList(),
+                            leftActions = leftActions,
+                            rightActions = rightActions,
                             selected = selectionMode && note.id in selection,
                             avatars = if (shareState is ShareState.Shared) {
                                 {
@@ -642,7 +746,7 @@ private fun NotesBody(
 }
 
 @Composable
-private fun SectionHeader(group: NoteGroup) {
+private fun SectionHeader(group: NoteGroup, modifier: Modifier = Modifier) {
     val labelRes = when (group) {
         NoteGroup.Pinned -> R.string.note_group_pinned
         NoteGroup.Today -> R.string.note_group_today
@@ -656,7 +760,7 @@ private fun SectionHeader(group: NoteGroup) {
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(start = 16.dp, top = 16.dp, bottom = 4.dp)
             .testTag(UiTestTags.sectionHeader(group.name)),
