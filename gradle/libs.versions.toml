@@ -3,6 +3,7 @@ agp = "8.13.2"
 kotlin = "2.2.21"
 compose-bom = "2026.06.00"
 material-icons = "1.7.8"
+material3 = "1.5.0-alpha18"
 hilt = "2.58"
 hilt-nav-compose = "1.2.0"
 room = "2.8.4"
@@ -31,7 +32,7 @@ compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
-compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
 compose-animation = { module = "androidx.compose.animation:animation" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
 nav-compose = { module = "androidx.navigation:navigation-compose", version.ref = "nav-compose" }
@@ -75,7 +76,7 @@ material-icons-core = { module = "androidx.compose.material:material-icons-core"
 material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "material-icons" }
 aztec = { module = "org.wordpress:aztec", version.ref = "aztec" }
 appcompat = { module = "androidx.appcompat:appcompat", version = "1.6.1" }
-material = { module = "com.google.android.material:material", version = "1.12.0" }
+material = { module = "com.google.android.material:material", version = "1.14.0" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 
 [plugins]

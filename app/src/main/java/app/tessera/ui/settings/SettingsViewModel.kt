@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.tessera.core.export.MarkdownExport
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.preferences.ThemePalette
+import app.tessera.core.preferences.ThemeStyle
 import app.tessera.core.preferences.UserPreferences
 import app.tessera.domain.model.AccountSwitchDecision
 import app.tessera.domain.model.Note
@@ -46,15 +47,25 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
     private val uiState = MutableStateFlow(SettingsState())
 
-    // themeMode + dynamicColor + palette are independent prefs; bundle them so the top-level
-    // combine stays within its 5-arg arity.
+    // The theme-related prefs are independent; bundle them so the top-level combine stays
+    // within its 5-arg arity.
+    private data class ThemePrefs(
+        val mode: ThemeMode,
+        val dynamic: Boolean,
+        val palette: ThemePalette,
+        val style: ThemeStyle,
+        val amoled: Boolean,
+    )
+
     private val themePrefs =
         combine(
             userPreferences.themeMode,
             userPreferences.dynamicColor,
             userPreferences.themePalette,
-        ) { mode, dynamic, palette ->
-            Triple(mode, dynamic, palette)
+            userPreferences.themeStyle,
+            userPreferences.amoled,
+        ) { mode, dynamic, palette, style, amoled ->
+            ThemePrefs(mode, dynamic, palette, style, amoled)
         }
 
     // languageTag + trash size — paired for the same arity reason as themePrefs.
@@ -76,9 +87,11 @@ class SettingsViewModel @Inject constructor(
                 userId = profile?.id?.value,
                 displayName = profile?.displayName,
                 email = profile?.email,
-                themeMode = theme.first,
-                dynamicColor = theme.second,
-                themePalette = theme.third,
+                themeMode = theme.mode,
+                dynamicColor = theme.dynamic,
+                themePalette = theme.palette,
+                themeStyle = theme.style,
+                amoled = theme.amoled,
                 languageTag = langTrash.first,
                 trashCount = langTrash.second,
                 syncStatus = sync,
@@ -99,6 +112,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setThemePalette(palette: ThemePalette) {
         viewModelScope.launch { userPreferences.setThemePalette(palette) }
+    }
+
+    fun setThemeStyle(style: ThemeStyle) {
+        viewModelScope.launch { userPreferences.setThemeStyle(style) }
+    }
+
+    fun setAmoled(enabled: Boolean) {
+        viewModelScope.launch { userPreferences.setAmoled(enabled) }
     }
 
     fun setLanguage(tag: String) {

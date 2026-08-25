@@ -29,6 +29,18 @@ interface UserPreferences {
     /** Synchronously-readable last [themePalette] value, used to seed the UI on (re)creation. */
     val cachedThemePalette: ThemePalette
 
+    /** Dynamic-color scheme style (only applies while [dynamicColor] is on). */
+    val themeStyle: Flow<ThemeStyle>
+
+    /** Synchronously-readable last [themeStyle] value, used to seed the UI on (re)creation. */
+    val cachedThemeStyle: ThemeStyle
+
+    /** True-black (AMOLED) dark surfaces; only affects the dark scheme. */
+    val amoled: Flow<Boolean>
+
+    /** Synchronously-readable last [amoled] value, used to seed the UI on (re)creation. */
+    val cachedAmoled: Boolean
+
     val languageTag: Flow<String>
     val notesViewMode: Flow<NotesViewMode>
 
@@ -38,6 +50,8 @@ interface UserPreferences {
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setDynamicColor(enabled: Boolean)
     suspend fun setThemePalette(palette: ThemePalette)
+    suspend fun setThemeStyle(style: ThemeStyle)
+    suspend fun setAmoled(enabled: Boolean)
     suspend fun setLanguageTag(tag: String)
     suspend fun setNotesViewMode(mode: NotesViewMode)
 

@@ -65,6 +65,18 @@ class MainActivity : ComponentActivity() {
             ) {
                 userPreferences.themePalette.collect { value = it }
             }
+            val themeStyle by produceState(
+                initialValue = userPreferences.cachedThemeStyle,
+                userPreferences,
+            ) {
+                userPreferences.themeStyle.collect { value = it }
+            }
+            val amoled by produceState(
+                initialValue = userPreferences.cachedAmoled,
+                userPreferences,
+            ) {
+                userPreferences.amoled.collect { value = it }
+            }
 
             val context = LocalContext.current
             LaunchedEffect(languageTag) {
@@ -101,7 +113,13 @@ class MainActivity : ComponentActivity() {
                 controller.isAppearanceLightNavigationBars = !resolvedDark
             }
 
-            TesseraTheme(themeMode = themeMode, dynamicColor = dynamicColor, palette = themePalette) {
+            TesseraTheme(
+                themeMode = themeMode,
+                dynamicColor = dynamicColor,
+                palette = themePalette,
+                style = themeStyle,
+                amoled = amoled,
+            ) {
                 TesseraApp()
             }
         }

@@ -128,6 +128,13 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_dynamic_color">Dynamic color</string>
     <string name="settings_dynamic_color_subtitle">Use colors from your wallpaper</string>
+    <string name="settings_style_section">Color style</string>
+    <string name="settings_style_tonal_spot">Tonal Spot</string>
+    <string name="settings_style_vibrant">Vibrant</string>
+    <string name="settings_style_expressive">Expressive</string>
+    <string name="settings_style_fruit_salad">Fruit Salad</string>
+    <string name="settings_amoled">True black</string>
+    <string name="settings_amoled_subtitle">Pure black dark background (AMOLED)</string>
     <string name="settings_theme_preview_sample">Aa</string>
     <string name="settings_section_language">Language</string>
     <string name="settings_language_system">System default</string>

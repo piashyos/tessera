@@ -1,21 +1,20 @@
 package app.tessera.core.ui.theme
 
 import android.os.Build
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LocalRippleConfiguration
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.preferences.ThemePalette
+import app.tessera.core.preferences.ThemeStyle
 
 /** Resolves the brand color tokens for a [palette] in the given light/dark variant. */
 fun paletteColors(palette: ThemePalette, dark: Boolean): TesseraBrandColors = when (palette) {
@@ -93,37 +92,29 @@ private fun darkSchemeFor(c: TesseraBrandColors) = darkColorScheme(
   scrim                     = c.scrim,
 )
 
-/**
- * Overlay our brand identity onto a dynamic-color scheme:
- * primary/background/surface always come from the chosen palette; let
- * secondary/tertiary/surfaceContainer-* keep their dynamic values harmonized from the wallpaper.
- */
-private fun ColorScheme.brandOverlay(c: TesseraBrandColors): ColorScheme = copy(
-  primary                = c.primary,
-  onPrimary              = c.onPrimary,
-  primaryContainer       = c.primaryContainer,
-  onPrimaryContainer     = c.onPrimaryContainer,
-  background             = c.background,
-  onBackground           = c.onBackground,
-  surface                = c.surface,
-  onSurface              = c.onSurface,
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TesseraTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
   dynamicColor: Boolean = true,
   palette: ThemePalette = ThemePalette.Default,
+  style: ThemeStyle = ThemeStyle.Default,
+  amoled: Boolean = false,
   content: @Composable () -> Unit,
 ) {
   val ctx = LocalContext.current
   val brand = paletteColors(palette, darkTheme)
-  val scheme: ColorScheme = when {
+  // Full Material You: while dynamic color is on, the wallpaper seed drives the WHOLE scheme.
+  // TONAL_SPOT uses the platform scheme verbatim; the other styles re-mix the same seed via MDC's
+  // scheme variants. The hand-tuned brand palettes are the non-dynamic (or < Android 12) path.
+  var scheme: ColorScheme = when {
     dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
       runCatching {
-        val dyn = if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        dyn.brandOverlay(brand)
+        if (style == ThemeStyle.TONAL_SPOT) {
+          if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
+        } else {
+          styledDynamicColorScheme(ctx, style, darkTheme)
+        }
       }.getOrElse {
         if (darkTheme) darkSchemeFor(brand) else lightSchemeFor(brand)
       }
@@ -131,20 +122,15 @@ fun TesseraTheme(
     darkTheme -> darkSchemeFor(brand)
     else      -> lightSchemeFor(brand)
   }
+  if (amoled && darkTheme) scheme = scheme.withTrueBlack()
 
-  MaterialTheme(
-    colorScheme = scheme,
-    typography  = TesseraTypography,
-    shapes      = TesseraShapes,
-  ) {
-    // Suppress the dark Material press state-layer everywhere: a null ripple config silences
-    // `ripple()`-based components, while NoIndication covers bare Modifier.clickable surfaces.
-    CompositionLocalProvider(
-      LocalRippleConfiguration provides null,
-      LocalIndication provides NoIndication,
-      content = content,
-    )
-  }
+  MaterialExpressiveTheme(
+    colorScheme  = scheme,
+    motionScheme = MotionScheme.expressive(),
+    typography   = TesseraTypography,
+    shapes       = TesseraShapes,
+    content      = content,
+  )
 }
 
 @Composable
@@ -152,6 +138,8 @@ fun TesseraTheme(
   themeMode: ThemeMode,
   dynamicColor: Boolean,
   palette: ThemePalette = ThemePalette.Default,
+  style: ThemeStyle = ThemeStyle.Default,
+  amoled: Boolean = false,
   content: @Composable () -> Unit,
 ) {
   val darkTheme = themeMode.resolveDark(isSystemInDarkTheme())
@@ -159,6 +147,8 @@ fun TesseraTheme(
     darkTheme = darkTheme,
     dynamicColor = dynamicColor,
     palette = palette,
+    style = style,
+    amoled = amoled,
     content = content,
   )
 }

@@ -92,6 +92,8 @@ fun SettingsScreen(
     onSelectThemeMode: (ThemeMode) -> Unit = {},
     onSetDynamicColor: (Boolean) -> Unit = {},
     onSelectPalette: (ThemePalette) -> Unit = {},
+    onSelectStyle: (app.tessera.core.preferences.ThemeStyle) -> Unit = {},
+    onSetAmoled: (Boolean) -> Unit = {},
     onSelectLanguage: (String) -> Unit = {},
     onRetrySync: () -> Unit = {},
     onExport: (OutputStream) -> Unit = {},
@@ -227,9 +229,13 @@ fun SettingsScreen(
             selected = state.themeMode,
             dynamicColor = state.dynamicColor,
             selectedPalette = state.themePalette,
+            selectedStyle = state.themeStyle,
+            amoled = state.amoled,
             onSelectTheme = onSelectThemeMode,
             onToggleDynamic = onSetDynamicColor,
             onSelectPalette = onSelectPalette,
+            onSelectStyle = onSelectStyle,
+            onToggleAmoled = onSetAmoled,
             onDismiss = { showThemeSheet = false },
         )
     }

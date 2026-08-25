@@ -30,7 +30,11 @@ import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.preferences.ThemePalette
+import app.tessera.core.preferences.ThemeStyle
 import app.tessera.core.ui.tessera.TesseraBottomSheet
+import app.tessera.core.ui.theme.schemeForSeed
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import app.tessera.core.ui.theme.TesseraShapes
 import app.tessera.core.ui.theme.TesseraSpacing
 import app.tessera.core.ui.theme.paletteColors
@@ -48,9 +52,13 @@ fun ThemePickerSheet(
     selected: ThemeMode,
     dynamicColor: Boolean,
     selectedPalette: ThemePalette,
+    selectedStyle: ThemeStyle,
+    amoled: Boolean,
     onSelectTheme: (ThemeMode) -> Unit,
     onToggleDynamic: (Boolean) -> Unit,
     onSelectPalette: (ThemePalette) -> Unit,
+    onSelectStyle: (ThemeStyle) -> Unit,
+    onToggleAmoled: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -67,12 +75,16 @@ fun ThemePickerSheet(
             ),
         )
 
-        PaletteSelector(
-            selected = selectedPalette,
-            // Dynamic color overrides the static palette's hue, so the swatches are inert then.
-            enabled = !(dynamicColor && dynamicColorSupported),
-            onSelect = onSelectPalette,
-        )
+        if (dynamicColor && dynamicColorSupported) {
+            // Dynamic color on: the wallpaper seed drives everything; offer the scheme style.
+            StyleSelector(selected = selectedStyle, onSelect = onSelectStyle)
+        } else {
+            PaletteSelector(
+                selected = selectedPalette,
+                enabled = true,
+                onSelect = onSelectPalette,
+            )
+        }
 
         ThemeRadioRow(
             label = stringResource(R.string.settings_theme_system),
@@ -100,15 +112,90 @@ fun ThemePickerSheet(
                     Switch(
                         checked = dynamicColor,
                         onCheckedChange = { onToggleDynamic(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        ),
                     )
                 },
             )
         }
+        SettingsRow(
+            leadingIcon = null,
+            title = stringResource(R.string.settings_amoled),
+            subtitle = stringResource(R.string.settings_amoled_subtitle),
+            onClick = { onToggleAmoled(!amoled) },
+            trailing = {
+                Switch(
+                    checked = amoled,
+                    onCheckedChange = { onToggleAmoled(it) },
+                )
+            },
+        )
     }
+}
+
+/**
+ * Dynamic-color scheme style picker: one swatch per [ThemeStyle], each previewing the style's
+ * actual primary/secondary/tertiary mix generated live from the current system accent seed.
+ */
+@Composable
+private fun StyleSelector(
+    selected: ThemeStyle,
+    onSelect: (ThemeStyle) -> Unit,
+) {
+    val context = LocalContext.current
+    val dark = isSystemInDarkTheme()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TesseraSpacing.xxl, vertical = TesseraSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(TesseraSpacing.md),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_style_section),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.md),
+        ) {
+            val seed = if (dynamicColorSupported) {
+                ContextCompat.getColor(context, android.R.color.system_accent1_500)
+            } else {
+                MaterialTheme.colorScheme.primary.hashCode()
+            }
+            ThemeStyle.entries.forEach { style ->
+                val preview = schemeForSeed(seed, style, dark)
+                val name = styleName(style)
+                val ring = MaterialTheme.colorScheme.primary
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .selectable(selected = style == selected, onClick = { onSelect(style) })
+                        .then(if (style == selected) Modifier.border(2.dp, ring, CircleShape) else Modifier)
+                        .semantics { contentDescription = name },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        color = preview.primary,
+                        shape = CircleShape,
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ),
+                        modifier = Modifier.size(if (style == selected) 30.dp else 36.dp),
+                    ) {}
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun styleName(style: ThemeStyle): String = when (style) {
+    ThemeStyle.TONAL_SPOT -> stringResource(R.string.settings_style_tonal_spot)
+    ThemeStyle.VIBRANT -> stringResource(R.string.settings_style_vibrant)
+    ThemeStyle.EXPRESSIVE -> stringResource(R.string.settings_style_expressive)
+    ThemeStyle.FRUIT_SALAD -> stringResource(R.string.settings_style_fruit_salad)
 }
 
 @Composable

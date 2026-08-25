@@ -129,6 +129,13 @@
     <string name="settings_theme_dark">Тёмная</string>
     <string name="settings_dynamic_color">Динамические цвета</string>
     <string name="settings_dynamic_color_subtitle">Использовать цвета из обоев</string>
+    <string name="settings_style_section">Стиль цвета</string>
+    <string name="settings_style_tonal_spot">Tonal Spot</string>
+    <string name="settings_style_vibrant">Vibrant</string>
+    <string name="settings_style_expressive">Expressive</string>
+    <string name="settings_style_fruit_salad">Fruit Salad</string>
+    <string name="settings_amoled">Истинно чёрная</string>
+    <string name="settings_amoled_subtitle">Чисто чёрный тёмный фон (AMOLED)</string>
     <string name="settings_theme_preview_sample">Aa</string>
     <string name="settings_section_language">Язык</string>
     <string name="settings_language_system">Системный</string>

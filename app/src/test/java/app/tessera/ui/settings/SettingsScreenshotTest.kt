@@ -70,9 +70,13 @@ class SettingsScreenshotTest {
                     selected = ThemeMode.AUTO,
                     dynamicColor = true,
                     selectedPalette = app.tessera.core.preferences.ThemePalette.Default,
+                    selectedStyle = app.tessera.core.preferences.ThemeStyle.Default,
+                    amoled = false,
                     onSelectTheme = {},
                     onToggleDynamic = {},
                     onSelectPalette = {},
+                    onSelectStyle = {},
+                    onToggleAmoled = {},
                     onDismiss = {},
                 )
             }

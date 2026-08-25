@@ -249,6 +249,12 @@ private class FakeUserPreferences : UserPreferences {
     override val cachedDynamicColor: Boolean get() = dynamic.value
     override val themePalette: Flow<ThemePalette> get() = palette
     override val cachedThemePalette: ThemePalette get() = palette.value
+    private val style = MutableStateFlow(app.tessera.core.preferences.ThemeStyle.Default)
+    private val amoledFlow = MutableStateFlow(false)
+    override val themeStyle: Flow<app.tessera.core.preferences.ThemeStyle> get() = style
+    override val cachedThemeStyle: app.tessera.core.preferences.ThemeStyle get() = style.value
+    override val amoled: Flow<Boolean> get() = amoledFlow
+    override val cachedAmoled: Boolean get() = amoledFlow.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<app.tessera.ui.notes.NotesViewMode> get() = viewMode
     override val recentSearches: Flow<List<String>> get() = recent
@@ -262,6 +268,14 @@ private class FakeUserPreferences : UserPreferences {
 
     override suspend fun setThemePalette(palette: ThemePalette) {
         this.palette.value = palette
+    }
+
+    override suspend fun setThemeStyle(style: app.tessera.core.preferences.ThemeStyle) {
+        this.style.value = style
+    }
+
+    override suspend fun setAmoled(enabled: Boolean) {
+        amoledFlow.value = enabled
     }
 
     override suspend fun setLanguageTag(tag: String) {

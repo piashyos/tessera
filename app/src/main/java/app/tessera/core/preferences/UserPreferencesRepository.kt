@@ -20,6 +20,8 @@ private val Context.userPrefsDataStore by preferencesDataStore(name = "user_pref
 private val KEY_THEME = stringPreferencesKey("theme_mode")
 private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
 private val KEY_PALETTE = stringPreferencesKey("theme_palette")
+private val KEY_STYLE = stringPreferencesKey("theme_style")
+private val KEY_AMOLED = booleanPreferencesKey("theme_amoled")
 private val KEY_LANG = stringPreferencesKey("language_tag")
 private val KEY_VIEW_MODE = stringPreferencesKey("notes_view_mode")
 private val KEY_RECENT_SEARCHES = stringPreferencesKey("recent_searches")
@@ -59,6 +61,22 @@ class UserPreferencesRepository @Inject constructor(
         ThemePalette.fromName(p[KEY_PALETTE])
     }.onEach { lastPalette = it }
 
+    @Volatile
+    private var lastStyle: ThemeStyle = ThemeStyle.Default
+    override val cachedThemeStyle: ThemeStyle get() = lastStyle
+
+    @Volatile
+    private var lastAmoled: Boolean = false
+    override val cachedAmoled: Boolean get() = lastAmoled
+
+    override val themeStyle: Flow<ThemeStyle> = store.data.map { p ->
+        ThemeStyle.fromName(p[KEY_STYLE])
+    }.onEach { lastStyle = it }
+
+    override val amoled: Flow<Boolean> = store.data.map { p ->
+        p[KEY_AMOLED] ?: false
+    }.onEach { lastAmoled = it }
+
     /** Empty string = follow system default. */
     override val languageTag: Flow<String> = store.data.map { it[KEY_LANG] ?: "" }
 
@@ -83,6 +101,14 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun setThemePalette(palette: ThemePalette) {
         store.edit { it[KEY_PALETTE] = palette.name }
+    }
+
+    override suspend fun setThemeStyle(style: ThemeStyle) {
+        store.edit { it[KEY_STYLE] = style.name }
+    }
+
+    override suspend fun setAmoled(enabled: Boolean) {
+        store.edit { it[KEY_AMOLED] = enabled }
     }
 
     override suspend fun setLanguageTag(tag: String) {
