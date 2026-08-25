@@ -232,6 +232,7 @@
     <!-- Tag picker -->
     <string name="editor_existing_tags">Existing tags</string>
     <!-- Table block editor -->
+    <string name="table_menu">Table options</string>
     <string name="table_row">Row</string>
     <string name="table_column">Col</string>
     <string name="table_add_row">Add row</string>

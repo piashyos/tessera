@@ -239,6 +239,7 @@
     <!-- Tag picker -->
     <string name="editor_existing_tags">Существующие теги</string>
     <!-- Table block editor -->
+    <string name="table_menu">Параметры таблицы</string>
     <string name="table_row">Строка</string>
     <string name="table_column">Столбец</string>
     <string name="table_add_row">Добавить строку</string>
