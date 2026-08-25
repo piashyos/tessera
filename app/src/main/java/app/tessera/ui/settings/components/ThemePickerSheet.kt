@@ -2,7 +2,6 @@ package app.tessera.ui.settings.components
 
 import android.os.Build
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +13,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -141,7 +141,8 @@ private fun StyleSelector(
     onSelect: (ThemeStyle) -> Unit,
 ) {
     val context = LocalContext.current
-    val dark = isSystemInDarkTheme()
+    // Preview the variant of the APP's resolved theme, not the system's.
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,7 +262,7 @@ private fun PaletteSwatch(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val swatchColor = paletteColors(palette, isSystemInDarkTheme()).primary
+    val swatchColor = paletteColors(palette, MaterialTheme.colorScheme.background.luminance() < 0.5f).primary
     val name = paletteName(palette)
     val ring = MaterialTheme.colorScheme.primary
     Box(

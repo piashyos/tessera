@@ -150,7 +150,7 @@ fun TesseraPopup(
                     .hazeEffect(state = hazeState) {
                         backgroundColor = frostColor
                     }
-                    .background(Color.Black.copy(alpha = 0.25f))
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.25f))
                     .testTag(UiTestTags.PopupScrim)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },

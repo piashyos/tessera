@@ -11,6 +11,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -85,17 +86,21 @@ fun TagChipsExpandable(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     ) {
                         Text("#$tag", style = MaterialTheme.typography.labelMedium)
+                        // 28dp is the practical floor for an inline chip affordance — the old
+                        // 20dp box was less than half the Material minimum.
                         Surface(
                             onClick = { haptics.tick(); onRemoveTag(tag) },
                             shape = CircleShape,
                             color = Color.Transparent,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(28.dp),
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.editor_remove_tag, tag),
-                                modifier = Modifier.size(12.dp),
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = stringResource(R.string.editor_remove_tag, tag),
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -105,14 +110,16 @@ fun TagChipsExpandable(
                 onClick = { haptics.tick(); onAddTagClick() },
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(32.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = stringResource(R.string.editor_add_tag),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(12.dp),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.editor_add_tag),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }

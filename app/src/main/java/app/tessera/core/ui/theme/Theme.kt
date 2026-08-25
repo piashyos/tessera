@@ -25,6 +25,10 @@ fun paletteColors(palette: ThemePalette, dark: Boolean): TesseraBrandColors = wh
 }
 
 private fun lightSchemeFor(c: TesseraBrandColors) = lightColorScheme(
+  // surfaceVariant has no dedicated brand token; mirror the XML theme's mapping
+  // (colorSurfaceVariant -> surface_container_high) so consumers don't fall back
+  // to the off-palette M3 baseline tone.
+  surfaceVariant            = c.surfaceContainerHigh,
   primary                   = c.primary,
   onPrimary                 = c.onPrimary,
   primaryContainer          = c.primaryContainer,
@@ -59,6 +63,7 @@ private fun lightSchemeFor(c: TesseraBrandColors) = lightColorScheme(
 )
 
 private fun darkSchemeFor(c: TesseraBrandColors) = darkColorScheme(
+  surfaceVariant            = c.surfaceContainerHigh,
   primary                   = c.primary,
   onPrimary                 = c.onPrimary,
   primaryContainer          = c.primaryContainer,

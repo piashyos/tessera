@@ -110,7 +110,7 @@ fun TesseraNotesDrawer(
           color = MaterialTheme.colorScheme.primary,
           modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onCreateRootFolder, modifier = Modifier.size(36.dp)) {
+        IconButton(onClick = onCreateRootFolder) {
           Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.folders_create))
         }
       }
@@ -164,12 +164,14 @@ private fun DrawerFolderRow(
     modifier = Modifier
       .fillMaxWidth()
       .padding(start = (indentLevel * 20).dp)
-      .clip(RoundedCornerShape(18.dp))
+      .clip(RoundedCornerShape(24.dp))
       .background(background)
       .clickable(onClick = onClick)
       .padding(start = TesseraSpacing.md, end = TesseraSpacing.xs),
     verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.sm),
+    // 12dp between the two 44dp trailing actions — the delete is destructive and used to sit
+    // 8dp from "add subfolder" at 36dp each, one slip apart.
+    horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.md),
   ) {
     Icon(
       Icons.Rounded.Folder,
@@ -213,7 +215,7 @@ private fun DrawerFolderAction(
 ) {
   Box(
     modifier = Modifier
-      .size(36.dp)
+      .size(44.dp)
       .clip(CircleShape)
       .clickable(onClick = onClick),
     contentAlignment = Alignment.Center,
@@ -221,7 +223,7 @@ private fun DrawerFolderAction(
     Icon(
       imageVector = icon,
       contentDescription = contentDescription,
-      modifier = Modifier.size(16.dp),
+      modifier = Modifier.size(18.dp),
       tint = tint,
     )
   }
