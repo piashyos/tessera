@@ -55,4 +55,37 @@ class BlankLineAfterBlockTypingTest {
             assertEquals("typing a blank line after [$initial] must keep it", expected, flushed)
         }
     }
+
+    @Test
+    fun blankLineTypedBetweenTwoBlocksIsPreserved() {
+        var editor: AztecText? = null
+        rule.setContent {
+            TesseraTheme(darkTheme = false, dynamicColor = false) {
+                RichNoteBody(html = "", markdownKey = "seed", htmlToMarkdown = converter::htmlToMarkdown,
+                    onMarkdownChange = {}, onActionsReady = {})
+            }
+        }
+        rule.waitForIdle()
+        editor = rule.activity.findViewById(R.id.aztec)
+
+        // The reported bug: place the caret at the end of a block that is FOLLOWED by another
+        // block and press Enter — the typed blank line must survive the flush.
+        // (initialMarkdown, caret anchor text, expected)
+        val cases = listOf(
+            Triple("# H\n- [ ] task", "H", "# H\n\n- [ ] task"),
+            Triple("# A\n# B", "A", "# A\n\n# B"),
+            Triple("# A\n> quote", "A", "# A\n\n> quote"),
+        )
+        for ((initial, anchor, expected) in cases) {
+            var flushed = ""
+            rule.runOnUiThread {
+                editor!!.fromHtml(converter.markdownToHtml(initial))
+                val caret = editor!!.editableText.toString().let { it.indexOf(anchor) + anchor.length }
+                editor!!.setSelection(caret)
+                editor!!.text.insert(editor!!.selectionStart, "\n")
+                flushed = converter.htmlToMarkdown(editor!!.toHtml())
+            }
+            assertEquals("typing a blank line inside [$initial] must keep it", expected, flushed)
+        }
+    }
 }

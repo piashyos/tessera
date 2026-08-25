@@ -219,12 +219,13 @@ class MarkdownHtmlConverter {
         // placeholder for blank lines), so this only rescales Aztec output — the "<br>" path below
         // is left at 1:1. <pre> code blocks are masked first: their line breaks aren't doubled and
         // may include intentional blank rows, so they must survive verbatim.
-        // A blank line BETWEEN two block elements cannot round-trip through Aztec: it serializes
-        // empty paragraphs between blocks inconsistently (1 blank between headings collapses to 0,
-        // but 2+ blanks INFLATE — `<h2>A</h2>\n\n\n\n\n<h1>B</h1>` — and re-encoding the inflated
-        // count grows it again every save, the "blank lines multiply" bug). There is no stable
-        // representation, so collapse any run flanked by two block tags (or masked <pre> sentinels)
-        // to a single newline = adjacency, NO blank. Blanks adjacent to plain text are unaffected.
+        // A bare-"\n" run BETWEEN two block tags is unambiguous (verified via Robolectric):
+        // adjacency serializes as exactly ONE "\n" (`</h1>\n<ul>`), while a LOADED blank line is an
+        // NBSP paragraph that serializes as a text row (`</h1>\n \n<ul>`) and never reaches the
+        // bare-run rules. So a bare run of 2+ between blocks can only be a blank line the user
+        // TYPED since the last load — it must be kept (capped at one blank by rule (3) below; the
+        // NBSP encoding makes it stable on every following round-trip). The historical "collapse
+        // to adjacency" rule here predated the NBSP marker and silently deleted typed blanks.
         val (masked, preBlocks) = maskPreBlocks(html)
 
         // (1) Normalize a TOGGLED heading. Toggling an existing line to a heading leaves a trailing
@@ -237,12 +238,9 @@ class MarkdownHtmlConverter {
             "</h${m.groupValues[1]}>" + "\n".repeat((m.groupValues[2].length + 1) / 2)
         }
 
-        // (2) A blank BETWEEN two block elements can't round-trip (Aztec drops/!inflates empty
-        // paragraphs between blocks, the "multiply" bug), so collapse to adjacency.
-        val betweenBlocks = toggleFixed.replace(Regex("(?<=[>$CODE_SENTINEL])\\n+(?=[<$CODE_SENTINEL])"), "\n")
-
-        // (3) After a block, ONE blank line is stable and kept; 2+ inflate unstably, so cap at one.
-        val capped = betweenBlocks.replace(Regex("(?<=[>$CODE_SENTINEL])\\n{2,}"), "\n\n")
+        // (3) After a block, ONE blank line is stable and kept; 2+ inflate unstably, so cap at
+        // one. This also covers a blank TYPED between two blocks (run of 2+ before the next tag).
+        val capped = toggleFixed.replace(Regex("(?<=[>$CODE_SENTINEL])\\n{2,}"), "\n\n")
 
         // (4) PLAIN-text paragraph breaks serialize DOUBLED ("\n\n" per break), so halve any run
         // whose LEFT neighbour is plain text (not a tag's ">" / masked sentinel). This preserves
