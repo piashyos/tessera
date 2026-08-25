@@ -81,6 +81,9 @@
     <string name="toolbar_code">Code</string>
     <string name="toolbar_divider">Divider</string>
     <string name="toolbar_more">More formats</string>
+    <string name="toolbar_undo">Undo</string>
+    <string name="toolbar_redo">Redo</string>
+    <string name="toolbar_table">Insert table</string>
     <string name="note_group_pinned">Pinned</string>
     <string name="note_group_today">Today</string>
     <string name="note_group_yesterday">Yesterday</string>

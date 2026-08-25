@@ -37,6 +37,9 @@ import com.composables.icons.lucide.Lucide
 import org.wordpress.aztec.AztecTextFormat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.automirrored.rounded.Redo
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.FormatBold
@@ -63,39 +66,55 @@ fun EditorFormatBar(
   activeFormats: Set<AztecTextFormat>,
   modifier: Modifier = Modifier,
 ) {
+  // Layout: [undo][redo] are pinned at the start and [⋯] at the end — the panic action and the
+  // overflow menu must never hide inside the horizontal scroll (the old all-scrolling bar put
+  // the ⋯ ~500dp off-screen with no scroll indicator). Only the format groups scroll.
   Row(
     modifier = modifier
       .height(48.dp)
-      .horizontalScroll(rememberScrollState())
       .padding(horizontal = 8.dp),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(2.dp),
   ) {
-    // [B][I][U][S]
-    FormatToggle(Icons.Rounded.FormatBold, R.string.toolbar_bold, AztecTextFormat.FORMAT_BOLD in activeFormats) { actions?.toggleBold() }
-    FormatToggle(Icons.Rounded.FormatItalic, R.string.toolbar_italic, AztecTextFormat.FORMAT_ITALIC in activeFormats) { actions?.toggleItalic() }
-    FormatToggle(Icons.Rounded.FormatUnderlined, R.string.toolbar_underline, AztecTextFormat.FORMAT_UNDERLINE in activeFormats) { actions?.toggleUnderline() }
-    FormatToggle(Icons.Rounded.FormatStrikethrough, R.string.toolbar_strikethrough, AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats) { actions?.toggleStrikethrough() }
+    // Pinned: [↶][↷]
+    FormatToggle(Icons.AutoMirrored.Rounded.Undo, R.string.toolbar_undo, active = false) { actions?.undo() }
+    FormatToggle(Icons.AutoMirrored.Rounded.Redo, R.string.toolbar_redo, active = false) { actions?.redo() }
+    GroupSeparator()
+
+    Row(
+      modifier = Modifier
+        .weight(1f, fill = false)
+        .horizontalScroll(rememberScrollState()),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+      // [B][I][U][S]
+      FormatToggle(Icons.Rounded.FormatBold, R.string.toolbar_bold, AztecTextFormat.FORMAT_BOLD in activeFormats) { actions?.toggleBold() }
+      FormatToggle(Icons.Rounded.FormatItalic, R.string.toolbar_italic, AztecTextFormat.FORMAT_ITALIC in activeFormats) { actions?.toggleItalic() }
+      FormatToggle(Icons.Rounded.FormatUnderlined, R.string.toolbar_underline, AztecTextFormat.FORMAT_UNDERLINE in activeFormats) { actions?.toggleUnderline() }
+      FormatToggle(Icons.Rounded.FormatStrikethrough, R.string.toolbar_strikethrough, AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats) { actions?.toggleStrikethrough() }
+
+      GroupSeparator()
+      // [H1][H2]
+      FormatToggle(Lucide.Heading1, R.string.toolbar_h1, AztecTextFormat.FORMAT_HEADING_1 in activeFormats) { actions?.toggleHeading1() }
+      FormatToggle(Lucide.Heading2, R.string.toolbar_h2, AztecTextFormat.FORMAT_HEADING_2 in activeFormats) { actions?.toggleHeading2() }
+
+      GroupSeparator()
+      // [•][1.][☐]
+      FormatToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, R.string.toolbar_bullet, AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats) { actions?.toggleBulletList() }
+      FormatToggle(Icons.Rounded.FormatListNumbered, R.string.toolbar_ordered, AztecTextFormat.FORMAT_ORDERED_LIST in activeFormats) { actions?.toggleOrderedList() }
+      FormatToggle(Icons.Rounded.Checklist, R.string.toolbar_checklist, AztecTextFormat.FORMAT_TASK_LIST in activeFormats) { actions?.toggleTaskList() }
+
+      GroupSeparator()
+      // [«][</>][—][⊞]
+      FormatToggle(Icons.Rounded.FormatQuote, R.string.toolbar_quote, AztecTextFormat.FORMAT_QUOTE in activeFormats) { actions?.toggleQuote() }
+      FormatToggle(Icons.Rounded.Code, R.string.toolbar_code, AztecTextFormat.FORMAT_PREFORMAT in activeFormats) { actions?.toggleCode() }
+      FormatToggle(Icons.Rounded.Remove, R.string.toolbar_divider, active = false) { actions?.insertHorizontalRule() }
+      FormatToggle(Icons.Rounded.TableChart, R.string.toolbar_table, active = false) { actions?.insertTable() }
+    }
 
     GroupSeparator()
-    // [H1][H2]
-    FormatToggle(Lucide.Heading1, R.string.toolbar_h1, AztecTextFormat.FORMAT_HEADING_1 in activeFormats) { actions?.toggleHeading1() }
-    FormatToggle(Lucide.Heading2, R.string.toolbar_h2, AztecTextFormat.FORMAT_HEADING_2 in activeFormats) { actions?.toggleHeading2() }
-
-    GroupSeparator()
-    // [•][1.][☐]
-    FormatToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, R.string.toolbar_bullet, AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats) { actions?.toggleBulletList() }
-    FormatToggle(Icons.Rounded.FormatListNumbered, R.string.toolbar_ordered, AztecTextFormat.FORMAT_ORDERED_LIST in activeFormats) { actions?.toggleOrderedList() }
-    FormatToggle(Icons.Rounded.Checklist, R.string.toolbar_checklist, AztecTextFormat.FORMAT_TASK_LIST in activeFormats) { actions?.toggleTaskList() }
-
-    GroupSeparator()
-    // [«][</>][—]
-    FormatToggle(Icons.Rounded.FormatQuote, R.string.toolbar_quote, AztecTextFormat.FORMAT_QUOTE in activeFormats) { actions?.toggleQuote() }
-    FormatToggle(Icons.Rounded.Code, R.string.toolbar_code, AztecTextFormat.FORMAT_PREFORMAT in activeFormats) { actions?.toggleCode() }
-    FormatToggle(Icons.Rounded.Remove, R.string.toolbar_divider, active = false) { actions?.insertHorizontalRule() }
-
-    GroupSeparator()
-    // [⋯] — anchors the paragraph/headings Material 3 dropdown.
+    // Pinned: [⋯] — anchors the paragraph/headings Material 3 dropdown.
     Box {
       var menuExpanded by remember { mutableStateOf(false) }
       // The menu's popup is non-focusable (so it doesn't dismiss the keyboard), which means a

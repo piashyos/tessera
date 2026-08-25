@@ -79,6 +79,12 @@ interface RichBodyActions {
     /** Insert a horizontal rule (divider) at the cursor. */
     fun insertHorizontalRule() {}
 
+    /** Undo the last edit via Aztec's history stack. No-op when the stack is empty. */
+    fun undo() {}
+
+    /** Redo the last undone edit. No-op when nothing was undone. */
+    fun redo() {}
+
     /** Programmatically focus the editor and surface the IME, placing the cursor at end of text. */
     fun focusBody()
 
@@ -662,6 +668,24 @@ fun RichNoteBody(
                     } else {
                         editor.toggleFormatting(format)
                     }
+                }
+
+                override fun undo() {
+                    if (!editor.history.undoValid()) return
+                    editor.history.undo(editor)
+                    // History restores raw text; re-sync the serif overlay + toolbar and persist,
+                    // same as a toolbar toggle (the TextWatcher's debounce alone would lag).
+                    reapplySerifHeadings()
+                    pushActiveFormats()
+                    flushHtmlNow()
+                }
+
+                override fun redo() {
+                    if (!editor.history.redoValid()) return
+                    editor.history.redo(editor)
+                    reapplySerifHeadings()
+                    pushActiveFormats()
+                    flushHtmlNow()
                 }
 
                 override fun toggleBold() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_BOLD) }

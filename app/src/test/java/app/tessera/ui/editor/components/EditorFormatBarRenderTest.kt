@@ -72,7 +72,8 @@ class EditorFormatBarRenderTest {
         EditorFormatBar(actions = actions, activeFormats = emptySet())
       }
     }
-    rule.onNodeWithContentDescription("More formats").performScrollTo().performClick()
+    // The ⋯ overflow is pinned outside the scrollable group, so no scroll is needed (or possible).
+    rule.onNodeWithContentDescription("More formats").performClick()
     rule.onNodeWithText("Paragraph").assertExists()
     rule.onNodeWithText("Heading 1").assertExists()
   }
