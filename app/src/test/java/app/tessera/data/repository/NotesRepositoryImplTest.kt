@@ -267,12 +267,21 @@ class NotesRepositoryImplTest {
         }
 
     @Test
-    fun `toFtsMatchQuery strips operators and appends prefix wildcard`() {
-        assertEquals("ab*", "a\"b".toFtsMatchQuery())
-        assertEquals("foobar*", "foo-bar".toFtsMatchQuery())
-        assertEquals("kotlin* flow*", "kotlin flow".toFtsMatchQuery())
-        assertEquals("", "  \"^*  ".toFtsMatchQuery())
-    }
+    fun `searchNotes is case-insensitive across registers and tolerates typos`() =
+        runTest {
+            val noteDao = FakeNoteDao()
+            val tagDao = FakeTagDao()
+            val repository = NotesRepositoryImpl(noteDao, tagDao, NoteMapper(), MutableClock(10L), FakeSyncScheduler(), FakeSharedNotesGateway())
+            val note = repository.createNote()
+            // Title is derived from the first content line, so the searchable word lives in content.
+            repository.updateNote(note.copy(content = "Свадьба\nРесторан и платье"))
+
+            // Different register (uppercase query, capitalized note) and a typo both still match.
+            assertEquals(1, repository.searchNotes("СВАДЬБА").first().size)
+            assertEquals(1, repository.searchNotes("свадба").first().size)
+            // Unrelated query does not match.
+            assertTrue(repository.searchNotes("автомобиль").first().isEmpty())
+        }
 
     @Test
     fun `mutations request a sync push`() = runTest {
@@ -428,6 +437,8 @@ private class FakeNoteDao : NoteDao {
 
     override suspend fun getCurrentOwnerId(): String? =
         notes.values.firstOrNull { it.ownerId != null }?.ownerId
+
+    override suspend fun hasForeignNotes(uid: String): Boolean = false
 
     override suspend fun adoptLocalNotes(uid: String) {
         notes.entries.forEach { entry ->

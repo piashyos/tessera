@@ -15,6 +15,7 @@ sealed interface NotesListState {
     val isArchiveView: Boolean
     val isTrashView: Boolean
     val isSharedView: Boolean
+    val isPinnedView: Boolean
     val hasSharedNotes: Boolean
     val recentSearches: List<String>
     val datePeriod: DatePeriod
@@ -27,6 +28,7 @@ sealed interface NotesListState {
         override val isArchiveView: Boolean = false
         override val isTrashView: Boolean = false
         override val isSharedView: Boolean = false
+        override val isPinnedView: Boolean = false
         override val hasSharedNotes: Boolean = false
         override val recentSearches: List<String> = emptyList()
         override val datePeriod: DatePeriod = DatePeriod.All
@@ -44,6 +46,7 @@ sealed interface NotesListState {
         override val isArchiveView: Boolean = false,
         override val isTrashView: Boolean = false,
         override val isSharedView: Boolean = false,
+        override val isPinnedView: Boolean = false,
         override val hasSharedNotes: Boolean = false,
         override val recentSearches: List<String> = emptyList(),
         override val datePeriod: DatePeriod = DatePeriod.All,
@@ -66,6 +69,7 @@ sealed interface NotesListState {
         override val isArchiveView: Boolean = false,
         override val isTrashView: Boolean = false,
         override val isSharedView: Boolean = false,
+        override val isPinnedView: Boolean = false,
         override val hasSharedNotes: Boolean = false,
         override val recentSearches: List<String> = emptyList(),
         override val datePeriod: DatePeriod = DatePeriod.All,

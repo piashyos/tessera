@@ -25,6 +25,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,7 @@ fun TesseraNoteCard(
   selected: Boolean = false,
   avatars: (@Composable () -> Unit)? = null,
 ) {
+  val haptics = LocalHapticFeedback.current
   Surface(
     color = if (selected) MaterialTheme.colorScheme.secondaryContainer
             else MaterialTheme.colorScheme.surface,
@@ -61,7 +64,13 @@ fun TesseraNoteCard(
       .testTag(TesseraNoteCardTags.Root)
       .fillMaxWidth()
       .heightIn(min = 78.dp)
-      .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+      .combinedClickable(
+        onClick = onClick,
+        onLongClick = {
+          haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+          onLongClick()
+        },
+      ),
   ) {
     Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
       if (isPinned) {

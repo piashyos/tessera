@@ -53,6 +53,18 @@ class MainActivity : ComponentActivity() {
             ) {
                 userPreferences.themeMode.collect { value = it }
             }
+            val dynamicColor by produceState(
+                initialValue = userPreferences.cachedDynamicColor,
+                userPreferences,
+            ) {
+                userPreferences.dynamicColor.collect { value = it }
+            }
+            val themePalette by produceState(
+                initialValue = userPreferences.cachedThemePalette,
+                userPreferences,
+            ) {
+                userPreferences.themePalette.collect { value = it }
+            }
 
             val context = LocalContext.current
             LaunchedEffect(languageTag) {
@@ -81,7 +93,7 @@ class MainActivity : ComponentActivity() {
             // Keep status/navigation bar icon tint in sync with the active theme. With
             // edge-to-edge the bars are transparent, so we only flip light/dark icons:
             // dark icons on a light theme, light icons on a dark theme.
-            val resolvedDark = themeMode.resolve(isSystemInDarkTheme()).first
+            val resolvedDark = themeMode.resolveDark(isSystemInDarkTheme())
             val view = LocalView.current
             LaunchedEffect(resolvedDark) {
                 val controller = WindowCompat.getInsetsController(window, view)
@@ -89,7 +101,7 @@ class MainActivity : ComponentActivity() {
                 controller.isAppearanceLightNavigationBars = !resolvedDark
             }
 
-            TesseraTheme(themeMode = themeMode) {
+            TesseraTheme(themeMode = themeMode, dynamicColor = dynamicColor, palette = themePalette) {
                 TesseraApp()
             }
         }

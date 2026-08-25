@@ -2,15 +2,25 @@ package app.tessera.ui.settings
 
 import app.cash.turbine.test
 import app.tessera.core.preferences.ThemeMode
+import app.tessera.core.preferences.ThemePalette
 import app.tessera.core.preferences.UserPreferences
+import app.tessera.domain.model.InviteResult
+import app.tessera.domain.model.Note
+import app.tessera.domain.model.NoteId
+import app.tessera.domain.model.ShareMember
+import app.tessera.domain.model.ShareRole
 import app.tessera.domain.model.UserId
 import app.tessera.domain.model.UserProfile
 import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
+import app.tessera.domain.repository.NotesRepository
+import app.tessera.domain.repository.SyncRepository
 import app.tessera.domain.repository.SyncScheduler
 import app.tessera.domain.usecase.HandleAccountSwitchUseCase
+import app.tessera.domain.usecase.PermanentlyDeleteNoteUseCase
 import app.tessera.domain.usecase.SignInUseCase
 import app.tessera.domain.usecase.SignOutUseCase
+import kotlinx.coroutines.flow.flowOf
 import app.tessera.sync.SyncIndicator
 import app.tessera.sync.SyncStatusProvider
 import kotlinx.coroutines.Dispatchers
@@ -193,6 +203,7 @@ class SettingsViewModelTest {
         userPreferences: UserPreferences = FakeUserPreferences(),
         syncScheduler: SyncScheduler = FakeSyncScheduler(),
         syncStatusProvider: SyncStatusProvider = FakeSyncStatusProvider(),
+        notesRepository: NotesRepository = FakeNotesRepository(),
     ): SettingsViewModel =
         SettingsViewModel(
             authRepository = auth,
@@ -202,6 +213,12 @@ class SettingsViewModelTest {
             handleAccountSwitchUseCase = HandleAccountSwitchUseCase(account),
             userPreferences = userPreferences,
             syncScheduler = syncScheduler,
+            notesRepository = notesRepository,
+            permanentlyDeleteNoteUseCase = PermanentlyDeleteNoteUseCase(
+                notesRepository = notesRepository,
+                syncRepository = FakeSyncRepository(),
+                authRepository = auth,
+            ),
             syncStatusProvider = syncStatusProvider,
         )
 }
@@ -221,16 +238,30 @@ private class FakeSyncStatusProvider(
 
 private class FakeUserPreferences : UserPreferences {
     private val theme = MutableStateFlow(ThemeMode.AUTO)
+    private val dynamic = MutableStateFlow(true)
+    private val palette = MutableStateFlow(ThemePalette.Default)
     private val lang = MutableStateFlow("")
     private val viewMode = MutableStateFlow(app.tessera.ui.notes.NotesViewMode.List)
     private val recent = MutableStateFlow<List<String>>(emptyList())
     override val themeMode: Flow<ThemeMode> get() = theme
     override val cachedThemeMode: ThemeMode get() = theme.value
+    override val dynamicColor: Flow<Boolean> get() = dynamic
+    override val cachedDynamicColor: Boolean get() = dynamic.value
+    override val themePalette: Flow<ThemePalette> get() = palette
+    override val cachedThemePalette: ThemePalette get() = palette.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<app.tessera.ui.notes.NotesViewMode> get() = viewMode
     override val recentSearches: Flow<List<String>> get() = recent
     override suspend fun setThemeMode(mode: ThemeMode) {
         theme.value = mode
+    }
+
+    override suspend fun setDynamicColor(enabled: Boolean) {
+        dynamic.value = enabled
+    }
+
+    override suspend fun setThemePalette(palette: ThemePalette) {
+        this.palette.value = palette
     }
 
     override suspend fun setLanguageTag(tag: String) {
@@ -281,6 +312,41 @@ private class FakeAuthRepository(
     }
 }
 
+private class FakeNotesRepository : NotesRepository {
+    override fun observeNotes(): Flow<List<Note>> = flowOf(emptyList())
+    override fun observeNote(id: NoteId): Flow<Note?> = flowOf(null)
+    override fun searchNotes(query: String): Flow<List<Note>> = flowOf(emptyList())
+    override fun observeArchivedNotes(): Flow<List<Note>> = flowOf(emptyList())
+    override fun observeDeletedNotes(): Flow<List<Note>> = flowOf(emptyList())
+    override suspend fun getNote(id: NoteId): Note? = null
+    override suspend fun createNote(ownerId: UserId?): Note = error("unused")
+    override suspend fun updateNote(note: Note): Note = note
+    override suspend fun deleteNote(id: NoteId) = Unit
+    override suspend fun permanentlyDeleteNote(id: NoteId) = Unit
+    override suspend fun restoreNote(id: NoteId) = Unit
+    override suspend fun togglePin(id: NoteId) = Unit
+    override suspend fun setArchived(id: NoteId, archived: Boolean) = Unit
+    override suspend fun shareNote(id: NoteId): Result<Unit> = Result.success(Unit)
+    override suspend fun inviteByEmail(id: NoteId, email: String, role: ShareRole): Result<InviteResult> =
+        Result.success(InviteResult.Added)
+    override suspend fun changeRole(id: NoteId, uid: UserId, role: ShareRole): Result<Unit> =
+        Result.success(Unit)
+    override suspend fun removeMember(id: NoteId, uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun leaveSharedNote(id: NoteId): Result<Unit> = Result.success(Unit)
+    override suspend fun unshareNote(id: NoteId): Result<Unit> = Result.success(Unit)
+    override fun observeMembers(id: NoteId): Flow<List<ShareMember>> = flowOf(emptyList())
+}
+
+private class FakeSyncRepository : SyncRepository {
+    override suspend fun syncNow(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun pushLocalChanges(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun purgeTombstones(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun purgeLocalTombstones(): Result<Unit> = Result.success(Unit)
+    override suspend fun permanentlyDelete(uid: UserId, ids: List<NoteId>): Result<Unit> =
+        Result.success(Unit)
+    override fun observeRemote(uid: UserId): Flow<Unit> = flowOf(Unit)
+}
+
 private class FakeAccountRepository(
     private val owner: UserId?,
 ) : AccountRepository {
@@ -301,4 +367,8 @@ private class FakeAccountRepository(
     override suspend fun deleteNotesOwnedBy(uid: UserId) {
         deletedOwners += uid
     }
+
+    override suspend fun hasForeignData(uid: UserId): Boolean = false
+
+    override suspend fun clearLocalData() = Unit
 }

@@ -25,18 +25,30 @@ val Inter: FontFamily = FontFamily(
   interFont(700),
 )
 
-val InstrumentSerif: FontFamily = FontFamily(
-  Font(R.font.instrument_serif_regular, FontWeight.Normal, FontStyle.Normal),
-  Font(R.font.instrument_serif_italic,  FontWeight.Normal, FontStyle.Italic),
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private fun playfairFont(weight: Int, style: FontStyle, resId: Int) = Font(
+  resId = resId,
+  weight = FontWeight(weight),
+  style = style,
+  variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
+)
+
+// Playfair Display — the editorial display serif used for titles/headings. Replaces Instrument
+// Serif, which shipped zero Cyrillic glyphs (so Russian titles silently fell back to sans).
+// Playfair is a high-contrast Didone with full Cyrillic coverage (OFL; see assets/licenses).
+val PlayfairDisplay: FontFamily = FontFamily(
+  playfairFont(400, FontStyle.Normal, R.font.playfair_display_regular),
+  playfairFont(700, FontStyle.Normal, R.font.playfair_display_regular),
+  playfairFont(400, FontStyle.Italic, R.font.playfair_display_italic),
 )
 
 val TesseraTypography: Typography = Typography(
-  displayLarge   = TextStyle(fontFamily = InstrumentSerif, fontSize = 52.sp, lineHeight = 58.sp),
-  displayMedium  = TextStyle(fontFamily = InstrumentSerif, fontSize = 40.sp, lineHeight = 48.sp),
-  displaySmall   = TextStyle(fontFamily = InstrumentSerif, fontSize = 32.sp, lineHeight = 40.sp),
+  displayLarge   = TextStyle(fontFamily = PlayfairDisplay, fontSize = 52.sp, lineHeight = 58.sp),
+  displayMedium  = TextStyle(fontFamily = PlayfairDisplay, fontSize = 40.sp, lineHeight = 48.sp),
+  displaySmall   = TextStyle(fontFamily = PlayfairDisplay, fontSize = 32.sp, lineHeight = 40.sp),
 
-  headlineLarge  = TextStyle(fontFamily = InstrumentSerif, fontSize = 28.sp, lineHeight = 36.sp),
-  headlineMedium = TextStyle(fontFamily = InstrumentSerif, fontSize = 24.sp, lineHeight = 32.sp),
+  headlineLarge  = TextStyle(fontFamily = PlayfairDisplay, fontSize = 28.sp, lineHeight = 36.sp),
+  headlineMedium = TextStyle(fontFamily = PlayfairDisplay, fontSize = 24.sp, lineHeight = 32.sp),
   headlineSmall  = TextStyle(fontFamily = Inter, fontWeight = FontWeight.W600,
                              fontSize = 20.sp, lineHeight = 28.sp, letterSpacing = 0.sp),
 

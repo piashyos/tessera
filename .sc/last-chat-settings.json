@@ -1,5 +1,5 @@
 {
-  "provider_key": "cursor",
-  "model_id": "claude-opus-4-8-thinking-high",
+  "provider_key": "claude",
+  "model_id": "claude-opus-4-8[1m]",
   "reasoning_effort": "medium"
 }

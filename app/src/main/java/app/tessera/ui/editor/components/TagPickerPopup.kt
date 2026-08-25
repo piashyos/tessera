@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,7 +29,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
-import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.components.TesseraPopup
 import app.tessera.core.ui.components.TesseraTextField
 import app.tessera.core.ui.theme.TesseraTheme
@@ -65,10 +64,12 @@ fun TagPickerPopup(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
         )
-        FloatingCapsule(
+        // Flat, theme-tinted input (no glassy gradient) — follows the active palette.
+        Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
         ) {
             TesseraTextField(
                 value = newTag,
@@ -77,6 +78,7 @@ fun TagPickerPopup(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 24.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
                     .testTag(UiTestTags.ReusableTextField),
                 imeAction = ImeAction.Done,
                 onImeAction = submit,

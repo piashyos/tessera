@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import app.tessera.core.util.Clock
 import app.tessera.data.local.NotesDatabase
+import app.tessera.data.local.RoomTransactor
 import app.tessera.data.mapper.NoteMapper
 import app.tessera.data.mapper.SharedNoteMapper
 import app.tessera.data.repository.SharedNotesGatewayImpl
@@ -53,6 +54,7 @@ class SharedNotesTestDevice(
     )
 
     val sync = SyncRepositoryImpl(
+        RoomTransactor(db),
         noteDao,
         tagDao,
         db.folderDao(),

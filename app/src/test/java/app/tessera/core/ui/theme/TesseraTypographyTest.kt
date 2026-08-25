@@ -7,15 +7,15 @@ import org.junit.Test
 
 class TesseraTypographyTest {
 
-  @Test fun `display roles use Instrument Serif`() {
-    assertEquals(InstrumentSerif, TesseraTypography.displayLarge.fontFamily)
-    assertEquals(InstrumentSerif, TesseraTypography.displayMedium.fontFamily)
-    assertEquals(InstrumentSerif, TesseraTypography.displaySmall.fontFamily)
+  @Test fun `display roles use Playfair Display`() {
+    assertEquals(PlayfairDisplay, TesseraTypography.displayLarge.fontFamily)
+    assertEquals(PlayfairDisplay, TesseraTypography.displayMedium.fontFamily)
+    assertEquals(PlayfairDisplay, TesseraTypography.displaySmall.fontFamily)
   }
 
-  @Test fun `headlineLarge and headlineMedium use Instrument Serif`() {
-    assertEquals(InstrumentSerif, TesseraTypography.headlineLarge.fontFamily)
-    assertEquals(InstrumentSerif, TesseraTypography.headlineMedium.fontFamily)
+  @Test fun `headlineLarge and headlineMedium use Playfair Display`() {
+    assertEquals(PlayfairDisplay, TesseraTypography.headlineLarge.fontFamily)
+    assertEquals(PlayfairDisplay, TesseraTypography.headlineMedium.fontFamily)
   }
 
   @Test fun `headlineSmall and below use Inter`() {
@@ -35,10 +35,10 @@ class TesseraTypographyTest {
     assertEquals(52.sp, TesseraTypography.displayLarge.fontSize)
   }
 
-  @Test fun `headlineLarge is 28sp Instrument Serif`() {
+  @Test fun `headlineLarge is 28sp Playfair Display`() {
     val s = TesseraTypography.headlineLarge
     assertEquals(28.sp, s.fontSize)
-    assertEquals(InstrumentSerif, s.fontFamily)
+    assertEquals(PlayfairDisplay, s.fontFamily)
   }
 
   @Test fun `titleSmall uses W600 with letterSpacing for caps`() {

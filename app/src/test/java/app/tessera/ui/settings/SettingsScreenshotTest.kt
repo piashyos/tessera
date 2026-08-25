@@ -66,7 +66,15 @@ class SettingsScreenshotTest {
     private fun captureSheet(name: String, darkTheme: Boolean) {
         composeRule.setContent {
             TesseraTheme(darkTheme = darkTheme, dynamicColor = false) {
-                ThemePickerSheet(selected = ThemeMode.AUTO, onSelect = {}, onDismiss = {})
+                ThemePickerSheet(
+                    selected = ThemeMode.AUTO,
+                    dynamicColor = true,
+                    selectedPalette = app.tessera.core.preferences.ThemePalette.Default,
+                    onSelectTheme = {},
+                    onToggleDynamic = {},
+                    onSelectPalette = {},
+                    onDismiss = {},
+                )
             }
         }
         composeRule.waitForIdle()

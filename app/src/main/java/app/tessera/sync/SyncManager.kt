@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import app.tessera.core.connectivity.ConnectivityObserver
 import app.tessera.domain.model.UserId
+import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.repository.SyncRepository
 import java.util.concurrent.TimeUnit
@@ -39,6 +40,7 @@ class SyncManager @Inject constructor(
     private val workManager: WorkManager,
     private val authRepository: AuthRepository,
     private val syncRepository: SyncRepository,
+    private val accountRepository: AccountRepository,
     connectivityObserver: ConnectivityObserver,
 ) : SyncStatusProvider {
     /**
@@ -61,6 +63,12 @@ class SyncManager @Inject constructor(
     private var remoteJob: Job? = null
     private var started = false
 
+    // Tracks whether the previous auth state had a signed-in user, so we can tell a real sign-out
+    // (signed-in -> null) apart from a cold start that simply begins signed-out. Only the former
+    // must wipe the local cache; clearing on the initial null would delete a local-only user's notes
+    // on every launch.
+    private var hadSignedInUser = false
+
     fun start() {
         if (started) return
         started = true
@@ -68,12 +76,45 @@ class SyncManager @Inject constructor(
         scope.launch { syncRepository.purgeLocalTombstones() }
         scope.launch {
             authRepository.currentUser.collectLatest { user ->
-                if (user != null) onSignedIn(user) else onSignedOut()
+                if (user != null) {
+                    hadSignedInUser = true
+                    onSignedIn(user)
+                } else {
+                    val wasSignedIn = hadSignedInUser
+                    hadSignedInUser = false
+                    onSignedOut(wasSignedIn)
+                }
             }
         }
     }
 
-    private fun onSignedIn(uid: UserId) {
+    private suspend fun onSignedIn(uid: UserId) {
+        // Stop the previous account's remote snapshot listener first, so it can't repopulate the
+        // cache while/after we clear it below.
+        remoteJob?.cancel()
+        remoteJob = null
+
+        // Account isolation: if the local cache holds data from a different account — foreign-owned
+        // private notes, or shared notes this account isn't a member of (e.g. a note shared between
+        // two other users that was cached while one of them was signed in on this device) — wipe the
+        // cache before syncing so only this account's cloud data repopulates. Null-owned local drafts
+        // are not foreign, so the signed-out -> first-sign-in adoption flow is preserved.
+        runCatching {
+            if (accountRepository.hasForeignData(uid)) {
+                // Flush this account's own unsynced folders/notes to Firebase first so wiping the
+                // cache can't drop data that only exists locally. Only clear if the push succeeded
+                // (e.g. when offline it fails — keep the cache and retry on the next sign-in; the
+                // shared-note eviction in mergeRemoteShared still provides a fallback).
+                val flushed = syncRepository.pushLocalChanges(uid).isSuccess
+                if (flushed) {
+                    Log.i(TAG, "Foreign local data detected on sign-in; clearing cache for account isolation")
+                    accountRepository.clearLocalData()
+                } else {
+                    Log.w(TAG, "Could not flush local changes before cache clear; deferring isolation wipe")
+                }
+            }
+        }.onFailure { Log.w(TAG, "Account-isolation cache check failed", it) }
+
         val data = workDataOf(SyncWorker.KEY_UID to uid.value)
 
         val syncRequest =
@@ -109,7 +150,6 @@ class SyncManager @Inject constructor(
             purgeRequest,
         )
 
-        remoteJob?.cancel()
         remoteJob =
             scope.launch {
                 syncRepository
@@ -119,12 +159,23 @@ class SyncManager @Inject constructor(
             }
     }
 
-    private fun onSignedOut() {
+    private suspend fun onSignedOut(wasSignedIn: Boolean) {
+        // Stop the remote snapshot listener FIRST so a late Firestore snapshot can't repopulate the
+        // cache after we wipe it below.
         remoteJob?.cancel()
         remoteJob = null
         workManager.cancelUniqueWork(SyncWorker.UNIQUE_NAME)
         workManager.cancelUniqueWork(DeleteTombstonesWorker.UNIQUE_NAME)
         workManager.cancelUniqueWork(DeleteTombstonesWorker.ONE_TIME_NAME)
+
+        // On a genuine sign-out, the account's notes were cloud-backed, so drop the local cache —
+        // otherwise the signed-in user's notes linger on the device for the next (signed-out or
+        // different) user. A cold start that begins signed-out must NOT clear: those notes are a
+        // local-only user's and exist nowhere else.
+        if (wasSignedIn) {
+            runCatching { accountRepository.clearLocalData() }
+                .onFailure { Log.w(TAG, "Failed to clear local cache on sign-out", it) }
+        }
     }
 
     private companion object {

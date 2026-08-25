@@ -61,6 +61,7 @@ class DeleteTombstonesWorkerTest {
 
         val remote = RecordingRemote()
         val syncRepository = SyncRepositoryImpl(
+            app.tessera.data.local.RoomTransactor(database),
             dao,
             database.tagDao(),
             database.folderDao(),

@@ -4,22 +4,17 @@ import android.content.Context
 import android.graphics.Typeface
 import android.text.Spannable
 import android.text.TextPaint
-import android.text.style.AbsoluteSizeSpan
 import android.text.style.MetricAffectingSpan
-import android.util.TypedValue
 import androidx.core.content.res.ResourcesCompat
 import app.tessera.R
 import org.wordpress.aztec.spans.AztecHeadingSpan
 
-/** First-line H1 display size, per spec §6 (Instrument Serif, 26sp). */
-private const val SerifH1SizeSp = 26f
-
 /**
  * [MetricAffectingSpan] that swaps the paint typeface to a supplied [Typeface]. Unlike the
  * platform `TypefaceSpan(Typeface)` (API 28+), this works from our minSdk 26. Also serves
- * as a marker so [applySerifH1Range] can find and remove its own previously-applied spans.
+ * as a marker so [applySerifHeadingSpans] can find and remove its own previously-applied spans.
  */
-class SerifH1TypefaceSpan(private val typeface: Typeface) : MetricAffectingSpan() {
+class SerifHeadingTypefaceSpan(private val typeface: Typeface) : MetricAffectingSpan() {
   override fun updateMeasureState(paint: TextPaint) {
     paint.typeface = typeface
   }
@@ -30,63 +25,61 @@ class SerifH1TypefaceSpan(private val typeface: Typeface) : MetricAffectingSpan(
 }
 
 /**
- * Render the note's first H1 block in Instrument Serif at display size. Aztec installs an
- * [AztecHeadingSpan] per heading line; we locate the earliest `H1` and overlay our serif
- * typeface + absolute size on it. Safe to call repeatedly (idempotent) — used both after
- * the initial `fromHtml` load and on debounced text changes when the H1 moves.
+ * Render every H1/H2 heading block in the Playfair Display serif. Aztec installs an
+ * [AztecHeadingSpan] per heading line and sizes it via its own multiplicative scale (H1 ≈ 26sp,
+ * H2 ≈ 20sp at the 15sp base); we only overlay the serif typeface so the heading keeps Aztec's
+ * native size. Deliberately typeface-only — no absolute-size span — so we never stack on Aztec's
+ * size multiplier (a stale absolute size span would render at size × 1.73 ≈ 45sp).
  *
- * No-op when the note has no H1.
+ * Idempotent: clears its own previously-applied spans first, so it's safe to call after every
+ * (re)load and on debounced text changes / toolbar toggles when headings move or change. No-op
+ * when the note has no heading.
  */
-fun applyFirstLineSerifH1(spannable: Spannable, ctx: Context) {
-  val serif = ResourcesCompat.getFont(ctx, R.font.instrument_serif_regular) ?: return
-  val sizePx = TypedValue.applyDimension(
-    TypedValue.COMPLEX_UNIT_SP,
-    SerifH1SizeSp,
-    ctx.resources.displayMetrics,
-  ).toInt()
+fun applySerifHeadingSpans(spannable: Spannable, ctx: Context) {
+  val serif = ResourcesCompat.getFont(ctx, R.font.playfair_display_regular) ?: return
 
-  val firstH1 = spannable
-    .getSpans(0, spannable.length, AztecHeadingSpan::class.java)
-    .filter { it.heading == AztecHeadingSpan.Heading.H1 }
-    .minByOrNull { spannable.getSpanStart(it) }
+  // The serif typeface lives in a SEPARATE span from Aztec's heading-SIZE span
+  // (AztecHeadingSpan). Re-applying it means a remove-then-re-add of MetricAffectingSpans,
+  // and every such change forces DynamicLayout to reflow the affected lines. Doing that on
+  // every keystroke — especially while the IME is mid-composition on a heading line — churns
+  // the layout and, on a fast (release) render pipeline, a half-reflowed frame can reach the
+  // screen: lines momentarily draw at the wrong (heading) size/typeface until the next pass
+  // settles. So only touch spans when the heading ranges have ACTUALLY changed; when the
+  // existing serif ranges already match, this is a no-op and no reflow is triggered.
+  val desired = spannable.getSpans(0, spannable.length, AztecHeadingSpan::class.java)
+    .filter { it.heading == AztecHeadingSpan.Heading.H1 || it.heading == AztecHeadingSpan.Heading.H2 }
+    .map { spannable.getSpanStart(it) to spannable.getSpanEnd(it) }
+    // An empty heading line (start == end) has no range to carry a character span; skip it.
+    .filter { (start, end) -> start in 0 until end }
+    .sortedBy { it.first }
 
-  if (firstH1 == null) {
-    // H1 was removed since the last apply — strip our markers so stale serif styling
-    // doesn't linger on what is now body text.
-    removeSerifH1Spans(spannable)
-    return
-  }
+  val existing = spannable.getSpans(0, spannable.length, SerifHeadingTypefaceSpan::class.java)
+    .map { spannable.getSpanStart(it) to spannable.getSpanEnd(it) }
+    .sortedBy { it.first }
 
-  val start = spannable.getSpanStart(firstH1)
-  val end = spannable.getSpanEnd(firstH1)
-  if (start < 0 || end < 0 || start >= end) return
-  applySerifH1Range(spannable, start, end, serif, sizePx)
+  if (existing == desired) return
+
+  // Ranges changed (heading added/removed/moved): rebuild from scratch so a stale marker can
+  // never linger on text that is no longer a heading.
+  removeSerifHeadingSpans(spannable)
+  desired.forEach { (start, end) -> applySerifTypefaceRange(spannable, start, end, serif) }
 }
 
-/** Remove any previously-applied serif-H1 markers across the whole [spannable]. */
-internal fun removeSerifH1Spans(spannable: Spannable) {
-  spannable.getSpans(0, spannable.length, SerifH1TypefaceSpan::class.java)
-    .forEach { spannable.removeSpan(it) }
-  spannable.getSpans(0, spannable.length, SerifH1MarkerSizeSpan::class.java)
+/** Remove any previously-applied serif-heading markers across the whole [spannable]. */
+internal fun removeSerifHeadingSpans(spannable: Spannable) {
+  spannable.getSpans(0, spannable.length, SerifHeadingTypefaceSpan::class.java)
     .forEach { spannable.removeSpan(it) }
 }
 
 /**
- * Apply the serif typeface + [sizePx] absolute size over `[start, end)`, first clearing our
- * own previously-applied spans so repeated calls don't stack. Extracted for unit testing
- * without a live Aztec editor.
+ * Apply the serif typeface over `[start, end)`. Extracted for unit testing without a live
+ * Aztec editor. Does NOT clear existing spans — callers that need idempotency clear first.
  */
-internal fun applySerifH1Range(
+internal fun applySerifTypefaceRange(
   spannable: Spannable,
   start: Int,
   end: Int,
   typeface: Typeface,
-  sizePx: Int,
 ) {
-  removeSerifH1Spans(spannable)
-  spannable.setSpan(SerifH1TypefaceSpan(typeface), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-  spannable.setSpan(SerifH1MarkerSizeSpan(sizePx), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+  spannable.setSpan(SerifHeadingTypefaceSpan(typeface), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 }
-
-/** [AbsoluteSizeSpan] subclass used as a removable marker for the H1 display size. */
-class SerifH1MarkerSizeSpan(sizePx: Int) : AbsoluteSizeSpan(sizePx)

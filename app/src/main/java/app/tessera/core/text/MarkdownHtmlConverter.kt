@@ -19,6 +19,18 @@ class MarkdownHtmlConverter {
 
         /** Private-use sentinel wrapping protected inline-code content during conversion. */
         private const val CODE_SENTINEL = "\uE000"
+
+        /**
+         * Zero-width space used to materialize a blank line in the HTML we feed Aztec. An empty
+         * line (no characters) gets silently dropped by Aztec.fromHtml — especially right after a
+         * block element or when several blanks are stacked — so we give the line one invisible
+         * character to keep it alive. It serializes back out as an ordinary empty line ("\n") and
+         * is stripped again on import, so it never leaks into the stored Markdown.
+         */
+        private const val BLANK_LINE_PLACEHOLDER = "\u00A0"
+
+        /** Matches an HTML line break in any of the forms Aztec / our converter emit. */
+        private val BR_TAG = Regex("<br\\s*/?>")
     }
 
     // -----------------------------------------------------------------------------------------
@@ -29,56 +41,83 @@ class MarkdownHtmlConverter {
         if (markdown.isEmpty()) return ""
 
         val lines = markdown.split("\n")
-        val output = StringBuilder()
+        // One HTML fragment per logical line/block. Plain lines are emitted as bare (inline-only)
+        // HTML rather than wrapped in <p>; a "<br>" separator between two PLAIN fragments is what
+        // Aztec.fromHtml turns back into a single "\n" line break. Empty lines use the zero-width
+        // placeholder so Aztec keeps them; the import step reverses both transforms.
+        //
+        // Crucially, a "<br>" placed immediately AFTER (or before) a block element — `</h1><br>`,
+        // `</ul><br>` … — is rendered by Aztec.fromHtml as a phantom EMPTY line (the block already
+        // ends its line, so the <br> adds a second break). That surfaced as a stray blank line
+        // under every heading/list. So each fragment is tagged as block or not, and a separator is
+        // emitted only between two non-block fragments; blocks self-separate in HTML.
+        val fragments = mutableListOf<Pair<String, Boolean>>()
+        fun addBlock(html: String) = fragments.add(html to true)
+        fun addInline(html: String) = fragments.add(html to false)
 
         var i = 0
         while (i < lines.size) {
             val line = lines[i]
             when {
+                // Fenced code block — a line that starts with ``` opens a block consumed
+                // verbatim until the next ``` line (the optional language after the opening
+                // fence is ignored). Emitted as <pre>, content escaped and never inline-parsed
+                // so markup characters inside code stay literal. Blank code lines use the
+                // zero-width placeholder so Aztec keeps them.
+                line.startsWith("```") -> {
+                    i++ // skip opening fence
+                    val codeLines = mutableListOf<String>()
+                    while (i < lines.size && lines[i].trimEnd() != "```") {
+                        codeLines.add(lines[i])
+                        i++
+                    }
+                    if (i < lines.size) i++ // skip closing fence
+                    val body = codeLines.joinToString("<br>") {
+                        if (it.isEmpty()) BLANK_LINE_PLACEHOLDER else escapeHtml(it)
+                    }
+                    addBlock("<pre>$body</pre>")
+                }
                 // H1
                 line.startsWith("# ") -> {
-                    val content = line.removePrefix("# ")
-                    output.append("<h1>${inlineToHtml(content)}</h1>")
+                    addBlock("<h1>${inlineToHtml(line.removePrefix("# "))}</h1>")
                     i++
                 }
                 // H2
                 line.startsWith("## ") -> {
-                    val content = line.removePrefix("## ")
-                    output.append("<h2>${inlineToHtml(content)}</h2>")
+                    addBlock("<h2>${inlineToHtml(line.removePrefix("## "))}</h2>")
                     i++
                 }
                 // Task-list items — consume consecutive task items into one <ul type="task-list">
                 line.startsWith("- [ ] ") || line.startsWith("- [x] ") -> {
-                    output.append("<ul type=\"task-list\">")
+                    val sb = StringBuilder("<ul type=\"task-list\">")
                     while (i < lines.size &&
                         (lines[i].startsWith("- [ ] ") || lines[i].startsWith("- [x] "))
                     ) {
-                        val taskLine = lines[i]
-                        val checked = taskLine.startsWith("- [x] ")
-                        val text = if (checked) taskLine.removePrefix("- [x] ")
-                                   else taskLine.removePrefix("- [ ] ")
+                        val checked = lines[i].startsWith("- [x] ")
+                        val text = lines[i].removePrefix(if (checked) "- [x] " else "- [ ] ")
                         val checkedAttr = if (checked) " checked" else ""
-                        output.append(
+                        sb.append(
                             "<li><input type=\"checkbox\" class=\"task-list-item-checkbox\"$checkedAttr />${inlineToHtml(text)}</li>"
                         )
                         i++
                     }
-                    output.append("</ul>")
+                    sb.append("</ul>")
+                    addBlock(sb.toString())
                 }
                 // Horizontal rule — a line that is exactly "---".
                 line.trim() == "---" -> {
-                    output.append("<hr>")
+                    addBlock("<hr>")
                     i++
                 }
                 // Ordered list items — consume consecutive "N. " lines into one <ol>.
                 ORDERED_ITEM.containsMatchIn(line) -> {
-                    output.append("<ol>")
+                    val sb = StringBuilder("<ol>")
                     while (i < lines.size && ORDERED_ITEM.containsMatchIn(lines[i])) {
-                        val text = lines[i].replaceFirst(ORDERED_ITEM, "")
-                        output.append("<li>${inlineToHtml(text)}</li>")
+                        sb.append("<li>${inlineToHtml(lines[i].replaceFirst(ORDERED_ITEM, ""))}</li>")
                         i++
                     }
-                    output.append("</ol>")
+                    sb.append("</ol>")
+                    addBlock(sb.toString())
                 }
                 // Blockquote — consume consecutive "> " lines into one <blockquote>, lines
                 // joined with <br> (mirrors Aztec's single-block multiline quote).
@@ -88,31 +127,50 @@ class MarkdownHtmlConverter {
                         quoted.add(inlineToHtml(lines[i].removePrefix("> ")))
                         i++
                     }
-                    output.append("<blockquote>${quoted.joinToString("<br>")}</blockquote>")
+                    addBlock("<blockquote>${quoted.joinToString("<br>")}</blockquote>")
                 }
                 // Regular bullet list items — consume consecutive bullets into one <ul>
                 line.startsWith("- ") -> {
-                    output.append("<ul>")
+                    val sb = StringBuilder("<ul>")
                     while (i < lines.size &&
                         lines[i].startsWith("- ") &&
                         !lines[i].startsWith("- [ ] ") &&
                         !lines[i].startsWith("- [x] ")
                     ) {
-                        val text = lines[i].removePrefix("- ")
-                        output.append("<li>${inlineToHtml(text)}</li>")
+                        sb.append("<li>${inlineToHtml(lines[i].removePrefix("- "))}</li>")
                         i++
                     }
-                    output.append("</ul>")
+                    sb.append("</ul>")
+                    addBlock(sb.toString())
                 }
-                // Plain paragraph
+                // Plain line — bare inline HTML, no <p> wrapper. An EMPTY line is a blank line the
+                // user typed; emit it as an empty PARAGRAPH carrying the zero-width placeholder
+                // (`<p>​</p>`). This is the only encoding Aztec.fromHtml keeps as a real blank row:
+                // a bare empty fragment, an empty `<p></p>`, or a double `<br>` are all silently
+                // collapsed. Critically, `<p>​</p>` reproduces the SAME paragraph structure a typed
+                // blank line has, so Aztec's toHtml serializes it as the doubled "\n\n\n\n" run that
+                // htmlToMarkdown's halving recovers — making the blank line a stable round-trip.
                 else -> {
-                    output.append("<p>${inlineToHtml(line)}</p>")
+                    if (line.isEmpty()) addBlock("<p>$BLANK_LINE_PLACEHOLDER</p>") else addInline(inlineToHtml(line))
                     i++
                 }
             }
         }
 
-        return output.toString()
+        val sb = StringBuilder()
+        fragments.forEachIndexed { idx, (html, isBlock) ->
+            if (idx > 0) {
+                val (prevHtml, prevBlock) = fragments[idx - 1]
+                val blankInvolved = prevHtml == BLANK_LINE_PLACEHOLDER || html == BLANK_LINE_PLACEHOLDER
+                // A blank-line placeholder needs <br> separators on both sides to materialize.
+                // Otherwise a <br> adjacent to a block renders as a phantom empty line, so omit it
+                // between a block and a (non-blank) neighbour — blocks self-separate in HTML.
+                val needBr = blankInvolved || !(prevBlock || isBlock)
+                if (needBr) sb.append("<br>")
+            }
+            sb.append(html)
+        }
+        return sb.toString()
     }
 
     /** Convert inline Markdown spans (bold, italic, strike) to HTML inside a block. */
@@ -152,15 +210,85 @@ class MarkdownHtmlConverter {
     fun htmlToMarkdown(html: String): String {
         if (html.isEmpty()) return ""
 
-        val blocks = parseBlocks(html)
-        // Aztec's toHtml() separates plain paragraphs with a *double* newline ("\n\n"),
-        // whereas our markdownToHtml treats every single "\n" as its own paragraph (<p>).
-        // Left unreconciled, each load→edit→save cycle re-expands one logical break into an
-        // extra blank line, so paragraph gaps grow without bound. Collapsing runs of blank
-        // lines back to a single newline makes the round-trip idempotent AND retroactively
-        // heals notes that already accumulated stray blank lines.
-        return blocks.joinToString("\n").replace(Regex("\n{2,}"), "\n")
+        // Aztec's toHtml() serializes every plain-text paragraph break as a DOUBLE bare "\n"
+        // (verified via Robolectric: editable "a\nb" -> "a\n\nb"; "a\n\nb" -> "a\n\n\n\nb"), i.e.
+        // its bare-newline runs are 2x the line breaks the user actually sees, while a block↔text
+        // boundary stays a single "\n". So halve each bare-"\n" run to recover the visible line/
+        // blank structure (one typed Enter -> one break, two Enters -> one blank line). Our OWN
+        // markdownToHtml never emits a bare "\n" (it uses "<br>" for breaks and a zero-width
+        // placeholder for blank lines), so this only rescales Aztec output — the "<br>" path below
+        // is left at 1:1. <pre> code blocks are masked first: their line breaks aren't doubled and
+        // may include intentional blank rows, so they must survive verbatim.
+        // A blank line BETWEEN two block elements cannot round-trip through Aztec: it serializes
+        // empty paragraphs between blocks inconsistently (1 blank between headings collapses to 0,
+        // but 2+ blanks INFLATE — `<h2>A</h2>\n\n\n\n\n<h1>B</h1>` — and re-encoding the inflated
+        // count grows it again every save, the "blank lines multiply" bug). There is no stable
+        // representation, so collapse any run flanked by two block tags (or masked <pre> sentinels)
+        // to a single newline = adjacency, NO blank. Blanks adjacent to plain text are unaffected.
+        val (masked, preBlocks) = maskPreBlocks(html)
+
+        // (1) Normalize a TOGGLED heading. Toggling an existing line to a heading leaves a trailing
+        // "\n" INSIDE the tag (`<h1>body\n</h1>`) AND serializes the break to the following content
+        // DOUBLED (plain-paragraph style): editable `body\nXxx` -> `<h1>body\n</h1>\n\nXxx` (adjacent)
+        // and `body\n\nXxx` -> `<h1>body\n</h1>\n\n\n\nXxx` (one blank). A heading TYPED cleanly has
+        // no in-tag "\n" and a 1:1 break. So when the in-tag "\n" is present, drop it and HALVE the
+        // following run — turning the toggle form into the clean typed form the rules below expect.
+        val toggleFixed = masked.replace(Regex("\\n+</h([12])>(\\n*)")) { m ->
+            "</h${m.groupValues[1]}>" + "\n".repeat((m.groupValues[2].length + 1) / 2)
+        }
+
+        // (2) A blank BETWEEN two block elements can't round-trip (Aztec drops/!inflates empty
+        // paragraphs between blocks, the "multiply" bug), so collapse to adjacency.
+        val betweenBlocks = toggleFixed.replace(Regex("(?<=[>$CODE_SENTINEL])\\n+(?=[<$CODE_SENTINEL])"), "\n")
+
+        // (3) After a block, ONE blank line is stable and kept; 2+ inflate unstably, so cap at one.
+        val capped = betweenBlocks.replace(Regex("(?<=[>$CODE_SENTINEL])\\n{2,}"), "\n\n")
+
+        // (4) PLAIN-text paragraph breaks serialize DOUBLED ("\n\n" per break), so halve any run
+        // whose LEFT neighbour is plain text (not a tag's ">" / masked sentinel). This preserves
+        // blanks plain→plain and plain→block for any count (the doubling there is linear/stable).
+        // parseBlocks then emits (run-1) blank lines per remaining run.
+        val halved = capped.replace(Regex("(?<=[^>\\n$CODE_SENTINEL])\\n+")) {
+            "\n".repeat((it.value.length + 1) / 2)
+        }
+        val restored = restorePreBlocks(halved, preBlocks)
+
+        // Now fold the remaining markup to plain newlines: "<br>" (our adjacency markup / Aztec
+        // soft breaks) -> a single "\n"; the placeholder is removed but its row survives as an
+        // empty line. parseBlocks then preserves every blank line; joining with "\n" reproduces
+        // the user's paragraph spacing exactly.
+        val normalized = restored.replace(BR_TAG, "\n").replace(BLANK_LINE_PLACEHOLDER, "")
+
+        // Exiting a list/quote/code by typing Enter serializes as a SINGLE "\n" before the next
+        // paragraph (`</ul>\ntext`) — Aztec drops the blank line the user added, and a single
+        // newline is a lazy continuation in Markdown anyway. Promote that to a blank line so the
+        // separation the user typed is kept. Only fires for a block close directly followed by one
+        // newline and then non-whitespace, non-tag text: a run with an existing blank ("\n\n…") or
+        // a following tag/empty-paragraph placeholder is left untouched, so the load path (which
+        // encodes blanks as 2 newlines / placeholders) stays idempotent.
+        val separated = normalized.replace(
+            Regex("(</ul>|</ol>|</blockquote>|</pre>)\\n(?=[^<\\s])"),
+        ) { "${it.groupValues[1]}\n\n" }
+        return parseBlocks(separated).joinToString("\n")
     }
+
+    /**
+     * Replace each `<pre>…</pre>` block with an opaque sentinel so the bare-newline halving in
+     * [htmlToMarkdown] can't rescale code-block line breaks. Returns the masked HTML plus the
+     * extracted blocks in order; [restorePreBlocks] swaps them back.
+     */
+    private fun maskPreBlocks(html: String): Pair<String, List<String>> {
+        val blocks = mutableListOf<String>()
+        val masked = Regex("<pre[\\s>].*?</pre>", RegexOption.DOT_MATCHES_ALL).replace(html) { m ->
+            blocks.add(m.value)
+            "$CODE_SENTINEL${blocks.size - 1}$CODE_SENTINEL"
+        }
+        return masked to blocks
+    }
+
+    private fun restorePreBlocks(html: String, blocks: List<String>): String =
+        if (blocks.isEmpty()) html
+        else html.replace(Regex("$CODE_SENTINEL(\\d+)$CODE_SENTINEL")) { blocks[it.groupValues[1].toInt()] }
 
     /**
      * Parse the top-level HTML into a flat list of Markdown lines (one per block element).
@@ -171,15 +299,27 @@ class MarkdownHtmlConverter {
         var remaining = html.trim()
 
         while (remaining.isNotEmpty()) {
-            remaining = remaining.trimStart()
-            if (remaining.isEmpty()) break
+            // The newline run separating this element from the previous one carries the user's
+            // blank lines: the FIRST newline is the line separator (adjacency), and each EXTRA
+            // newline is a blank line. (Aztec's doubled plain-text breaks were already halved to
+            // the visible count in htmlToMarkdown.) Emit one empty line per extra newline, then
+            // drop the run. Leading newlines at the very start (lines still empty) are ignored so a
+            // note never opens with a blank row.
+            val newlineRun = remaining.takeWhile { it == '\n' }.length
+            if (newlineRun > 0) {
+                if (lines.isNotEmpty()) repeat(newlineRun - 1) { lines.add("") }
+                remaining = remaining.substring(newlineRun)
+                if (remaining.isEmpty()) break
+            }
 
             when {
+                // A toggled heading can carry a spurious trailing "\n" inside the tag
+                // (`<h1>body\n</h1>`); trim it so it doesn't leak an extra line into the Markdown.
                 remaining.startsWith("<h1>") ->
-                    remaining = consumeTag(remaining, "h1") { inner -> lines.add("# ${inlineToMarkdown(inner)}") }
+                    remaining = consumeTag(remaining, "h1") { inner -> lines.add("# ${inlineToMarkdown(inner.trimEnd('\n'))}") }
 
                 remaining.startsWith("<h2>") ->
-                    remaining = consumeTag(remaining, "h2") { inner -> lines.add("## ${inlineToMarkdown(inner)}") }
+                    remaining = consumeTag(remaining, "h2") { inner -> lines.add("## ${inlineToMarkdown(inner.trimEnd('\n'))}") }
 
                 remaining.startsWith("<ul type=\"task-list\">") ->
                     remaining = consumeTaskList(remaining, lines)
@@ -189,6 +329,9 @@ class MarkdownHtmlConverter {
 
                 remaining.startsWith("<ol>") ->
                     remaining = consumeOrderedList(remaining, lines)
+
+                remaining.startsWith("<pre>") || remaining.startsWith("<pre ") ->
+                    remaining = consumePreformat(remaining, lines)
 
                 remaining.startsWith("<blockquote>") ->
                     remaining = consumeBlockquote(remaining, lines)
@@ -202,42 +345,43 @@ class MarkdownHtmlConverter {
                 remaining.startsWith("<p>") ->
                     remaining = consumeTag(remaining, "p") { inner -> lines.add(inlineToMarkdown(inner)) }
 
-                remaining.startsWith("<") -> {
-                    // Check whether the leading tag is a known inline tag.
-                    // If so, consume everything up to the next block-level tag as inline content.
-                    val leadingTag = extractTagName(remaining)
-                    if (leadingTag in INLINE_TAGS) {
-                        // Accumulate all content until a block tag (or end of string)
-                        val nextBlock = indexOfNextBlockTag(remaining)
-                        val chunk = if (nextBlock == -1) remaining else remaining.substring(0, nextBlock)
-                        val text = inlineToMarkdown(chunk.trim())
-                        if (text.isNotEmpty()) lines.add(text)
-                        remaining = if (nextBlock == -1) "" else remaining.substring(nextBlock)
-                    } else {
-                        // Unknown block tag: strip outer tag, recursively process inner content
-                        val (inner, rest) = stripOuterTag(remaining)
-                        lines.addAll(parseBlocks(inner))
-                        remaining = rest
-                    }
+                remaining.startsWith("<") && extractTagName(remaining) !in INLINE_TAGS -> {
+                    // Unknown block-level tag: strip outer tag, recursively process inner content.
+                    val (inner, rest) = stripOuterTag(remaining)
+                    lines.addAll(parseBlocks(inner))
+                    remaining = rest
                 }
 
                 else -> {
-                    // Bare text with no block tag — treat as paragraph up to next tag
-                    val nextTag = remaining.indexOf('<')
-                    if (nextTag == -1) {
-                        val text = inlineToMarkdown(remaining.trim())
-                        if (text.isNotEmpty()) lines.add(text)
-                        remaining = ""
-                    } else {
-                        val text = inlineToMarkdown(remaining.substring(0, nextTag).trim())
-                        if (text.isNotEmpty()) lines.add(text)
-                        remaining = remaining.substring(nextTag)
-                    }
+                    // Plain-text run (may start with an inline tag like <b>). Consume up to the
+                    // next block-level tag; drop trailing newlines (left for the next iteration's
+                    // blank-line accounting) and emit one Markdown line per "\n".
+                    val nextBlock = indexOfNextBlockTagFrom(remaining, 0)
+                    val chunk = if (nextBlock == -1) remaining else remaining.substring(0, nextBlock)
+                    val core = chunk.trimEnd('\n')
+                    addTextLines(core, lines)
+                    remaining = remaining.substring(core.length)
+                    if (nextBlock == -1 && remaining.all { it == '\n' }) remaining = ""
                 }
             }
         }
 
         return lines
+    }
+
+    /**
+     * Append a plain-text run as discrete Markdown lines, preserving blank lines.
+     *
+     * By the time a run reaches here, [htmlToMarkdown] has already halved Aztec's doubled
+     * plain-text breaks, so the newlines in [core] match the line/blank structure the user sees:
+     * a single "\n" separates adjacent lines and each additional "\n" is a blank line. So split on
+     * "\n" verbatim — empty segments become blank Markdown lines.
+     */
+    private fun addTextLines(core: String, lines: MutableList<String>) {
+        if (core.isEmpty()) return
+        core.split("\n").forEach { line ->
+            lines.add(inlineToMarkdown(line.trim()))
+        }
     }
 
     /** Consume a known paired tag, call [handler] with inner content, return the remainder. */
@@ -265,11 +409,17 @@ class MarkdownHtmlConverter {
         val end = html.indexOf(closeUl, contentStart)
         if (end == -1) return ""
         val inner = html.substring(contentStart, end)
-        // Extract each <li>...</li>
-        extractListItems(inner).forEach { itemHtml ->
-            lines.add("- ${inlineToMarkdown(itemHtml)}")
+        val rest = html.substring(end + closeUl.length)
+        // An empty list item is the blank line Aztec absorbed into the list (when a break was
+        // inserted between this list and a neighbour). Emit it as a real blank line — UNLESS it's
+        // the genuine LAST item of a list that ends the note (a not-yet-typed item being built),
+        // i.e. nothing meaningful follows the list.
+        val items = extractListItems(inner)
+        items.forEachIndexed { idx, itemHtml ->
+            val md = inlineToMarkdown(itemHtml)
+            if (md.isBlank() && (idx < items.lastIndex || rest.isNotBlank())) lines.add("") else lines.add("- $md")
         }
-        return html.substring(end + closeUl.length)
+        return rest
     }
 
     private fun consumeOrderedList(html: String, lines: MutableList<String>): String {
@@ -281,10 +431,47 @@ class MarkdownHtmlConverter {
         val end = html.indexOf(closeOl, contentStart)
         if (end == -1) return ""
         val inner = html.substring(contentStart, end)
-        extractListItems(inner).forEachIndexed { idx, itemHtml ->
-            lines.add("${idx + 1}. ${inlineToMarkdown(itemHtml)}")
+        val rest = html.substring(end + closeOl.length)
+        val items = extractListItems(inner)
+        var n = 0
+        items.forEachIndexed { idx, itemHtml ->
+            val md = inlineToMarkdown(itemHtml)
+            if (md.isBlank() && (idx < items.lastIndex || rest.isNotBlank())) lines.add("") else { n++; lines.add("$n. $md") }
         }
-        return html.substring(end + closeOl.length)
+        return rest
+    }
+
+    /**
+     * Consume a `<pre>` code block, emitting a fenced Markdown block:
+     * ```
+     * line one
+     * line two
+     * ```
+     * Content is preserved verbatim (inline tags stripped, entities decoded) — no Markdown
+     * inline parsing applies inside code. The htmlToMarkdown normalization already turned the
+     * `<br>` separators (ours) and any `\n` (Aztec's) into newlines, so split on either form.
+     */
+    private fun consumePreformat(html: String, lines: MutableList<String>): String {
+        val openEnd = html.indexOf('>')
+        if (openEnd == -1) return ""
+        val contentStart = openEnd + 1
+        val closeTag = "</pre>"
+        val end = html.indexOf(closeTag, contentStart)
+        val inner = if (end == -1) html.substring(contentStart) else html.substring(contentStart, end)
+        val codeLines = inner.split(Regex("<br\\s*/?>|\n")).map { part ->
+            val decoded = decodeHtmlEntities(part.replace(Regex("<[^>]+>"), ""))
+            // A blank code line is carried by the NBSP placeholder (which Aztec may emit as a raw
+            // NBSP or as "&nbsp;" -> a space); normalize any whitespace-only line back to empty so
+            // the placeholder never leaks into the stored code.
+            if (decoded.isBlank()) "" else decoded
+        }.toMutableList()
+        // Aztec may append a structural trailing newline to the block; drop a single empty
+        // tail line so the code block doesn't gain a phantom blank row each round-trip.
+        if (codeLines.size > 1 && codeLines.last().isEmpty()) codeLines.removeAt(codeLines.lastIndex)
+        lines.add("```")
+        lines.addAll(codeLines)
+        lines.add("```")
+        return if (end == -1) "" else html.substring(end + closeTag.length)
     }
 
     private fun consumeBlockquote(html: String, lines: MutableList<String>): String {
@@ -297,8 +484,9 @@ class MarkdownHtmlConverter {
         if (end == -1) return ""
         val inner = html.substring(contentStart, end)
         // Aztec keeps a multiline quote as one block with <br> separators; our markdownToHtml
-        // does the same. Split them back into one "> " line each.
-        inner.split(Regex("<br\\s*/?>")).forEach { part ->
+        // does the same. The htmlToMarkdown normalization may already have turned those into
+        // "\n", so split on either form. Split them back into one "> " line each.
+        inner.split(Regex("<br\\s*/?>|\n")).forEach { part ->
             val text = inlineToMarkdown(part.trim())
             if (text.isNotEmpty()) lines.add("> $text")
         }
@@ -314,12 +502,22 @@ class MarkdownHtmlConverter {
         val end = html.indexOf(closeUl, contentStart)
         if (end == -1) return ""
         val inner = html.substring(contentStart, end)
-        extractListItems(inner).forEach { itemHtml ->
+        val rest = html.substring(end + closeUl.length)
+        // An EMPTY task item is the blank line Aztec absorbed into the list when a break was
+        // inserted between this list and a neighbour — emit it as a real blank line (round-trips as
+        // an NBSP paragraph). EXCEPTION: a trailing empty item of a list that ENDS the note is a
+        // genuine not-yet-typed checkbox (checklist being built), so keep it.
+        val items = extractListItems(inner)
+        items.forEachIndexed { idx, itemHtml ->
             val (checked, text) = parseTaskItem(itemHtml)
-            val marker = if (checked) "- [x] " else "- [ ] "
-            lines.add("$marker${inlineToMarkdown(text)}")
+            val md = inlineToMarkdown(text)
+            if (md.isBlank() && (idx < items.lastIndex || rest.isNotBlank())) {
+                lines.add("")
+            } else {
+                lines.add("${if (checked) "- [x] " else "- [ ] "}$md")
+            }
         }
-        return html.substring(end + closeUl.length)
+        return rest
     }
 
     /** Extract raw inner HTML for each <li>…</li> in a list's inner HTML. */
@@ -381,17 +579,15 @@ class MarkdownHtmlConverter {
     }
 
     /**
-     * Find the index of the next block-level opening tag in [html], or -1 if none.
-     * Used to split "inline content before the next block tag".
+     * Find the index (>= [from]) of the next block-level opening tag in [html], or -1 if none.
+     * Inline tags (<b>, <i>, …) are deliberately ignored so a plain-text run that contains
+     * emphasis is consumed as a single paragraph.
      */
-    private fun indexOfNextBlockTag(html: String): Int {
-        val blockTags = listOf("<h1>", "<h2>", "<ul>", "<ul ", "<ol>", "<blockquote>", "<hr", "<p>")
+    private fun indexOfNextBlockTagFrom(html: String, from: Int): Int {
+        val blockTags = listOf("<h1>", "<h2>", "<ul>", "<ul ", "<ol>", "<blockquote>", "<pre>", "<pre ", "<hr", "<p>")
         var idx = -1
-        // Search from position 1 to skip current opening tag
-        val searchFrom = html.indexOf('>') + 1
-        if (searchFrom <= 0 || searchFrom >= html.length) return -1
         for (tag in blockTags) {
-            val found = html.indexOf(tag, searchFrom)
+            val found = html.indexOf(tag, from)
             if (found != -1 && (idx == -1 || found < idx)) idx = found
         }
         return idx

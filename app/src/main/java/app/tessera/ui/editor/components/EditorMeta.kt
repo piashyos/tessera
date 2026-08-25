@@ -48,16 +48,19 @@ fun EditorMeta(
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.size(16.dp),
       )
+      // Takes all remaining width so the date is pushed to the right edge; the
+      // breadcrumb ellipsizes instead of centering the date.
       Text(
         text = folderBreadcrumb.joinToString(" › "),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.weight(1f, fill = false),
+        modifier = Modifier.weight(1f),
       )
+    } else {
+      Spacer(Modifier.weight(1f))
     }
-    Spacer(Modifier.weight(1f))
     Text(
       text = relativeDate,
       style = MaterialTheme.typography.bodySmall,

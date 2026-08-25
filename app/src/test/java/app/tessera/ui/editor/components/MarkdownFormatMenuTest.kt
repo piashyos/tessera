@@ -4,8 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import app.tessera.core.ui.theme.TesseraTheme
-import dev.chrisbanes.haze.HazeState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,20 +44,21 @@ class MarkdownFormatMenuTest {
         composeRule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
                 MarkdownFormatMenu(
-                    visible = true,
+                    expanded = true,
                     activeFormats = setOf(AztecTextFormat.FORMAT_HEADING_1),
                     actions = fakeActions,
                     onDismiss = { dismissed = true },
-                    hazeState = HazeState(),
                 )
             }
         }
 
         composeRule.onNodeWithText("Paragraph").assertIsDisplayed()
         composeRule.onNodeWithText("Heading 1").assertIsDisplayed()
-        composeRule.onNodeWithText("Heading 6").assertIsDisplayed()
+        // The menu height is capped so it anchors near the overflow button; the last entry
+        // scrolls into view rather than being shown at once.
+        composeRule.onNodeWithText("Heading 6").performScrollTo().assertIsDisplayed()
 
-        composeRule.onNodeWithText("Heading 3").performClick()
+        composeRule.onNodeWithText("Heading 3").performScrollTo().performClick()
         assert(AztecTextFormat.FORMAT_HEADING_3 in recordedToggles)
         assert(dismissed)
     }

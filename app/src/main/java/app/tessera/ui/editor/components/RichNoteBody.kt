@@ -4,19 +4,28 @@ import android.os.Handler
 import android.os.Looper
 import android.text.Editable
 import android.text.Spannable
+import android.text.Spanned
 import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -24,17 +33,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
 import app.tessera.R
-import app.tessera.core.text.applyFirstLineSerifH1
+import app.tessera.core.text.applySerifHeadingSpans
 import org.wordpress.aztec.Aztec
 import org.wordpress.aztec.AztecText
 import org.wordpress.aztec.AztecTextFormat
 import org.wordpress.aztec.ITextFormat
 import org.wordpress.aztec.plugins.IToolbarButton
 import org.wordpress.aztec.source.SourceViewEditText
+import org.wordpress.aztec.spans.AztecPreformatSpan
 import org.wordpress.aztec.spans.AztecTaskListSpan
 import org.wordpress.aztec.spans.AztecUnorderedListSpan
 import org.wordpress.aztec.toolbar.IAztecToolbar
 import org.wordpress.aztec.toolbar.IAztecToolbarClickListener
+import kotlinx.coroutines.launch
 
 /** Toolbar-facing actions applied to the AztecText current selection. */
 interface RichBodyActions {
@@ -62,7 +73,7 @@ interface RichBodyActions {
     /** Toggle a block quote on the current block(s). */
     fun toggleQuote() {}
 
-    /** Toggle inline monospace code on the current selection. */
+    /** Toggle a monospace code block (preformatted) on the current block(s). */
     fun toggleCode() {}
 
     /** Insert a horizontal rule (divider) at the cursor. */
@@ -106,6 +117,7 @@ private val EditorQueryFormats = listOf(
     AztecTextFormat.FORMAT_ORDERED_LIST,
     AztecTextFormat.FORMAT_QUOTE,
     AztecTextFormat.FORMAT_CODE,
+    AztecTextFormat.FORMAT_PREFORMAT,
 )
 
 /**
@@ -116,10 +128,120 @@ private val EditorQueryFormats = listOf(
  * checkbox tap. Triggering it once at load time stabilises line metrics so toggling
  * later doesn't visibly resize the line.
  */
+/**
+ * Caret line rectangle in the editor's local (and therefore the AndroidView node's) coordinate
+ * space, padding-corrected to where the line is actually drawn. Returned to the Compose
+ * bring-into-view machinery so the host verticalScroll can pull the line above the keyboard.
+ */
+private fun caretRectOf(editor: AztecText): Rect? {
+    val layout = editor.layout ?: return null
+    val offset = editor.selectionStart.coerceIn(0, editor.length())
+    val line = layout.getLineForOffset(offset)
+    val x = layout.getPrimaryHorizontal(offset)
+    val top = (layout.getLineTop(line) + editor.paddingTop).toFloat()
+    val bottom = (layout.getLineBottom(line) + editor.paddingTop).toFloat()
+    return Rect(x, top, x + 1f, bottom)
+}
+
+/**
+ * Swap Aztec's stock [AztecPreformatSpan] (which rounds only the first line's top corners,
+ * leaving single-line code blocks square at the bottom) for [TesseraPreformatSpan], which
+ * paints a fully rounded background. Run after every (re)load and after toggling code so a
+ * freshly-created block renders correctly.
+ */
+private fun replacePreformatSpans(editor: AztecText, bgArgb: Int, textArgb: Int) {
+    val editable = editor.editableText ?: return
+    val spans = editable.getSpans(0, editable.length, AztecPreformatSpan::class.java)
+    spans.forEach { span ->
+        val start = editable.getSpanStart(span)
+        val end = editable.getSpanEnd(span)
+        val flags = editable.getSpanFlags(span)
+        if (start < 0 || end < 0) return@forEach
+        // Re-style with the live theme palette (the XML attrs bake in the static brand, which the
+        // AndroidView's Activity-themed context can't override with the Compose palette).
+        val themedStyle = span.preformatStyle.copy(
+            preformatBackground = bgArgb,
+            preformatColor = textArgb,
+        )
+        editable.removeSpan(span)
+        val replacement = TesseraPreformatSpan(
+            nestingLevel = span.nestingLevel,
+            attributes = span.attributes,
+            preformatStyle = themedStyle,
+        )
+        editable.setSpan(replacement, start, end, flags)
+    }
+}
+
+/**
+ * Re-style block quotes with the active theme palette (bar/text/fill). Like the preformat and
+ * bullet re-styling, this overrides the static brand colors baked into the layout XML so the
+ * editor follows the chosen color palette.
+ */
+private fun replaceQuoteSpans(editor: AztecText, barArgb: Int, textArgb: Int, fillArgb: Int) {
+    val editable = editor.editableText ?: return
+    val spans = editable.getSpans(0, editable.length, org.wordpress.aztec.spans.AztecQuoteSpan::class.java)
+    spans.forEach { span ->
+        val start = editable.getSpanStart(span)
+        val end = editable.getSpanEnd(span)
+        val flags = editable.getSpanFlags(span)
+        if (start < 0 || end < 0) return@forEach
+        val themedStyle = span.quoteStyle.copy(
+            quoteColor = barArgb,
+            quoteTextColor = textArgb,
+            quoteBackground = fillArgb,
+        )
+        editable.removeSpan(span)
+        val replacement = org.wordpress.aztec.spans.AztecQuoteSpan(
+            nestingLevel = span.nestingLevel,
+            attributes = span.attributes,
+            quoteStyle = themedStyle,
+        )
+        editable.setSpan(replacement, start, end, flags)
+    }
+}
+
+/**
+ * True while the IME holds an active composing region (the underlined, not-yet-committed word).
+ * Android marks that region with a span carrying the [Spanned.SPAN_COMPOSING] flag. We use this to
+ * avoid reflowing the serif heading overlay mid-composition, which can surface a half-laid-out
+ * frame on the fast release render pipeline.
+ */
+private fun hasComposingRegion(spannable: Spannable): Boolean =
+    spannable.getSpans(0, spannable.length, Any::class.java)
+        .any { (spannable.getSpanFlags(it) and Spanned.SPAN_COMPOSING) != 0 }
+
 private fun primeTaskListSpans(editor: AztecText) {
     val editable = editor.editableText ?: return
     val spans = editable.getSpans(0, editable.length, AztecTaskListSpan::class.java)
+    // Prime line metrics only. The checkbox glyph is a drawable resource
+    // (ic_checkbox_checked/_unchecked, brand-colored + day/night) — it can't follow the Compose
+    // palette because Aztec loads it with a null theme and recreates the span on every tap.
     spans.forEach { it.refresh() }
+}
+
+/**
+ * Swap Aztec's ordered-list spans for [TesseraOrderedListSpan] (numbers in Inter Medium) and
+ * re-style the marker color from the live palette (the "1." markers paint with
+ * listStyle.indicatorColor, which the XML bakes to the static brand).
+ */
+private fun replaceOrderedListSpans(editor: AztecText, indicatorArgb: Int) {
+    val editable = editor.editableText ?: return
+    val spans = editable.getSpans(0, editable.length, org.wordpress.aztec.spans.AztecOrderedListSpan::class.java)
+    spans.forEach { span ->
+        val start = editable.getSpanStart(span)
+        val end = editable.getSpanEnd(span)
+        val flags = editable.getSpanFlags(span)
+        if (start < 0 || end < 0) return@forEach
+        val themedStyle = span.listStyle.copy(indicatorColor = indicatorArgb)
+        editable.removeSpan(span)
+        editable.setSpan(
+            TesseraOrderedListSpan(span.nestingLevel, span.attributes, themedStyle),
+            start,
+            end,
+            flags,
+        )
+    }
 }
 
 /**
@@ -128,20 +250,21 @@ private fun primeTaskListSpans(editor: AztecText) {
  * filled circle of the requested radius — lets us size the dot independently of the
  * surrounding text.
  */
-private fun replaceBulletSpans(editor: AztecText, bulletRadiusPx: Float) {
+private fun replaceBulletSpans(editor: AztecText, bulletRadiusPx: Float, bulletArgb: Int) {
     val editable = editor.editableText ?: return
     val spans = editable.getSpans(0, editable.length, AztecUnorderedListSpan::class.java)
     spans.forEach { span ->
-        if (span is TesseraBulletListSpan) return@forEach
         val start = editable.getSpanStart(span)
         val end = editable.getSpanEnd(span)
         val flags = editable.getSpanFlags(span)
         if (start < 0 || end < 0) return@forEach
+        // Re-style the bullet with the live palette color (XML bakes in the static brand).
+        val themedStyle = span.listStyle.copy(indicatorColor = bulletArgb)
         editable.removeSpan(span)
         val replacement = TesseraBulletListSpan(
             nestingLevel = span.nestingLevel,
             attributes = span.attributes,
-            listStyle = span.listStyle,
+            listStyle = themedStyle,
             bulletRadiusPx = bulletRadiusPx,
         )
         editable.setSpan(replacement, start, end, flags)
@@ -172,6 +295,7 @@ private object NoOpAztecToolbarClickListener : IAztecToolbarClickListener {
     override fun onToolbarMediaButtonClicked(): Boolean = false
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RichNoteBody(
     html: String,
@@ -183,6 +307,14 @@ fun RichNoteBody(
     onFocusChanged: (Boolean) -> Unit = {},
     onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit = {},
     editable: Boolean = true,
+    /**
+     * When true the editor fills its (bounded) height and scrolls internally instead of growing to
+     * wrap its content. Used by the single-editor fast path so the text-selection toolbar/handles —
+     * which Android positions relative to the editor View's bounds — stay within the visible editor
+     * region and no longer spill over the top bar or the keyboard. The table path keeps this false
+     * because its blocks are laid out inside an outer Compose scroll.
+     */
+    scrollable: Boolean = false,
 ) {
     if (LocalInspectionMode.current) {
         // Aztec cannot instantiate in Compose preview — show a placeholder
@@ -203,6 +335,23 @@ fun RichNoteBody(
     val selectionHighlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
     val density = LocalDensity.current
     val bulletRadiusPx = with(density) { 5.dp.toPx() }
+    // Block-element accent colors pulled from the active Material3 palette (the layout XML bakes in
+    // the static brand, which the Activity-themed AndroidView can't override with the live palette).
+    val codeBgArgb = MaterialTheme.colorScheme.surfaceContainerHigh.toArgb()
+    val codeTextArgb = MaterialTheme.colorScheme.onSurface.toArgb()
+    val bulletArgb = MaterialTheme.colorScheme.primary.toArgb()
+    val checkboxTickArgb = MaterialTheme.colorScheme.onPrimary.toArgb()
+    // Task-list checkbox is a drawable Aztec loads with a null theme (static colors only) and its
+    // span is recreated on every tap — so it can't be re-styled like the other blocks. Instead we
+    // intercept the drawable via a wrapped context and repaint it from this live-updated holder.
+    val checkboxPalette = remember { CheckboxPalette() }
+    checkboxPalette.boxColor = bulletArgb
+    checkboxPalette.tickColor = checkboxTickArgb
+    val checkboxCornerPx = with(density) { 4.dp.toPx() }
+    val checkboxStrokePx = with(density) { 2.dp.toPx() }
+    val quoteBarArgb = MaterialTheme.colorScheme.primary.toArgb()
+    val quoteTextArgb = MaterialTheme.colorScheme.onSurface.toArgb()
+    val quoteFillArgb = MaterialTheme.colorScheme.primary.toArgb()
     // Tessera body type: Inter 15sp with 4dp extra leading (spec §6).
     val bodyTextSizeSp = 15f
     val lineSpacingExtraPx = with(density) { 4.dp.toPx() }
@@ -211,6 +360,20 @@ fun RichNoteBody(
     // runnables when the editor leaves composition (e.g. back-nav during typing).
     val handler = remember { Handler(Looper.getMainLooper()) }
     val editorRef = remember { mutableStateOf<AztecText?>(null) }
+    // Re-apply block-element theming whenever the palette colors change (e.g. the user switches
+    // palette in Settings). The factory captures colors once and `update` only re-styles on a
+    // content change, so without this a live palette switch would leave the old accent colors.
+    LaunchedEffect(
+        editorRef.value, bulletArgb, checkboxTickArgb, codeBgArgb, codeTextArgb, quoteBarArgb, quoteTextArgb, quoteFillArgb,
+    ) {
+        val editor = editorRef.value ?: return@LaunchedEffect
+        replaceBulletSpans(editor, bulletRadiusPx, bulletArgb)
+        replacePreformatSpans(editor, codeBgArgb, codeTextArgb)
+        replaceQuoteSpans(editor, quoteBarArgb, quoteTextArgb, quoteFillArgb)
+        replaceOrderedListSpans(editor, bulletArgb)
+        // The checkbox drawable reads checkboxPalette live; just force a repaint to pick up changes.
+        editor.invalidate()
+    }
     // Tracks the markdown most recently *loaded into* the editor (initial load + each
     // post-debounce flush). MUST NOT be a Compose State — writing to it would trigger an
     // additional recomposition that races the slower collectAsState→state.content path,
@@ -223,6 +386,22 @@ fun RichNoteBody(
     val currentHtmlToMarkdown by rememberUpdatedState(htmlToMarkdown)
     val currentOnFocusChanged by rememberUpdatedState(onFocusChanged)
     val currentOnActiveFormatsChanged by rememberUpdatedState(onActiveFormatsChanged)
+
+    // Keeps the caret line riding above the soft keyboard. The IME inset is read *here* (not in
+    // the screen) so only this editor subtree recomposes as the keyboard animates — the top bar
+    // stays out of that recomposition path. On each inset change we ask the host verticalScroll
+    // to bring the current caret line into view via the Compose-native bring-into-view machinery.
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val caretScope = rememberCoroutineScope()
+    val imeBottomPx = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(imeBottomPx) {
+        if (imeBottomPx <= 0) return@LaunchedEffect
+        val editor = editorRef.value ?: return@LaunchedEffect
+        if (!editor.isFocused) return@LaunchedEffect
+        val rect = caretRectOf(editor) ?: return@LaunchedEffect
+        runCatching { bringIntoViewRequester.bringIntoView(rect) }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             handler.removeCallbacksAndMessages(null)
@@ -246,17 +425,34 @@ fun RichNoteBody(
     }
 
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.bringIntoViewRequester(bringIntoViewRequester),
         factory = { context ->
             var debounceRunnable: Runnable? = null
             var serifRunnable: Runnable? = null
 
-            val inflater = LayoutInflater.from(context)
+            // Inflate from a context whose Resources swap Aztec's static checkbox drawable for our
+            // palette-driven one. Aztec builds task-list spans from this context, so their checkbox
+            // resolves to ours; checkboxPalette is read live at draw time.
+            val themedContext = checkboxThemedContext(context, checkboxPalette, checkboxCornerPx, checkboxStrokePx)
+            // cloneInContext binds the inflater (and every view it inflates, incl. the AztecText's
+            // own context) to themedContext. LayoutInflater.from(wrapper) alone would delegate
+            // getSystemService to the base context and yield a base-bound inflater.
+            val inflater = LayoutInflater.from(context).cloneInContext(themedContext)
             val editor = inflater.inflate(R.layout.rich_note_body, null, false) as AztecText
             editor.layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+                // Fast path fills the viewport and scrolls internally so the OS keeps the
+                // selection toolbar/handles inside the visible editor; the block-stack (table)
+                // path wraps its content and is scrolled by the outer Compose scroll.
+                if (scrollable) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT,
             )
+            if (scrollable) {
+                // A height-bounded multiline EditText scrolls its own content and auto-keeps the
+                // caret visible (incl. when the height shrinks for the keyboard), so the outer
+                // BringIntoView machinery isn't needed here.
+                editor.isVerticalScrollBarEnabled = true
+                editor.setVerticalFadingEdgeEnabled(false)
+            }
 
             // Apply theme-aware styling
             editor.setTextColor(textColor.toArgb())
@@ -279,11 +475,22 @@ fun RichNoteBody(
                 NoOpAztecToolbarClickListener,
             )
 
-            // Re-apply the Instrument Serif display style to the first H1. Aztec's
-            // fromHtml round-trip rebuilds spans, so this must run after every (re)load
-            // and after edits that may shift the H1 (debounced via the TextWatcher).
-            fun reapplySerifH1() {
-                (editor.text as? Spannable)?.let { applyFirstLineSerifH1(it, context) }
+            // Re-apply the Playfair serif overlay to every H1/H2. Aztec's fromHtml round-trip
+            // rebuilds spans, so this must run after every (re)load and after edits that may
+            // shift a heading (debounced via the TextWatcher).
+            //
+            // [skipWhileComposing] guards the typing-driven path: while the IME holds an active
+            // composing region (mid-word suggestion on a heading line), re-applying the serif
+            // overlay forces a layout reflow that, on the fast release render pipeline, can
+            // surface a half-reflowed frame (lines briefly drawn at the wrong heading size). We
+            // defer until the composition commits — the afterTextChanged that fires on commit
+            // schedules another reapply, which then runs with no composing region. Load and
+            // toolbar-toggle callers pass false: there's no composition then, and the overlay
+            // must land synchronously.
+            fun reapplySerifHeadings(skipWhileComposing: Boolean = false) {
+                val spannable = editor.text as? Spannable ?: return
+                if (skipWhileComposing && hasComposingRegion(spannable)) return
+                applySerifHeadingSpans(spannable, context)
             }
 
             // Load initial HTML AFTER Aztec.with so plugins/history see it as the starting state.
@@ -293,8 +500,11 @@ fun RichNoteBody(
             // to the post-tap state — otherwise the first checkbox toggle causes a visible
             // one-time line-height shift when Aztec's `refresh()` reinstalls the span.
             primeTaskListSpans(editor)
-            replaceBulletSpans(editor, bulletRadiusPx)
-            reapplySerifH1()
+            replaceBulletSpans(editor, bulletRadiusPx, bulletArgb)
+            replacePreformatSpans(editor, codeBgArgb, codeTextArgb)
+            replaceQuoteSpans(editor, quoteBarArgb, quoteTextArgb, quoteFillArgb)
+            replaceOrderedListSpans(editor, bulletArgb)
+            reapplySerifHeadings()
             editorRef.value = editor
 
             editor.isFocusable = editable
@@ -328,11 +538,11 @@ fun RichNoteBody(
                 handler.postDelayed(runnable, DebounceMs)
             }
 
-            // Cheap span-only re-apply (no HTML round-trip) so the serif H1 follows the
+            // Cheap span-only re-apply (no HTML round-trip) so the serif headings follow the
             // heading as the user edits / moves it. 50ms keeps it off the typing hot path.
             fun scheduleSerifReapply() {
                 serifRunnable?.let { handler.removeCallbacks(it) }
-                val runnable = Runnable { reapplySerifH1() }
+                val runnable = Runnable { reapplySerifHeadings(skipWhileComposing = true) }
                 serifRunnable = runnable
                 handler.postDelayed(runnable, SerifReapplyMs)
             }
@@ -348,6 +558,16 @@ fun RichNoteBody(
                 currentOnActiveFormatsChanged(active)
             }
 
+            // Pull the caret line above the keyboard as the user types or moves the cursor. Posted
+            // so the text layout reflects the just-applied edit before we measure the caret rect.
+            fun bringCaretIntoView() {
+                editor.post {
+                    if (!editor.isFocused) return@post
+                    val rect = caretRectOf(editor) ?: return@post
+                    caretScope.launch { runCatching { bringIntoViewRequester.bringIntoView(rect) } }
+                }
+            }
+
             editor.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
@@ -355,6 +575,7 @@ fun RichNoteBody(
                     scheduleHtmlFlush()
                     scheduleSerifReapply()
                     pushActiveFormats()
+                    bringCaretIntoView()
                 }
             })
 
@@ -367,15 +588,23 @@ fun RichNoteBody(
             // Keep the toolbar's active-format highlight in sync as the caret moves. The
             // initial fromHtml above fires before this listener is attached, so seed the
             // toolbar once here too.
-            (editor as? FlickerlessAztecText)?.onCaretSelectionChanged = { _, _ -> pushActiveFormats() }
+            (editor as? FlickerlessAztecText)?.onCaretSelectionChanged = { _, _ ->
+                pushActiveFormats()
+                bringCaretIntoView()
+            }
             pushActiveFormats()
 
             // Expose formatting actions to the toolbar
             onActionsReady(object : RichBodyActions {
-                private inline fun withPreservedSelection(block: () -> Unit) {
+                private inline fun withPreservedSelection(rebuildLayout: Boolean = false, block: () -> Unit) {
                     val start = editor.selectionStart
                     val end = editor.selectionEnd
                     block()
+                    // Block-level toggles (heading/list/quote/code/paragraph) change line height.
+                    // The lightweight refresh Aztec runs on toggle leaves the lines below at stale
+                    // Y positions (they render overlapping), so force a full layout rebuild here.
+                    // Inline toggles don't change metrics and skip this to stay flicker-free.
+                    if (rebuildLayout) (editor as? FlickerlessAztecText)?.rebuildLayout()
                     if (start in 0..editor.editableText.length &&
                         end in 0..editor.editableText.length &&
                         start != end
@@ -383,10 +612,15 @@ fun RichNoteBody(
                         editor.setSelection(start, end)
                     }
                     // Format toggles change spans without moving the caret or changing text,
-                    // so neither the selection nor the TextWatcher fires. Refresh the toolbar
-                    // highlight AND flush the new markdown synchronously — otherwise the
-                    // formatting never reaches state.content and is lost on exit (the
-                    // dispose-time flush runs too late, after viewModel.flush() on back-nav).
+                    // so neither the selection nor the TextWatcher fires. That also means
+                    // scheduleSerifReapply() (driven by afterTextChanged) never runs, so a
+                    // heading toggled via the toolbar would keep Aztec's native heading metrics
+                    // instead of the clamped serif H1 — and, worse, a re-toggle would stack the
+                    // multiplicative AztecHeadingSpan on a stale absolute size span, blowing the
+                    // line up far past 26sp. Re-sync the serif overlay synchronously here so the
+                    // first H1 always renders at the intended size/typeface and removing a heading
+                    // strips its size span. Cheap span-only op (no HTML round-trip).
+                    reapplySerifHeadings()
                     pushActiveFormats()
                     flushHtmlNow()
                 }
@@ -397,7 +631,7 @@ fun RichNoteBody(
                 // heading. Make it a real toggle: when the heading is already active at the
                 // selection, switch the block back to a paragraph (the only path Aztec
                 // exposes for removing a heading span).
-                private fun toggleHeadingFormat(format: AztecTextFormat) = withPreservedSelection {
+                private fun toggleHeadingFormat(format: AztecTextFormat) = withPreservedSelection(rebuildLayout = true) {
                     if (editor.contains(format, editor.selectionStart, editor.selectionEnd)) {
                         editor.toggleFormatting(AztecTextFormat.FORMAT_PARAGRAPH)
                     } else {
@@ -408,20 +642,20 @@ fun RichNoteBody(
                 override fun toggleBold() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_BOLD) }
                 override fun toggleItalic() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_ITALIC) }
                 override fun toggleStrikethrough() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_STRIKETHROUGH) }
-                override fun toggleParagraph() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_PARAGRAPH) }
+                override fun toggleParagraph() = withPreservedSelection(rebuildLayout = true) { editor.toggleFormatting(AztecTextFormat.FORMAT_PARAGRAPH) }
                 override fun toggleHeading1() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_1)
                 override fun toggleHeading2() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_2)
                 override fun toggleHeading3() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_3)
                 override fun toggleHeading4() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_4)
                 override fun toggleHeading5() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_5)
                 override fun toggleHeading6() = toggleHeadingFormat(AztecTextFormat.FORMAT_HEADING_6)
-                override fun toggleBulletList() = withPreservedSelection {
+                override fun toggleBulletList() = withPreservedSelection(rebuildLayout = true) {
                     editor.toggleFormatting(AztecTextFormat.FORMAT_UNORDERED_LIST)
                     // Aztec creates a fresh AztecUnorderedListSpan when toggling — swap it
                     // for our custom span so the larger circle bullet keeps rendering.
-                    replaceBulletSpans(editor, bulletRadiusPx)
+                    replaceBulletSpans(editor, bulletRadiusPx, bulletArgb)
                 }
-                override fun toggleTaskList() = withPreservedSelection {
+                override fun toggleTaskList() = withPreservedSelection(rebuildLayout = true) {
                     editor.toggleFormatting(AztecTextFormat.FORMAT_TASK_LIST)
                     // Prime the freshly-created task-list span so its leading verticalPadding
                     // is applied immediately — otherwise the first checkbox tap triggers
@@ -429,14 +663,29 @@ fun RichNoteBody(
                     primeTaskListSpans(editor)
                 }
                 override fun toggleUnderline() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_UNDERLINE) }
-                override fun toggleOrderedList() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_ORDERED_LIST) }
-                override fun toggleQuote() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_QUOTE) }
-                override fun toggleCode() = withPreservedSelection { editor.toggleFormatting(AztecTextFormat.FORMAT_CODE) }
+                override fun toggleOrderedList() = withPreservedSelection(rebuildLayout = true) {
+                    editor.toggleFormatting(AztecTextFormat.FORMAT_ORDERED_LIST)
+                    replaceOrderedListSpans(editor, bulletArgb)
+                }
+                override fun toggleQuote() = withPreservedSelection(rebuildLayout = true) {
+                    editor.toggleFormatting(AztecTextFormat.FORMAT_QUOTE)
+                    // Re-style the freshly-created quote span with the live palette colors.
+                    replaceQuoteSpans(editor, quoteBarArgb, quoteTextArgb, quoteFillArgb)
+                }
+                override fun toggleCode() = withPreservedSelection(rebuildLayout = true) {
+                    editor.toggleFormatting(AztecTextFormat.FORMAT_PREFORMAT)
+                    // Aztec creates a stock AztecPreformatSpan on toggle — swap it for our span
+                    // so the freshly-created block rounds all corners (incl. single-line).
+                    replacePreformatSpans(editor, codeBgArgb, codeTextArgb)
+                }
                 override fun insertHorizontalRule() {
                     editor.toggleFormatting(AztecTextFormat.FORMAT_HORIZONTAL_RULE)
                 }
 
                 override fun focusBody() {
+                    // Read-only (Viewer) editors are non-focusable; never grab focus or surface the
+                    // IME for them, even if a caller invokes this (e.g. a stray tap target).
+                    if (!editor.isFocusable) return
                     editor.requestFocus()
                     editor.setSelection(editor.length())
                     val imm = editor.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
@@ -458,11 +707,25 @@ fun RichNoteBody(
             // flush) — NOT against `editor.toHtml()` — means a mid-typing recomposition
             // can't race the unflushed Aztec state and wipe the user's keystrokes.
             if (markdownKey != lastLoadedMarkdownRef[0]) {
-                editor.fromHtml(html)
-                primeTaskListSpans(editor)
-                replaceBulletSpans(editor, bulletRadiusPx)
-                (editor.text as? Spannable)?.let { applyFirstLineSerifH1(it, editor.context) }
-                lastLoadedMarkdownRef[0] = markdownKey
+                // Guard against clobbering unflushed local edits. The flush is debounced
+                // (300ms), so within that window `state.content` (the source of `markdownKey`)
+                // still holds the pre-edit text. If an external snapshot — e.g. the editor
+                // ViewModel's applyRemoteIfIdle, which can fire while `hasLocalEdits` is still
+                // false — pushes a different `markdownKey` during this window, reloading would
+                // wipe the in-progress keystroke (a just-deleted character reappearing). When
+                // the editor's live content no longer matches what we last loaded, a flush is
+                // still pending and will reconcile state, so skip the reload entirely.
+                val live = currentHtmlToMarkdown(editor.toHtml())
+                if (live == lastLoadedMarkdownRef[0]) {
+                    editor.fromHtml(html)
+                    primeTaskListSpans(editor)
+                    replaceBulletSpans(editor, bulletRadiusPx, bulletArgb)
+                    replacePreformatSpans(editor, codeBgArgb, codeTextArgb)
+                    replaceQuoteSpans(editor, quoteBarArgb, quoteTextArgb, quoteFillArgb)
+                    replaceOrderedListSpans(editor, bulletArgb)
+                    (editor.text as? Spannable)?.let { applySerifHeadingSpans(it, editor.context) }
+                    lastLoadedMarkdownRef[0] = markdownKey
+                }
             }
         },
     )

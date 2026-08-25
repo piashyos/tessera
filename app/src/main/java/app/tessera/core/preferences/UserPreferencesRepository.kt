@@ -3,6 +3,7 @@ package app.tessera.core.preferences
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -17,6 +18,8 @@ import javax.inject.Singleton
 private val Context.userPrefsDataStore by preferencesDataStore(name = "user_prefs")
 
 private val KEY_THEME = stringPreferencesKey("theme_mode")
+private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+private val KEY_PALETTE = stringPreferencesKey("theme_palette")
 private val KEY_LANG = stringPreferencesKey("language_tag")
 private val KEY_VIEW_MODE = stringPreferencesKey("notes_view_mode")
 private val KEY_RECENT_SEARCHES = stringPreferencesKey("recent_searches")
@@ -34,9 +37,27 @@ class UserPreferencesRepository @Inject constructor(
     private var lastThemeMode: ThemeMode = ThemeMode.AUTO
     override val cachedThemeMode: ThemeMode get() = lastThemeMode
 
+    @Volatile
+    private var lastDynamicColor: Boolean = true
+    override val cachedDynamicColor: Boolean get() = lastDynamicColor
+
+    @Volatile
+    private var lastPalette: ThemePalette = ThemePalette.Default
+    override val cachedThemePalette: ThemePalette get() = lastPalette
+
     override val themeMode: Flow<ThemeMode> = store.data.map { p ->
-        p[KEY_THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.AUTO
+        parseThemeMode(p[KEY_THEME])
     }.onEach { lastThemeMode = it }
+
+    override val dynamicColor: Flow<Boolean> = store.data.map { p ->
+        // No stored flag yet (fresh install or upgrade from the old combined ThemeMode): default
+        // on, except when the legacy mode was an explicit *_STATIC choice (dynamic deliberately off).
+        p[KEY_DYNAMIC_COLOR] ?: legacyDynamicDefault(p[KEY_THEME])
+    }.onEach { lastDynamicColor = it }
+
+    override val themePalette: Flow<ThemePalette> = store.data.map { p ->
+        ThemePalette.fromName(p[KEY_PALETTE])
+    }.onEach { lastPalette = it }
 
     /** Empty string = follow system default. */
     override val languageTag: Flow<String> = store.data.map { it[KEY_LANG] ?: "" }
@@ -54,6 +75,14 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun setThemeMode(mode: ThemeMode) {
         store.edit { it[KEY_THEME] = mode.name }
+    }
+
+    override suspend fun setDynamicColor(enabled: Boolean) {
+        store.edit { it[KEY_DYNAMIC_COLOR] = enabled }
+    }
+
+    override suspend fun setThemePalette(palette: ThemePalette) {
+        store.edit { it[KEY_PALETTE] = palette.name }
     }
 
     override suspend fun setLanguageTag(tag: String) {
@@ -90,5 +119,21 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun clearRecentSearches() {
         store.edit { it.remove(KEY_RECENT_SEARCHES) }
+    }
+
+    /**
+     * Read the persisted theme, mapping the legacy combined values (which encoded dynamic color in
+     * the name) onto the light/dark-only [ThemeMode]. Dynamic color now lives in [KEY_DYNAMIC_COLOR].
+     */
+    private fun parseThemeMode(raw: String?): ThemeMode = when (raw) {
+        "AUTO" -> ThemeMode.AUTO
+        "LIGHT", "LIGHT_DYNAMIC", "LIGHT_STATIC" -> ThemeMode.LIGHT
+        "DARK", "DARK_DYNAMIC", "DARK_STATIC" -> ThemeMode.DARK
+        else -> ThemeMode.AUTO
+    }
+
+    private fun legacyDynamicDefault(rawTheme: String?): Boolean = when (rawTheme) {
+        "LIGHT_STATIC", "DARK_STATIC" -> false
+        else -> true
     }
 }

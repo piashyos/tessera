@@ -1,6 +1,7 @@
 package app.tessera.data.repository
 
 import app.tessera.core.util.Clock
+import app.tessera.data.local.Transactor
 import app.tessera.data.local.dao.NoteDao
 import app.tessera.data.local.dao.SharedMemberDao
 import app.tessera.data.local.dao.TagDao
@@ -26,6 +27,11 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+
+/** Runs merge blocks without a real DB transaction — fakes don't need (or have) one. */
+internal object PassThroughTransactor : Transactor {
+    override suspend fun <T> transaction(block: suspend () -> T): T = block()
+}
 
 class SyncRepositoryImplTest {
     private val uid = UserId("owner-1")
@@ -60,6 +66,7 @@ class SyncRepositoryImplTest {
         remoteShared: FakeRemoteSharedNotesDataSource = FakeRemoteSharedNotesDataSource(),
         clock: Clock = SyncTestClock(1000L),
     ) = SyncRepositoryImpl(
+        PassThroughTransactor,
         noteDao,
         tagDao,
         folderDao,
@@ -623,6 +630,8 @@ private class SyncFakeNoteDao : NoteDao {
     }
 
     override suspend fun getCurrentOwnerId(): String? = notes.values.firstOrNull { it.ownerId != null }?.ownerId
+
+    override suspend fun hasForeignNotes(uid: String): Boolean = false
 
     override suspend fun adoptLocalNotes(uid: String) {
         notes.entries.forEach { e ->

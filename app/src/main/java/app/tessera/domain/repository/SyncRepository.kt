@@ -8,6 +8,13 @@ interface SyncRepository {
     /** Push local pending changes for [uid], then pull and last-write-wins merge remote notes. */
     suspend fun syncNow(uid: UserId): Result<Unit>
 
+    /**
+     * Pushes only the local pending folders and notes for [uid] to the cloud (no pull/merge).
+     * Used to flush unsynced data to Firebase before a destructive local operation (e.g. clearing
+     * the cache on account switch) so nothing that exists only locally is lost.
+     */
+    suspend fun pushLocalChanges(uid: UserId): Result<Unit>
+
     /** Purge soft-deleted tombstones older than the retention window, locally and remotely. */
     suspend fun purgeTombstones(uid: UserId): Result<Unit>
 

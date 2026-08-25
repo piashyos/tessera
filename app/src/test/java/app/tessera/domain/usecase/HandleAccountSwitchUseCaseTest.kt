@@ -46,4 +46,8 @@ private class FakeAccountRepository(
     override suspend fun moveAllNotesTo(uid: UserId) = Unit
 
     override suspend fun deleteNotesOwnedBy(uid: UserId) = Unit
+
+    override suspend fun hasForeignData(uid: UserId): Boolean = false
+
+    override suspend fun clearLocalData() = Unit
 }

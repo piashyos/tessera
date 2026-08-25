@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
@@ -35,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -59,13 +61,12 @@ import app.tessera.core.ui.theme.TesseraMotion
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.components.EditorFormatBar
 import app.tessera.ui.editor.components.EditorMeta
-import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.components.RichNoteBody
 import app.tessera.ui.editor.components.TableBlockEditor
 import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
-import app.tessera.ui.notes.formatNoteDate
+import app.tessera.ui.notes.noteDateLabel
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Lock
@@ -136,7 +137,6 @@ fun NoteEditorScreen(
 
     val hazeState = remember { HazeState() }
     var tagPickerVisible by remember { mutableStateOf(false) }
-    var formatMenuVisible by remember { mutableStateOf(false) }
     var overflowVisible by remember { mutableStateOf(false) }
     var leaveConfirmVisible by remember { mutableStateOf(false) }
     var deleteForAllConfirmVisible by remember { mutableStateOf(false) }
@@ -168,47 +168,57 @@ fun NoteEditorScreen(
                         }
                     },
                     actions = {
+                        // Each action is wrapped in a stable `key` so that when one button toggles
+                        // (e.g. share state resolves and the delete button appears/disappears) Compose
+                        // keeps every other button's node identity instead of positionally reusing a
+                        // removed slot — which otherwise briefly morphs the overflow icon into the
+                        // trash icon on each recomposition while typing.
                         // Pinning is a content edit — viewers can't pin.
-                        if (state.canEditContent) {
-                            TesseraTopBarIconButton(
-                                onClick = { haptics.tick(); onTogglePin() },
-                                contentDescription = stringResource(
-                                    if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
-                                ),
-                                modifier = Modifier.testTag(UiTestTags.EditorPin),
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Pin,
-                                    contentDescription = null,
-                                    tint = if (state.isPinned) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.size(20.dp),
-                                )
+                        key("editor-action-pin") {
+                            if (state.canEditContent) {
+                                TesseraTopBarIconButton(
+                                    onClick = { haptics.tick(); onTogglePin() },
+                                    contentDescription = stringResource(
+                                        if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
+                                    ),
+                                    modifier = Modifier.testTag(UiTestTags.EditorPin),
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.Pin,
+                                        contentDescription = null,
+                                        tint = if (state.isPinned) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             }
                         }
                         // Trash deletes a private note directly. For shared notes, deletion is
                         // "delete for everyone" and lives in the overflow menu (owner/manager only).
-                        if (!state.isShared) {
-                            TesseraTopBarIconButton(
-                                onClick = { haptics.tick(); onDelete() },
-                                contentDescription = stringResource(R.string.editor_delete),
-                                modifier = Modifier.testTag(UiTestTags.EditorDelete),
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Trash2,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp),
-                                )
+                        key("editor-action-delete") {
+                            if (!state.isShared) {
+                                TesseraTopBarIconButton(
+                                    onClick = { haptics.tick(); onDelete() },
+                                    contentDescription = stringResource(R.string.editor_delete),
+                                    modifier = Modifier.testTag(UiTestTags.EditorDelete),
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.Trash2,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             }
                         }
                         val hasOverflow = state.canMakeShared || state.canManageAccess ||
                             state.canUnshare || state.canLeave || state.canDeleteForAll
-                        if (hasOverflow) {
-                            Box {
+                        key("editor-action-overflow") {
+                            if (hasOverflow) {
+                                Box {
                                 TesseraTopBarIconButton(
                                     onClick = { haptics.tick(); overflowVisible = true },
                                     contentDescription = stringResource(R.string.editor_more),
@@ -279,6 +289,7 @@ fun NoteEditorScreen(
                                     }
                                 }
                             }
+                            }
                         }
                     },
                 )
@@ -302,7 +313,6 @@ fun NoteEditorScreen(
                         EditorFormatBar(
                             actions = actions,
                             activeFormats = activeFormats,
-                            onOpenOverflow = { formatMenuVisible = true },
                         )
                     }
                 }
@@ -315,8 +325,8 @@ fun NoteEditorScreen(
                     .hazeSource(hazeState),
             ) {
                 EditorMeta(
-                    folderBreadcrumb = emptyList(),
-                    relativeDate = if (state.updatedAt > 0L) formatNoteDate(state.updatedAt) else "",
+                    folderBreadcrumb = state.folderBreadcrumb,
+                    relativeDate = if (state.updatedAt > 0L) noteDateLabel(state.updatedAt) else "",
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
@@ -336,14 +346,67 @@ fun NoteEditorScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 )
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
-                ) {
+                // Read-only notes keep the outer Compose scroll: a non-editable AztecText doesn't
+                // scroll its own content, and viewers can't select text so the selection-overlap
+                // issue the internal-scroll path fixes doesn't apply to them.
+                if (hasTable || state.isReadOnly) {
+                    // BLOCK-STACK / READ-ONLY PATH — text blocks interleaved with tables are multiple
+                    // Views, so they share one outer Compose scroll (each editor stays wrap-content).
+                    BoxWithConstraints(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    ) {
+                        // The tap target below the text must cover ALL visible empty space so a tap
+                        // anywhere in the body — even far below the last line — focuses the editor
+                        // and opens the keyboard. Size it to the viewport height.
+                        val viewportHeight = maxHeight
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 20.dp),
+                        ) {
+                            EditorBody(
+                                hasTable = hasTable,
+                                blocks = blocks,
+                                initialHtml = initialHtml,
+                                content = state.content,
+                                converter = converter,
+                                onContentChange = onContentChange,
+                                onActionsReady = { actions = wrapActions(it) },
+                                onBlockFocused = { lastFocusedBlock = it },
+                                onActiveFormatsChanged = { activeFormats = it },
+                                editable = !state.isReadOnly,
+                            )
+
+                            // Tap target below the content forwards focus to the editor body and
+                            // surfaces the IME, so users can resume typing past the visible text.
+                            // Read-only viewers can't edit, so it must NOT exist for them — otherwise
+                            // tapping the empty area would call focusBody() and force the keyboard open.
+                            if (!state.isReadOnly) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(viewportHeight)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = { actions?.focusBody() },
+                                        ),
+                                )
+                            }
+                            Box(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars))
+                        }
+                    }
+                } else {
+                    // FAST PATH — one editor bounded to the remaining space (between the divider and
+                    // the format bar / keyboard) that scrolls internally. weight(1f) takes exactly
+                    // the leftover height so the editor's bottom aligns with the bar/keyboard and
+                    // the OS keeps text-selection UI inside this region. Empty space below the text
+                    // is part of the editor View, so tapping it already focuses the editor.
                     EditorBody(
-                        hasTable = hasTable,
+                        hasTable = false,
                         blocks = blocks,
                         initialHtml = initialHtml,
                         content = state.content,
@@ -353,35 +416,22 @@ fun NoteEditorScreen(
                         onBlockFocused = { lastFocusedBlock = it },
                         onActiveFormatsChanged = { activeFormats = it },
                         editable = !state.isReadOnly,
-                    )
-
-                    // Tap target below the content forwards focus to the editor body and
-                    // surfaces the IME, so users can resume typing past the visible text.
-                    Box(
                         modifier = Modifier
+                            .weight(1f)
                             .fillMaxWidth()
-                            .height(200.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = { actions?.focusBody() },
-                            ),
+                            .then(
+                                // Keyboard hidden: keep the editor above the nav bar. Keyboard up:
+                                // the format bar already sits above the IME, so no extra inset.
+                                if (!imeVisible) {
+                                    Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .padding(horizontal = 20.dp),
                     )
-                    Box(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars))
                 }
             }
-        }
-
-        // Overflow format menu (headings 3–6 / paragraph) — anchored as its own popup.
-        val currentActions = actions
-        if (currentActions != null) {
-            MarkdownFormatMenu(
-                visible = formatMenuVisible,
-                activeFormats = activeFormats,
-                actions = currentActions,
-                onDismiss = { formatMenuVisible = false },
-                hazeState = hazeState,
-            )
         }
 
         // Tag picker popup — drawn on top of everything.
@@ -508,10 +558,14 @@ private fun EditorBody(
     onActionsReady: (RichBodyActions) -> Unit,
     onBlockFocused: (Int) -> Unit,
     onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit,
+    modifier: Modifier = Modifier,
     editable: Boolean = true,
 ) {
     if (!hasTable) {
-        // FAST PATH — preserves behavior for notes without tables (the majority).
+        // FAST PATH — single editor that fills the viewport and scrolls internally. Keeping the
+        // editor bounded (rather than one giant wrap-content View inside the outer scroll) keeps
+        // the OS text-selection toolbar/handles within the visible editor instead of spilling
+        // over the top bar or the keyboard.
         RichNoteBody(
             html = initialHtml,
             markdownKey = content,
@@ -521,7 +575,8 @@ private fun EditorBody(
             onFocusChanged = { if (it) onBlockFocused(0) },
             onActiveFormatsChanged = onActiveFormatsChanged,
             editable = editable,
-            modifier = Modifier.fillMaxWidth(),
+            scrollable = true,
+            modifier = modifier.fillMaxWidth(),
         )
         return
     }

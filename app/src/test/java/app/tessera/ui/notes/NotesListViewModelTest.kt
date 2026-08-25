@@ -407,16 +407,30 @@ private class FakeNotesRepository(
 
 private class FakeUserPreferences : app.tessera.core.preferences.UserPreferences {
     private val theme = MutableStateFlow(app.tessera.core.preferences.ThemeMode.AUTO)
+    private val dynamic = MutableStateFlow(true)
+    private val palette = MutableStateFlow(app.tessera.core.preferences.ThemePalette.Default)
     private val lang = MutableStateFlow("")
     private val viewMode = MutableStateFlow(NotesViewMode.List)
     private val recent = MutableStateFlow<List<String>>(emptyList())
     override val themeMode: Flow<app.tessera.core.preferences.ThemeMode> get() = theme
     override val cachedThemeMode: app.tessera.core.preferences.ThemeMode get() = theme.value
+    override val dynamicColor: Flow<Boolean> get() = dynamic
+    override val cachedDynamicColor: Boolean get() = dynamic.value
+    override val themePalette: Flow<app.tessera.core.preferences.ThemePalette> get() = palette
+    override val cachedThemePalette: app.tessera.core.preferences.ThemePalette get() = palette.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<NotesViewMode> get() = viewMode
     override val recentSearches: Flow<List<String>> get() = recent
     override suspend fun setThemeMode(mode: app.tessera.core.preferences.ThemeMode) {
         theme.value = mode
+    }
+
+    override suspend fun setDynamicColor(enabled: Boolean) {
+        dynamic.value = enabled
+    }
+
+    override suspend fun setThemePalette(palette: app.tessera.core.preferences.ThemePalette) {
+        this.palette.value = palette
     }
 
     override suspend fun setLanguageTag(tag: String) {
@@ -444,6 +458,7 @@ private class FakeUserPreferences : app.tessera.core.preferences.UserPreferences
 
 private class FakeSyncRepository : app.tessera.domain.repository.SyncRepository {
     override suspend fun syncNow(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun pushLocalChanges(uid: UserId): Result<Unit> = Result.success(Unit)
     override suspend fun purgeTombstones(uid: UserId): Result<Unit> = Result.success(Unit)
     override suspend fun purgeLocalTombstones(): Result<Unit> = Result.success(Unit)
     override suspend fun permanentlyDelete(uid: UserId, ids: List<NoteId>): Result<Unit> = Result.success(Unit)

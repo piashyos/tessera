@@ -1,6 +1,9 @@
 package app.tessera.ui.settings
 
 import android.content.res.Configuration
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,9 +30,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,16 +43,19 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.preferences.ThemeMode
+import app.tessera.core.preferences.ThemePalette
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.theme.TesseraSpacing
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.sync.SyncIndicator
 import app.tessera.ui.settings.components.AccountSwitchDialog
+import app.tessera.ui.settings.components.EmptyTrashDialog
 import app.tessera.ui.settings.components.LanguagePickerSheet
 import app.tessera.ui.settings.components.SettingsChevron
 import app.tessera.ui.settings.components.SettingsDivider
@@ -56,9 +64,8 @@ import app.tessera.ui.settings.components.SettingsRow
 import app.tessera.ui.settings.components.SettingsValue
 import app.tessera.ui.settings.components.SyncStatusRow
 import app.tessera.ui.settings.components.ThemePickerSheet
-import app.tessera.ui.settings.components.ThemeChoice
-import app.tessera.ui.settings.components.toThemeChoice
 import coil.compose.AsyncImage
+import java.io.OutputStream
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Info
@@ -67,7 +74,6 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.Scale
 import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.Upload
 import com.composables.icons.lucide.User
 
 private const val FallbackAppVersion = "0.1.0"
@@ -84,12 +90,53 @@ fun SettingsScreen(
     onDeleteLocal: () -> Unit = {},
     onDismissDialog: () -> Unit = {},
     onSelectThemeMode: (ThemeMode) -> Unit = {},
+    onSetDynamicColor: (Boolean) -> Unit = {},
+    onSelectPalette: (ThemePalette) -> Unit = {},
     onSelectLanguage: (String) -> Unit = {},
     onRetrySync: () -> Unit = {},
+    onExport: (OutputStream) -> Unit = {},
+    onEmptyTrash: () -> Unit = {},
+    onMessageShown: () -> Unit = {},
 ) {
     var showThemeSheet by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
+    var showEmptyTrashDialog by remember { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    val context = LocalContext.current
+    val exportFileName = stringResource(R.string.settings_export_filename)
+    val exportFailedText = stringResource(R.string.settings_export_failed)
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        // Open the destination here (UI owns Context); hand the stream to the VM to fill.
+        val out = runCatching { context.contentResolver.openOutputStream(uri) }.getOrNull()
+        if (out != null) {
+            onExport(out)
+        } else {
+            Toast.makeText(context, exportFailedText, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Surface one-shot results (export done / trash emptied) as a toast, then clear.
+    val currentOnMessageShown by rememberUpdatedState(onMessageShown)
+    LaunchedEffect(state.message) {
+        val text = when (val message = state.message) {
+            SettingsMessage.TrashEmptied -> context.getString(R.string.settings_trash_emptied)
+            is SettingsMessage.ExportSuccess -> context.resources.getQuantityString(
+                R.plurals.settings_export_success,
+                message.count,
+                message.count,
+            )
+            SettingsMessage.ExportFailed -> exportFailedText
+            null -> null
+        }
+        if (text != null) {
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+            currentOnMessageShown()
+        }
+    }
 
     Scaffold(
         modifier = modifier
@@ -161,7 +208,15 @@ fun SettingsScreen(
                 )
             }
 
-            item { DataSection() }
+            item {
+                DataSection(
+                    isExporting = state.isExporting,
+                    trashCount = state.trashCount,
+                    isEmptyingTrash = state.isEmptyingTrash,
+                    onExport = { exportLauncher.launch(exportFileName) },
+                    onEmptyTrash = { showEmptyTrashDialog = true },
+                )
+            }
 
             item { AboutSection() }
         }
@@ -170,7 +225,11 @@ fun SettingsScreen(
     if (showThemeSheet) {
         ThemePickerSheet(
             selected = state.themeMode,
-            onSelect = onSelectThemeMode,
+            dynamicColor = state.dynamicColor,
+            selectedPalette = state.themePalette,
+            onSelectTheme = onSelectThemeMode,
+            onToggleDynamic = onSetDynamicColor,
+            onSelectPalette = onSelectPalette,
             onDismiss = { showThemeSheet = false },
         )
     }
@@ -180,6 +239,17 @@ fun SettingsScreen(
             selectedTag = state.languageTag,
             onSelect = onSelectLanguage,
             onDismiss = { showLanguageSheet = false },
+        )
+    }
+
+    if (showEmptyTrashDialog) {
+        EmptyTrashDialog(
+            count = state.trashCount,
+            onConfirm = {
+                showEmptyTrashDialog = false
+                onEmptyTrash()
+            },
+            onDismiss = { showEmptyTrashDialog = false },
         )
     }
 
@@ -303,30 +373,56 @@ private fun AppearanceSection(
 }
 
 @Composable
-private fun DataSection() {
+private fun DataSection(
+    isExporting: Boolean,
+    trashCount: Int,
+    isEmptyingTrash: Boolean,
+    onExport: () -> Unit,
+    onEmptyTrash: () -> Unit,
+) {
+    val trashEmpty = trashCount == 0
     SettingsGroup(label = stringResource(R.string.settings_section_data)) {
         SettingsRow(
             leadingIcon = Lucide.Download,
             title = stringResource(R.string.settings_data_export),
-            onClick = {},
-            trailing = { SettingsChevron() },
-        )
-        SettingsDivider()
-        SettingsRow(
-            leadingIcon = Lucide.Upload,
-            title = stringResource(R.string.settings_data_import),
-            onClick = {},
-            trailing = { SettingsChevron() },
+            subtitle = stringResource(R.string.settings_data_export_subtitle),
+            // Block re-entry while a write is in flight; show progress instead of the chevron.
+            onClick = if (isExporting) null else onExport,
+            trailing = { if (isExporting) RowSpinner() else SettingsChevron() },
         )
         SettingsDivider()
         SettingsRow(
             leadingIcon = Lucide.Trash2,
             title = stringResource(R.string.settings_data_empty_trash),
-            destructive = true,
-            onClick = {},
-            trailing = { SettingsChevron() },
+            subtitle = if (trashEmpty) {
+                stringResource(R.string.settings_data_empty_trash_empty)
+            } else {
+                pluralStringResource(
+                    R.plurals.settings_data_empty_trash_count,
+                    trashCount,
+                    trashCount,
+                )
+            },
+            destructive = !trashEmpty,
+            // Disabled (non-clickable, no chevron) when there's nothing to empty.
+            onClick = if (trashEmpty || isEmptyingTrash) null else onEmptyTrash,
+            trailing = {
+                when {
+                    isEmptyingTrash -> RowSpinner()
+                    !trashEmpty -> SettingsChevron()
+                }
+            },
         )
     }
+}
+
+@Composable
+private fun RowSpinner() {
+    CircularProgressIndicator(
+        modifier = Modifier.size(20.dp),
+        strokeWidth = 2.dp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -365,10 +461,10 @@ private fun ValueChevron(value: String) {
 }
 
 @Composable
-private fun themeChoiceLabel(mode: ThemeMode): String = when (mode.toThemeChoice()) {
-    ThemeChoice.System -> stringResource(R.string.settings_theme_system)
-    ThemeChoice.Light -> stringResource(R.string.settings_theme_light)
-    ThemeChoice.Dark -> stringResource(R.string.settings_theme_dark)
+private fun themeChoiceLabel(mode: ThemeMode): String = when (mode) {
+    ThemeMode.AUTO -> stringResource(R.string.settings_theme_system)
+    ThemeMode.LIGHT -> stringResource(R.string.settings_theme_light)
+    ThemeMode.DARK -> stringResource(R.string.settings_theme_dark)
 }
 
 @Composable

@@ -17,6 +17,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,13 +54,12 @@ import org.wordpress.aztec.AztecTextFormat
  * a `secondaryContainer` pill.
  *
  * Emits the same [RichBodyActions] the editor already understands — the trailing overflow
- * button defers headings 3–6 / paragraph to [onOpenOverflow] (the `MarkdownFormatMenu`).
+ * button anchors the [MarkdownFormatMenu] (paragraph / headings) Material 3 dropdown.
  */
 @Composable
 fun EditorFormatBar(
   actions: RichBodyActions?,
   activeFormats: Set<AztecTextFormat>,
-  onOpenOverflow: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Row(
@@ -86,12 +90,34 @@ fun EditorFormatBar(
     GroupSeparator()
     // [«][</>][—]
     FormatToggle(Lucide.Quote, R.string.toolbar_quote, AztecTextFormat.FORMAT_QUOTE in activeFormats) { actions?.toggleQuote() }
-    FormatToggle(Lucide.Code, R.string.toolbar_code, AztecTextFormat.FORMAT_CODE in activeFormats) { actions?.toggleCode() }
+    FormatToggle(Lucide.Code, R.string.toolbar_code, AztecTextFormat.FORMAT_PREFORMAT in activeFormats) { actions?.toggleCode() }
     FormatToggle(Lucide.Minus, R.string.toolbar_divider, active = false) { actions?.insertHorizontalRule() }
 
     GroupSeparator()
-    // [⋯]
-    FormatToggle(Lucide.Ellipsis, R.string.toolbar_more, active = false, onClick = onOpenOverflow)
+    // [⋯] — anchors the paragraph/headings Material 3 dropdown.
+    Box {
+      var menuExpanded by remember { mutableStateOf(false) }
+      // The menu's popup is non-focusable (so it doesn't dismiss the keyboard), which means a
+      // tap on this button while the menu is open is delivered BOTH to the popup's
+      // dismiss-on-outside handler AND to this button's onClick. Without a guard the dismiss
+      // closes the menu and the onClick immediately reopens it. Record when a dismiss happened
+      // and ignore a reopen that lands within the same tap, so the button truly toggles.
+      var lastDismissMs by remember { mutableLongStateOf(0L) }
+      FormatToggle(Lucide.Ellipsis, R.string.toolbar_more, active = menuExpanded) {
+        if (System.currentTimeMillis() - lastDismissMs > 200L) menuExpanded = true
+      }
+      if (actions != null) {
+        MarkdownFormatMenu(
+          expanded = menuExpanded,
+          activeFormats = activeFormats,
+          actions = actions,
+          onDismiss = {
+            menuExpanded = false
+            lastDismissMs = System.currentTimeMillis()
+          },
+        )
+      }
+    }
   }
 }
 
@@ -143,7 +169,6 @@ private fun EditorFormatBarLightPreview() {
       EditorFormatBar(
         actions = null,
         activeFormats = setOf(AztecTextFormat.FORMAT_BOLD),
-        onOpenOverflow = {},
       )
     }
   }
@@ -158,7 +183,7 @@ private fun EditorFormatBarLightPreview() {
 private fun EditorFormatBarDarkPreview() {
   TesseraTheme(darkTheme = true, dynamicColor = false) {
     Box(Modifier.padding(8.dp)) {
-      EditorFormatBar(actions = null, activeFormats = emptySet(), onOpenOverflow = {})
+      EditorFormatBar(actions = null, activeFormats = emptySet())
     }
   }
 }

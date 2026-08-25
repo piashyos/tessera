@@ -11,8 +11,8 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
@@ -25,12 +25,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.tessera.R
-import app.tessera.core.ui.components.FloatingCapsule
 import app.tessera.core.ui.rememberHaptics
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
@@ -57,32 +57,38 @@ fun TagChipsExpandable(
     AnimatedVisibility(
         visible = expanded,
         enter = fadeIn() +
-            expandHorizontally(animationSpec = springExpand, expandFrom = Alignment.End) +
-            scaleIn(transformOrigin = TransformOrigin(1f, 0.5f), initialScale = 0.85f, animationSpec = springScale),
+            expandHorizontally(animationSpec = springExpand, expandFrom = Alignment.Start) +
+            scaleIn(transformOrigin = TransformOrigin(0f, 0.5f), initialScale = 0.85f, animationSpec = springScale),
         exit = fadeOut() +
-            shrinkHorizontally(animationSpec = springExpand, shrinkTowards = Alignment.End) +
-            scaleOut(transformOrigin = TransformOrigin(1f, 0.5f), targetScale = 0.85f, animationSpec = springScale),
+            shrinkHorizontally(animationSpec = springExpand, shrinkTowards = Alignment.Start) +
+            scaleOut(transformOrigin = TransformOrigin(0f, 0.5f), targetScale = 0.85f, animationSpec = springScale),
         modifier = modifier,
     ) {
         Row(
             modifier = Modifier
-                .wrapContentWidth(Alignment.End)
-                .horizontalScroll(rememberScrollState(), reverseScrolling = true),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.End),
+                .wrapContentWidth(Alignment.Start)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tags.forEach { tag ->
-                FloatingCapsule(
+                // Flat, theme-tinted chip (no glassy gradient). Follows the active palette via
+                // secondaryContainer so it reads cleanly in every theme, light or dark.
+                Surface(
                     shape = CircleShape,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.clip(CircleShape),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
                         Text("#$tag", style = MaterialTheme.typography.labelMedium)
                         Surface(
                             onClick = { haptics.tick(); onRemoveTag(tag) },
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.0f),
+                            color = Color.Transparent,
                             modifier = Modifier.size(20.dp),
                         ) {
                             Icon(
@@ -99,13 +105,13 @@ fun TagChipsExpandable(
                 onClick = { haptics.tick(); onAddTagClick() },
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(22.dp),
             ) {
                 Icon(
                     imageVector = Lucide.Plus,
                     contentDescription = stringResource(R.string.editor_add_tag),
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(12.dp),
                 )
             }
         }

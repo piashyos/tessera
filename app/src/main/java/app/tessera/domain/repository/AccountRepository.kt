@@ -18,4 +18,14 @@ interface AccountRepository {
 
     /** Hard-deletes every local note owned by [uid]. */
     suspend fun deleteNotesOwnedBy(uid: UserId)
+
+    /**
+     * True when the local cache contains data belonging to an account other than [uid] (foreign
+     * private notes, or shared notes [uid] is not a member of). Signals that the cache must be
+     * cleared for account isolation. Null-owned local drafts are not considered foreign.
+     */
+    suspend fun hasForeignData(uid: UserId): Boolean
+
+    /** Wipes all locally-cached notes, folders, tags and shared members (full account switch). */
+    suspend fun clearLocalData()
 }

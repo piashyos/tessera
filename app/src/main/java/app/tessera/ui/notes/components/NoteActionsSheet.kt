@@ -35,6 +35,11 @@ fun NoteActionsSheet(
   onDismiss: () -> Unit,
   onMakeShared: (() -> Unit)? = null,
   /**
+   * When non-null, a Restore action is shown at the top — used in the Trash view to move a note
+   * back out of the trash. The rest of the actions are hidden in this restore-only mode.
+   */
+  onRestore: (() -> Unit)? = null,
+  /**
    * When false, the Delete action is hidden — used for shared notes the current user may not
    * delete for everyone (only owner/manager can; deleting a shared note is a delete-for-all).
    */
@@ -44,6 +49,23 @@ fun NoteActionsSheet(
     onDismissRequest = onDismiss,
     header = { Text(noteTitle, style = MaterialTheme.typography.titleMedium) },
   ) {
+    if (onRestore != null) {
+      TesseraSheetItem(
+        label = stringResource(R.string.note_action_restore),
+        leadingIcon = { Icon(Lucide.ArchiveRestore, contentDescription = null) },
+        onClick = { onRestore(); onDismiss() },
+      )
+      if (showDelete) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        TesseraSheetItem(
+          label = stringResource(R.string.note_action_delete),
+          leadingIcon = { Icon(Lucide.Trash2, contentDescription = null) },
+          onClick = { onDelete(); onDismiss() },
+          destructive = true,
+        )
+      }
+      return@TesseraBottomSheet
+    }
     TesseraSheetItem(
       label = stringResource(R.string.note_action_select),
       leadingIcon = { Icon(Lucide.ListChecks, contentDescription = null) },

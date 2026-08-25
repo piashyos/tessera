@@ -1,6 +1,9 @@
 package app.tessera.ui.editor
 
 import androidx.lifecycle.SavedStateHandle
+import app.tessera.domain.model.Folder
+import app.tessera.domain.model.FolderId
+import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.InviteResult
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
@@ -11,7 +14,9 @@ import app.tessera.domain.model.Tag
 import app.tessera.domain.model.UserId
 import app.tessera.domain.model.UserProfile
 import app.tessera.domain.repository.AuthRepository
+import app.tessera.domain.repository.FolderRepository
 import app.tessera.domain.repository.NotesRepository
+import app.tessera.domain.repository.SyncRepository
 import app.tessera.domain.usecase.ChangeMemberRoleUseCase
 import app.tessera.domain.usecase.DeleteNoteUseCase
 import app.tessera.domain.usecase.GetNoteUseCase
@@ -19,6 +24,7 @@ import app.tessera.domain.usecase.InviteMemberUseCase
 import app.tessera.domain.usecase.LeaveSharedNoteUseCase
 import app.tessera.domain.usecase.ObserveMembersUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
+import app.tessera.domain.usecase.PermanentlyDeleteNoteUseCase
 import app.tessera.domain.usecase.RemoveMemberUseCase
 import app.tessera.domain.usecase.ShareNoteUseCase
 import app.tessera.domain.usecase.UnshareNoteUseCase
@@ -137,20 +143,29 @@ class NoteEditorViewModelTest {
     }
 
     @Test
-    fun `flush with blank content saves a blank-draft note`() =
+    fun `flush with blank content permanently deletes the note everywhere`() =
         runTest(dispatcher.scheduler) {
+            // Emptying an existing note must remove it everywhere (cloud + local), not persist a
+            // blank draft. A local-only delete leaves the remote copy, which the next pull
+            // resurrects with the old title — the exact bug this guards against.
             val note = sampleNote("note-5b", content = "Also clear")
             val repo = FakeEditorRepository(notes = listOf(note))
-            val vm = repo.createViewModel(noteId = "note-5b")
+            val vm = repo.createViewModel(noteId = "note-5b", currentUser = "me")
             runCurrent()
 
             vm.onContentChange("")
             vm.flush()
             runCurrent()
 
-            assertTrue(repo.updateCalls.isNotEmpty(), "flush should have called updateNote")
-            val saved = repo.updateCalls.last()
-            assertTrue(saved.isBlankDraft(), "Saved note should be a blank draft (repo handles deletion)")
+            assertEquals(
+                listOf(NoteId("note-5b")),
+                repo.permanentDeleteEverywhereCalls,
+                "blank content must route through the permanent delete-everywhere path",
+            )
+            assertTrue(
+                repo.updateCalls.none { it.isBlankDraft() },
+                "blank content must NOT be persisted as a draft via updateNote",
+            )
         }
 
     @Test
@@ -474,6 +489,10 @@ private class FakeEditorRepository(
     val updateCalls = mutableListOf<Note>()
     val deleteCalls = mutableListOf<NoteId>()
 
+    // Records ids removed via the cloud-first "delete everywhere" path (signed-in users go through
+    // SyncRepository.permanentlyDelete; signed-out fall back to permanentlyDeleteNote here).
+    val permanentDeleteEverywhereCalls = mutableListOf<NoteId>()
+
     // Share collaborators recorded/configured for Phase 4 tests.
     val membersFlow = MutableStateFlow<List<ShareMember>>(emptyList())
     val shareCalls = mutableListOf<NoteId>()
@@ -501,7 +520,7 @@ private class FakeEditorRepository(
         deleteCalls += id
     }
     override suspend fun permanentlyDeleteNote(id: NoteId) {
-        deleteCalls += id
+        permanentDeleteEverywhereCalls += id
     }
     override suspend fun restoreNote(id: NoteId) {}
     override suspend fun togglePin(id: NoteId) {}
@@ -542,11 +561,13 @@ private class FakeEditorRepository(
     fun createViewModel(noteId: String, currentUser: String? = null): NoteEditorViewModel {
         val savedState = SavedStateHandle(mapOf("noteId" to noteId))
         val auth = FakeAuthRepository(currentUser?.let(::UserId))
+        val sync = FakeSyncRepository(permanentDeleteEverywhereCalls)
         return NoteEditorViewModel(
             getNoteUseCase = GetNoteUseCase(this),
             updateNoteUseCase = UpdateNoteUseCase(this),
             observeNotesUseCase = ObserveNotesUseCase(this),
             deleteNoteUseCase = DeleteNoteUseCase(this),
+            permanentlyDeleteNoteUseCase = PermanentlyDeleteNoteUseCase(this, sync, auth),
             observeMembersUseCase = ObserveMembersUseCase(this),
             shareNoteUseCase = ShareNoteUseCase(this, auth),
             inviteMemberUseCase = InviteMemberUseCase(this),
@@ -555,9 +576,39 @@ private class FakeEditorRepository(
             leaveSharedNoteUseCase = LeaveSharedNoteUseCase(this),
             unshareNoteUseCase = UnshareNoteUseCase(this),
             authRepository = auth,
+            folderRepository = FakeFolderRepository(),
             savedStateHandle = savedState,
         )
     }
+}
+
+private class FakeSyncRepository(
+    private val permanentDeleteEverywhereCalls: MutableList<NoteId>,
+) : SyncRepository {
+    override suspend fun syncNow(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun pushLocalChanges(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun purgeTombstones(uid: UserId): Result<Unit> = Result.success(Unit)
+    override suspend fun purgeLocalTombstones(): Result<Unit> = Result.success(Unit)
+    override suspend fun permanentlyDelete(uid: UserId, ids: List<NoteId>): Result<Unit> {
+        permanentDeleteEverywhereCalls += ids
+        return Result.success(Unit)
+    }
+    override fun observeRemote(uid: UserId): Flow<Unit> = flowOf(Unit)
+}
+
+private class FakeFolderRepository : FolderRepository {
+    override fun observeFolders(): Flow<List<Folder>> = flowOf(emptyList())
+    override fun observeFolderTree(): Flow<List<FolderTreeNode>> = flowOf(emptyList())
+    override fun observeFolderForNote(noteId: NoteId): Flow<FolderId?> = flowOf(null)
+    override fun observeNotesInFolder(folderId: FolderId): Flow<List<Note>> = flowOf(emptyList())
+    override suspend fun createFolder(name: String): Folder =
+        Folder(FolderId("f"), name, null, 0L)
+    override suspend fun createSubfolder(parentId: FolderId, name: String): Folder =
+        Folder(FolderId("f"), name, parentId, 0L)
+    override suspend fun renameFolder(id: FolderId, name: String) {}
+    override suspend fun moveFolder(id: FolderId, newParentId: FolderId?) {}
+    override suspend fun deleteFolder(id: FolderId) {}
+    override suspend fun assignNote(noteId: NoteId, folderId: FolderId?) {}
 }
 
 private class FakeAuthRepository(user: UserId?) : AuthRepository {

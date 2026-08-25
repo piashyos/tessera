@@ -10,6 +10,8 @@ import app.tessera.data.local.MIGRATION_3_4
 import app.tessera.data.local.MIGRATION_4_5
 import app.tessera.data.local.MIGRATION_5_6
 import app.tessera.data.local.NotesDatabase
+import app.tessera.data.local.RoomTransactor
+import app.tessera.data.local.Transactor
 import app.tessera.data.local.dao.FolderDao
 import app.tessera.data.local.dao.NoteDao
 import app.tessera.data.local.dao.SharedMemberDao
@@ -30,6 +32,10 @@ object DatabaseModule {
         Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
+
+    @Provides
+    @Singleton
+    fun provideTransactor(database: NotesDatabase): Transactor = RoomTransactor(database)
 
     @Provides
     fun provideNoteDao(database: NotesDatabase): NoteDao = database.noteDao()

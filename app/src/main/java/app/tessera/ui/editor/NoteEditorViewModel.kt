@@ -3,6 +3,8 @@ package app.tessera.ui.editor
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.tessera.domain.model.Folder
+import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.InviteResult
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
@@ -10,6 +12,7 @@ import app.tessera.domain.model.ShareRole
 import app.tessera.domain.model.Tag
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.AuthRepository
+import app.tessera.domain.repository.FolderRepository
 import app.tessera.domain.usecase.ChangeMemberRoleUseCase
 import app.tessera.domain.usecase.DeleteNoteUseCase
 import app.tessera.domain.usecase.GetNoteUseCase
@@ -17,6 +20,7 @@ import app.tessera.domain.usecase.InviteMemberUseCase
 import app.tessera.domain.usecase.LeaveSharedNoteUseCase
 import app.tessera.domain.usecase.ObserveMembersUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
+import app.tessera.domain.usecase.PermanentlyDeleteNoteUseCase
 import app.tessera.domain.usecase.RemoveMemberUseCase
 import app.tessera.domain.usecase.ShareNoteUseCase
 import app.tessera.domain.usecase.UnshareNoteUseCase
@@ -28,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -39,6 +44,7 @@ class NoteEditorViewModel @Inject constructor(
     private val updateNoteUseCase: UpdateNoteUseCase,
     private val observeNotesUseCase: ObserveNotesUseCase,
     private val deleteNoteUseCase: DeleteNoteUseCase,
+    private val permanentlyDeleteNoteUseCase: PermanentlyDeleteNoteUseCase,
     private val observeMembersUseCase: ObserveMembersUseCase,
     private val shareNoteUseCase: ShareNoteUseCase,
     private val inviteMemberUseCase: InviteMemberUseCase,
@@ -47,6 +53,7 @@ class NoteEditorViewModel @Inject constructor(
     private val leaveSharedNoteUseCase: LeaveSharedNoteUseCase,
     private val unshareNoteUseCase: UnshareNoteUseCase,
     private val authRepository: AuthRepository,
+    private val folderRepository: FolderRepository,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -100,6 +107,23 @@ class NoteEditorViewModel @Inject constructor(
                     val noteTags = current.tags.toSet()
                     current.copy(availableTags = allTagNames.filter { it !in noteTags })
                 }
+                // Live content: when a collaborator's edit has merged into the local store,
+                // adopt it in the open editor. observeNotes reflects the same store the remote
+                // Firestore listener writes into, so this is near-realtime for shared notes.
+                allNotes.firstOrNull { it.id == noteId }?.let(::applyRemoteIfIdle)
+            }
+        }
+
+        // Folder breadcrumb: the note's folder + its ancestor chain, resolved into a
+        // root → leaf list of names. Recomputes when the assignment or any folder changes.
+        viewModelScope.launch {
+            combine(
+                folderRepository.observeFolderForNote(noteId),
+                folderRepository.observeFolders(),
+            ) { folderId, folders ->
+                buildBreadcrumb(folderId, folders)
+            }.collect { breadcrumb ->
+                _state.update { it.copy(folderBreadcrumb = breadcrumb) }
             }
         }
 
@@ -263,6 +287,66 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Walks the parent chain of [folderId] using [folders], producing the names ordered
+     * root → leaf. Returns empty when the note has no folder. A visited-set guards against
+     * cyclic `parentId` data so the walk always terminates.
+     */
+    private fun buildBreadcrumb(folderId: FolderId?, folders: List<Folder>): List<String> {
+        if (folderId == null) return emptyList()
+        val byId = folders.associateBy { it.id }
+        val chain = ArrayDeque<String>()
+        val visited = mutableSetOf<FolderId>()
+        var current: Folder? = byId[folderId]
+        while (current != null && visited.add(current.id)) {
+            chain.addFirst(current.name)
+            current = current.parentId?.let { byId[it] }
+        }
+        return chain.toList()
+    }
+
+    /**
+     * Adopts [remote] into the open editor, but only when the user has no unsaved local edits —
+     * otherwise an incoming snapshot would wipe their in-progress typing. This is document-level
+     * last-write-wins (v1, pre-CRDT): concurrent edits still resolve by `updatedAt` in the sync
+     * layer; here we only surface the already-merged result without clobbering the local draft.
+     */
+    private fun applyRemoteIfIdle(remote: Note) {
+        val baseline = baselineNote ?: return
+        val current = _state.value
+        val baselineTags = baseline.tags.map { it.name }
+        val hasLocalEdits = current.content != baseline.content ||
+            current.isPinned != baseline.isPinned ||
+            current.tags != baselineTags
+        if (hasLocalEdits) return
+
+        // Only adopt a snapshot that is strictly newer than what we already have. Right after
+        // an autosave the local store echoes our own write back through Firestore, and that
+        // echo can briefly carry the PRE-edit content (eventual consistency) stamped with an
+        // older `updatedAt`. Adopting it would push stale text into the open editor — and since
+        // the editor then has no unsaved edits, RichNoteBody reloads it, resurrecting the
+        // character the user just deleted. A genuine collaborator edit always has a newer
+        // `updatedAt`, so live sync still flows through.
+        if (remote.updatedAt <= baseline.updatedAt) return
+
+        baselineNote = remote
+        val remoteTags = remote.tags.map { it.name }
+        if (remote.content != current.content ||
+            remote.isPinned != current.isPinned ||
+            remoteTags != current.tags ||
+            remote.updatedAt != current.updatedAt
+        ) {
+            _state.update {
+                it.copy(
+                    content = remote.content,
+                    tags = remoteTags,
+                    isPinned = remote.isPinned,
+                    updatedAt = remote.updatedAt,
+                )
+            }
+        }
+    }
+
     private fun scheduleAutosave() {
         autosaveJob?.cancel()
         autosaveJob = viewModelScope.launch {
@@ -282,6 +366,17 @@ class NoteEditorViewModel @Inject constructor(
         val baselineTags = baseline.tags.map { it.name }
         val tagsUnchanged = current.tags == baselineTags
         if (contentUnchanged && pinUnchanged && tagsUnchanged) return
+
+        // A note edited down to blank is removed everywhere (cloud + local), not kept as a draft.
+        // A local-only hard delete would leave the remote document intact, and the next remote pull
+        // would resurrect the note with its old title. Routing through the permanent-delete use case
+        // deletes the cloud doc first (when signed in) so it can't come back. Clear the baseline so a
+        // trailing autosave (e.g. the editor's dispose-time flush) can't re-persist the gone note.
+        if (current.content.isBlank()) {
+            permanentlyDeleteNoteUseCase(noteId)
+            baselineNote = null
+            return
+        }
 
         val updated = baseline.copy(
             content = current.content,

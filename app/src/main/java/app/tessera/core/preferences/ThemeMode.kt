@@ -1,18 +1,18 @@
 package app.tessera.core.preferences
 
+/**
+ * Light/dark selection only. Dynamic (Material You) color is an orthogonal preference — see
+ * [UserPreferences.dynamicColor] — so it can be toggled in any of these modes, including [AUTO].
+ */
 enum class ThemeMode {
     AUTO,
-    LIGHT_DYNAMIC,
-    DARK_DYNAMIC,
-    LIGHT_STATIC,
-    DARK_STATIC;
+    LIGHT,
+    DARK;
 
-    /** Resolve to (darkTheme, dynamicColor) given the current system dark state. */
-    fun resolve(isSystemDark: Boolean): Pair<Boolean, Boolean> = when (this) {
-        AUTO -> isSystemDark to true
-        LIGHT_DYNAMIC -> false to true
-        DARK_DYNAMIC -> true to true
-        LIGHT_STATIC -> false to false
-        DARK_STATIC -> true to false
+    /** Resolve whether the dark color scheme should be used, given the current system dark state. */
+    fun resolveDark(isSystemDark: Boolean): Boolean = when (this) {
+        AUTO -> isSystemDark
+        LIGHT -> false
+        DARK -> true
     }
 }

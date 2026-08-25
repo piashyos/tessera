@@ -15,113 +15,121 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import app.tessera.core.preferences.ThemeMode
+import app.tessera.core.preferences.ThemePalette
 
-private fun brandLightScheme() = lightColorScheme(
-  primary                   = TesseraBrandLight.primary,
-  onPrimary                 = TesseraBrandLight.onPrimary,
-  primaryContainer          = TesseraBrandLight.primaryContainer,
-  onPrimaryContainer        = TesseraBrandLight.onPrimaryContainer,
-  secondary                 = TesseraBrandLight.secondary,
-  onSecondary               = TesseraBrandLight.onSecondary,
-  secondaryContainer        = TesseraBrandLight.secondaryContainer,
-  onSecondaryContainer      = TesseraBrandLight.onSecondaryContainer,
-  tertiary                  = TesseraBrandLight.tertiary,
-  onTertiary                = TesseraBrandLight.onTertiary,
-  tertiaryContainer         = TesseraBrandLight.tertiaryContainer,
-  onTertiaryContainer       = TesseraBrandLight.onTertiaryContainer,
-  error                     = TesseraBrandLight.error,
-  onError                   = TesseraBrandLight.onError,
-  errorContainer            = TesseraBrandLight.errorContainer,
-  onErrorContainer          = TesseraBrandLight.onErrorContainer,
-  background                = TesseraBrandLight.background,
-  onBackground              = TesseraBrandLight.onBackground,
-  surface                   = TesseraBrandLight.surface,
-  onSurface                 = TesseraBrandLight.onSurface,
-  surfaceDim                = TesseraBrandLight.surfaceDim,
-  surfaceBright             = TesseraBrandLight.surfaceBright,
-  surfaceContainerLowest    = TesseraBrandLight.surfaceContainerLowest,
-  surfaceContainerLow       = TesseraBrandLight.surfaceContainerLow,
-  surfaceContainer          = TesseraBrandLight.surfaceContainer,
-  surfaceContainerHigh      = TesseraBrandLight.surfaceContainerHigh,
-  surfaceContainerHighest   = TesseraBrandLight.surfaceContainerHighest,
-  onSurfaceVariant          = TesseraBrandLight.onSurfaceVariant,
-  outline                   = TesseraBrandLight.outline,
-  outlineVariant            = TesseraBrandLight.outlineVariant,
-  scrim                     = TesseraBrandLight.scrim,
+/** Resolves the brand color tokens for a [palette] in the given light/dark variant. */
+fun paletteColors(palette: ThemePalette, dark: Boolean): TesseraBrandColors = when (palette) {
+  ThemePalette.WARM    -> if (dark) TesseraBrandDark else TesseraBrandLight
+  ThemePalette.NEUTRAL -> if (dark) TesseraNeutralDark else TesseraNeutralLight
+  ThemePalette.SLATE   -> if (dark) TesseraSlateDark else TesseraSlateLight
+  ThemePalette.SAGE    -> if (dark) TesseraSageDark else TesseraSageLight
+}
+
+private fun lightSchemeFor(c: TesseraBrandColors) = lightColorScheme(
+  primary                   = c.primary,
+  onPrimary                 = c.onPrimary,
+  primaryContainer          = c.primaryContainer,
+  onPrimaryContainer        = c.onPrimaryContainer,
+  secondary                 = c.secondary,
+  onSecondary               = c.onSecondary,
+  secondaryContainer        = c.secondaryContainer,
+  onSecondaryContainer      = c.onSecondaryContainer,
+  tertiary                  = c.tertiary,
+  onTertiary                = c.onTertiary,
+  tertiaryContainer         = c.tertiaryContainer,
+  onTertiaryContainer       = c.onTertiaryContainer,
+  error                     = c.error,
+  onError                   = c.onError,
+  errorContainer            = c.errorContainer,
+  onErrorContainer          = c.onErrorContainer,
+  background                = c.background,
+  onBackground              = c.onBackground,
+  surface                   = c.surface,
+  onSurface                 = c.onSurface,
+  surfaceDim                = c.surfaceDim,
+  surfaceBright             = c.surfaceBright,
+  surfaceContainerLowest    = c.surfaceContainerLowest,
+  surfaceContainerLow       = c.surfaceContainerLow,
+  surfaceContainer          = c.surfaceContainer,
+  surfaceContainerHigh      = c.surfaceContainerHigh,
+  surfaceContainerHighest   = c.surfaceContainerHighest,
+  onSurfaceVariant          = c.onSurfaceVariant,
+  outline                   = c.outline,
+  outlineVariant            = c.outlineVariant,
+  scrim                     = c.scrim,
 )
 
-private fun brandDarkScheme() = darkColorScheme(
-  primary                   = TesseraBrandDark.primary,
-  onPrimary                 = TesseraBrandDark.onPrimary,
-  primaryContainer          = TesseraBrandDark.primaryContainer,
-  onPrimaryContainer        = TesseraBrandDark.onPrimaryContainer,
-  secondary                 = TesseraBrandDark.secondary,
-  onSecondary               = TesseraBrandDark.onSecondary,
-  secondaryContainer        = TesseraBrandDark.secondaryContainer,
-  onSecondaryContainer      = TesseraBrandDark.onSecondaryContainer,
-  tertiary                  = TesseraBrandDark.tertiary,
-  onTertiary                = TesseraBrandDark.onTertiary,
-  tertiaryContainer         = TesseraBrandDark.tertiaryContainer,
-  onTertiaryContainer       = TesseraBrandDark.onTertiaryContainer,
-  error                     = TesseraBrandDark.error,
-  onError                   = TesseraBrandDark.onError,
-  errorContainer            = TesseraBrandDark.errorContainer,
-  onErrorContainer          = TesseraBrandDark.onErrorContainer,
-  background                = TesseraBrandDark.background,
-  onBackground              = TesseraBrandDark.onBackground,
-  surface                   = TesseraBrandDark.surface,
-  onSurface                 = TesseraBrandDark.onSurface,
-  surfaceDim                = TesseraBrandDark.surfaceDim,
-  surfaceBright             = TesseraBrandDark.surfaceBright,
-  surfaceContainerLowest    = TesseraBrandDark.surfaceContainerLowest,
-  surfaceContainerLow       = TesseraBrandDark.surfaceContainerLow,
-  surfaceContainer          = TesseraBrandDark.surfaceContainer,
-  surfaceContainerHigh      = TesseraBrandDark.surfaceContainerHigh,
-  surfaceContainerHighest   = TesseraBrandDark.surfaceContainerHighest,
-  onSurfaceVariant          = TesseraBrandDark.onSurfaceVariant,
-  outline                   = TesseraBrandDark.outline,
-  outlineVariant            = TesseraBrandDark.outlineVariant,
-  scrim                     = TesseraBrandDark.scrim,
+private fun darkSchemeFor(c: TesseraBrandColors) = darkColorScheme(
+  primary                   = c.primary,
+  onPrimary                 = c.onPrimary,
+  primaryContainer          = c.primaryContainer,
+  onPrimaryContainer        = c.onPrimaryContainer,
+  secondary                 = c.secondary,
+  onSecondary               = c.onSecondary,
+  secondaryContainer        = c.secondaryContainer,
+  onSecondaryContainer      = c.onSecondaryContainer,
+  tertiary                  = c.tertiary,
+  onTertiary                = c.onTertiary,
+  tertiaryContainer         = c.tertiaryContainer,
+  onTertiaryContainer       = c.onTertiaryContainer,
+  error                     = c.error,
+  onError                   = c.onError,
+  errorContainer            = c.errorContainer,
+  onErrorContainer          = c.onErrorContainer,
+  background                = c.background,
+  onBackground              = c.onBackground,
+  surface                   = c.surface,
+  onSurface                 = c.onSurface,
+  surfaceDim                = c.surfaceDim,
+  surfaceBright             = c.surfaceBright,
+  surfaceContainerLowest    = c.surfaceContainerLowest,
+  surfaceContainerLow       = c.surfaceContainerLow,
+  surfaceContainer          = c.surfaceContainer,
+  surfaceContainerHigh      = c.surfaceContainerHigh,
+  surfaceContainerHighest   = c.surfaceContainerHighest,
+  onSurfaceVariant          = c.onSurfaceVariant,
+  outline                   = c.outline,
+  outlineVariant            = c.outlineVariant,
+  scrim                     = c.scrim,
 )
 
 /**
  * Overlay our brand identity onto a dynamic-color scheme:
- * primary/background/surface always brand; let secondary/tertiary/surfaceContainer-*
- * keep their dynamic warm-tinted values harmonized from the user's wallpaper.
+ * primary/background/surface always come from the chosen palette; let
+ * secondary/tertiary/surfaceContainer-* keep their dynamic values harmonized from the wallpaper.
  */
-private fun ColorScheme.brandOverlay(dark: Boolean): ColorScheme {
-  val brand = if (dark) TesseraBrandDark else TesseraBrandLight
-  return this.copy(
-    primary                = brand.primary,
-    onPrimary              = brand.onPrimary,
-    primaryContainer       = brand.primaryContainer,
-    onPrimaryContainer     = brand.onPrimaryContainer,
-    background             = brand.background,
-    onBackground           = brand.onBackground,
-    surface                = brand.surface,
-    onSurface              = brand.onSurface,
-  )
-}
+private fun ColorScheme.brandOverlay(c: TesseraBrandColors): ColorScheme = copy(
+  primary                = c.primary,
+  onPrimary              = c.onPrimary,
+  primaryContainer       = c.primaryContainer,
+  onPrimaryContainer     = c.onPrimaryContainer,
+  background             = c.background,
+  onBackground           = c.onBackground,
+  surface                = c.surface,
+  onSurface              = c.onSurface,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TesseraTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
   dynamicColor: Boolean = true,
+  palette: ThemePalette = ThemePalette.Default,
   content: @Composable () -> Unit,
 ) {
   val ctx = LocalContext.current
+  val brand = paletteColors(palette, darkTheme)
   val scheme: ColorScheme = when {
     dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
       runCatching {
         val dyn = if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        dyn.brandOverlay(darkTheme)
+        dyn.brandOverlay(brand)
       }.getOrElse {
-        if (darkTheme) brandDarkScheme() else brandLightScheme()
+        if (darkTheme) darkSchemeFor(brand) else lightSchemeFor(brand)
       }
     }
-    darkTheme -> brandDarkScheme()
-    else      -> brandLightScheme()
+    darkTheme -> darkSchemeFor(brand)
+    else      -> lightSchemeFor(brand)
   }
 
   MaterialTheme(
@@ -140,7 +148,17 @@ fun TesseraTheme(
 }
 
 @Composable
-fun TesseraTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
-  val (darkTheme, dynamicColor) = themeMode.resolve(isSystemInDarkTheme())
-  TesseraTheme(darkTheme = darkTheme, dynamicColor = dynamicColor, content = content)
+fun TesseraTheme(
+  themeMode: ThemeMode,
+  dynamicColor: Boolean,
+  palette: ThemePalette = ThemePalette.Default,
+  content: @Composable () -> Unit,
+) {
+  val darkTheme = themeMode.resolveDark(isSystemInDarkTheme())
+  TesseraTheme(
+    darkTheme = darkTheme,
+    dynamicColor = dynamicColor,
+    palette = palette,
+    content = content,
+  )
 }

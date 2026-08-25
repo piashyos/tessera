@@ -99,16 +99,18 @@ class NotesListViewModel @Inject constructor(
     private val showArchive = MutableStateFlow(false)
     private val showTrash = MutableStateFlow(false)
     private val showShared = MutableStateFlow(false)
+    private val showPinned = MutableStateFlow(false)
     private val datePeriod = MutableStateFlow(DatePeriod.All)
 
     private val currentUserId: StateFlow<UserId?> = authRepository.currentUser
 
     private val systemView: Flow<SystemView> =
-        combine(showArchive, showTrash, showShared) { archive, trash, shared ->
+        combine(showArchive, showTrash, showShared, showPinned) { archive, trash, shared, pinned ->
             when {
                 trash -> SystemView.Trash
                 archive -> SystemView.Archive
                 shared -> SystemView.Shared
+                pinned -> SystemView.Pinned
                 else -> SystemView.Notes
             }
         }
@@ -144,6 +146,7 @@ class NotesListViewModel @Inject constructor(
                     view == SystemView.Trash -> observeDeletedNotesUseCase()
                     view == SystemView.Archive -> observeArchivedNotesUseCase()
                     view == SystemView.Shared -> observeNotesUseCase()
+                    view == SystemView.Pinned -> observeNotesUseCase()
                     value.isNotBlank() -> searchNotesUseCase(value)
                     folderId != null -> observeNotesInFolderUseCase(folderId)
                     else -> observeNotesUseCase()
@@ -189,6 +192,7 @@ class NotesListViewModel @Inject constructor(
                 isArchiveView = extras.viewMeta.view == SystemView.Archive,
                 isTrashView = extras.viewMeta.view == SystemView.Trash,
                 isSharedView = extras.viewMeta.view == SystemView.Shared,
+                isPinnedView = extras.viewMeta.view == SystemView.Pinned,
                 hasSharedNotes = extras.viewMeta.hasSharedNotes,
                 currentUserId = extras.viewMeta.currentUserId,
                 datePeriod = extras.datePeriod,
@@ -359,6 +363,7 @@ class NotesListViewModel @Inject constructor(
         showArchive.value = false
         showTrash.value = false
         showShared.value = false
+        showPinned.value = false
         selectedFolderId.value = folderId
     }
 
@@ -369,6 +374,7 @@ class NotesListViewModel @Inject constructor(
         datePeriod.value = DatePeriod.All
         showTrash.value = false
         showShared.value = false
+        showPinned.value = false
         showArchive.value = true
     }
 
@@ -379,6 +385,7 @@ class NotesListViewModel @Inject constructor(
         datePeriod.value = DatePeriod.All
         showArchive.value = false
         showShared.value = false
+        showPinned.value = false
         showTrash.value = true
     }
 
@@ -389,13 +396,26 @@ class NotesListViewModel @Inject constructor(
         datePeriod.value = DatePeriod.All
         showArchive.value = false
         showTrash.value = false
+        showPinned.value = false
         showShared.value = true
+    }
+
+    fun showPinnedNotes() {
+        selectedFolderId.value = null
+        query.value = ""
+        searchExpanded.value = false
+        datePeriod.value = DatePeriod.All
+        showArchive.value = false
+        showTrash.value = false
+        showShared.value = false
+        showPinned.value = true
     }
 
     fun showAllNotes() {
         showArchive.value = false
         showTrash.value = false
         showShared.value = false
+        showPinned.value = false
         selectedFolderId.value = null
     }
 
@@ -479,7 +499,7 @@ private data class StateInputs(
     val viewMode: NotesViewMode,
 )
 
-private enum class SystemView { Notes, Archive, Trash, Shared }
+private enum class SystemView { Notes, Archive, Trash, Shared, Pinned }
 
 private data class ViewMeta(
     val view: SystemView,
@@ -508,12 +528,17 @@ private fun List<Note>.toUiState(
     isArchiveView: Boolean,
     isTrashView: Boolean,
     isSharedView: Boolean,
+    isPinnedView: Boolean,
     hasSharedNotes: Boolean,
     currentUserId: UserId?,
     datePeriod: DatePeriod,
     recentSearches: List<String>,
 ): NotesListState {
-    val scoped = if (isSharedView) filter(Note::isShared) else this
+    val scoped = when {
+        isSharedView -> filter(Note::isShared)
+        isPinnedView -> filter(Note::isPinned)
+        else -> this
+    }
     val availableTags = scoped.flatMap { note -> note.tags.map { tag -> tag.name } }.distinct().sorted()
     val periodFiltered = datePeriod.windowMillis?.let { window ->
         val cutoff = System.currentTimeMillis() - window
@@ -542,6 +567,7 @@ private fun List<Note>.toUiState(
             isArchiveView = isArchiveView,
             isTrashView = isTrashView,
             isSharedView = isSharedView,
+            isPinnedView = isPinnedView,
             hasSharedNotes = hasSharedNotes,
             recentSearches = recentSearches,
             datePeriod = datePeriod,
@@ -565,6 +591,7 @@ private fun List<Note>.toUiState(
         isArchiveView = isArchiveView,
         isTrashView = isTrashView,
         isSharedView = isSharedView,
+        isPinnedView = isPinnedView,
         hasSharedNotes = hasSharedNotes,
         recentSearches = recentSearches,
         datePeriod = datePeriod,

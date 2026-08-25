@@ -142,6 +142,7 @@ private fun NavGraphBuilder.notesListDestination(
                 onShowArchive = viewModel::showArchivedNotes,
                 onShowTrash = viewModel::showTrashNotes,
                 onShowShared = viewModel::showSharedNotes,
+                onShowPinned = viewModel::showPinnedNotes,
                 onShowAllNotes = viewModel::showAllNotes,
                 onMakeShared = viewModel::shareNote,
             )
@@ -175,8 +176,13 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
                 onDeleteLocal = viewModel::onDeleteLocal,
                 onDismissDialog = viewModel::onDismissDialog,
                 onSelectThemeMode = viewModel::setThemeMode,
+                onSetDynamicColor = viewModel::setDynamicColor,
+                onSelectPalette = viewModel::setThemePalette,
                 onSelectLanguage = viewModel::setLanguage,
                 onRetrySync = viewModel::onRetrySync,
+                onExport = viewModel::onExport,
+                onEmptyTrash = viewModel::onEmptyTrash,
+                onMessageShown = viewModel::onMessageShown,
             )
         }
     }

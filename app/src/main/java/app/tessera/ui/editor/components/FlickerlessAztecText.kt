@@ -57,4 +57,15 @@ class FlickerlessAztecText : AztecText {
             onLightweightRefresh?.invoke()
         }
     }
+
+    /**
+     * Force Aztec's full text-layout rebuild (`setText(editableText)`), which re-measures every
+     * line. Needed after a BLOCK-level format change (heading/list/quote/code/paragraph) where the
+     * line height changes: the lightweight invalidate-only [refreshText] above leaves the lines
+     * below at stale Y positions, so they render overlapping. Aztec's path here preserves the
+     * selection and does NOT steal focus or fire the TextWatcher (stealEditorFocus = false), so it
+     * is safe to call straight after a toolbar toggle. Inline toggles (bold/italic/…) don't change
+     * line metrics and keep using the lightweight refresh, so checkbox taps stay flicker-free.
+     */
+    fun rebuildLayout() = super.refreshText(false)
 }

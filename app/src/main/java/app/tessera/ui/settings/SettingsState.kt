@@ -1,6 +1,7 @@
 package app.tessera.ui.settings
 
 import app.tessera.core.preferences.ThemeMode
+import app.tessera.core.preferences.ThemePalette
 import app.tessera.domain.model.UserId
 import app.tessera.sync.SyncIndicator
 
@@ -23,6 +24,21 @@ data class SettingsState(
     val pendingSwitch: PendingAccountSwitch? = null,
     val errorMessage: String? = null,
     val themeMode: ThemeMode = ThemeMode.AUTO,
+    val dynamicColor: Boolean = true,
+    val themePalette: ThemePalette = ThemePalette.Default,
     val languageTag: String = "",
     val syncStatus: SyncIndicator = SyncIndicator.Ok(),
+    /** Number of notes currently in Trash; drives the "Empty trash" row's enabled state. */
+    val trashCount: Int = 0,
+    val isEmptyingTrash: Boolean = false,
+    val isExporting: Boolean = false,
+    /** One-shot result of a data action; the UI localises and shows it as a toast, then clears. */
+    val message: SettingsMessage? = null,
 )
+
+/** A one-shot, localisable outcome of a Settings data action (export / empty trash). */
+sealed interface SettingsMessage {
+    data object TrashEmptied : SettingsMessage
+    data class ExportSuccess(val count: Int) : SettingsMessage
+    data object ExportFailed : SettingsMessage
+}

@@ -2,6 +2,7 @@ package app.tessera.ui.editor.components
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import app.tessera.core.ui.theme.TesseraTheme
@@ -43,7 +44,7 @@ class EditorFormatBarRenderTest {
     val actions = RecordingActions()
     rule.setContent {
       TesseraTheme(darkTheme = false, dynamicColor = false) {
-        EditorFormatBar(actions = actions, activeFormats = emptySet(), onOpenOverflow = {})
+        EditorFormatBar(actions = actions, activeFormats = emptySet())
       }
     }
     listOf("Bold", "Italic", "Underline", "Strikethrough", "Heading 1", "Heading 2",
@@ -55,7 +56,7 @@ class EditorFormatBarRenderTest {
     val actions = RecordingActions()
     rule.setContent {
       TesseraTheme(darkTheme = false, dynamicColor = false) {
-        EditorFormatBar(actions = actions, activeFormats = emptySet(), onOpenOverflow = {})
+        EditorFormatBar(actions = actions, activeFormats = emptySet())
       }
     }
     rule.onNodeWithContentDescription("Bold").performScrollTo().performClick()
@@ -64,14 +65,15 @@ class EditorFormatBarRenderTest {
     assert(actions.calls == listOf("bold", "quote", "divider")) { "got ${actions.calls}" }
   }
 
-  @Test fun overflow_invokes_callback() {
-    var opened = 0
+  @Test fun overflow_opens_heading_menu() {
+    val actions = RecordingActions()
     rule.setContent {
       TesseraTheme(darkTheme = false, dynamicColor = false) {
-        EditorFormatBar(actions = null, activeFormats = emptySet(), onOpenOverflow = { opened++ })
+        EditorFormatBar(actions = actions, activeFormats = emptySet())
       }
     }
     rule.onNodeWithContentDescription("More formats").performScrollTo().performClick()
-    assert(opened == 1) { "expected 1 overflow open, got $opened" }
+    rule.onNodeWithText("Paragraph").assertExists()
+    rule.onNodeWithText("Heading 1").assertExists()
   }
 }

@@ -109,6 +109,260 @@ object TesseraBrandDark : TesseraBrandColors {
   override val shadowSpot                = Color(0x99000000)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Alternate palettes. All intentionally low-saturation; error/scrim reuse the
+// brand's semantic red so destructive affordances stay recognisable everywhere.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Achromatic near-white / charcoal — no color cast (Tailwind zinc-style). */
+object TesseraNeutralLight : TesseraBrandColors {
+  override val primary                   = Color(0xFF3A3A3A)
+  override val onPrimary                 = Color(0xFFFFFFFF)
+  override val primaryContainer          = Color(0xFFE3E3E3)
+  override val onPrimaryContainer        = Color(0xFF1B1B1B)
+
+  override val secondary                 = Color(0xFF5F5F5F)
+  override val onSecondary               = Color(0xFFFFFFFF)
+  override val secondaryContainer        = Color(0xFFE8E8E8)
+  override val onSecondaryContainer      = Color(0xFF1F1F1F)
+
+  override val tertiary                  = Color(0xFF4A4A4A)
+  override val onTertiary                = Color(0xFFFFFFFF)
+  override val tertiaryContainer         = Color(0xFFE0E0E0)
+  override val onTertiaryContainer       = Color(0xFF1C1C1C)
+
+  override val error                     = TesseraBrandLight.error
+  override val onError                   = TesseraBrandLight.onError
+  override val errorContainer            = TesseraBrandLight.errorContainer
+  override val onErrorContainer          = TesseraBrandLight.onErrorContainer
+
+  override val background                = Color(0xFFFAFAFA)
+  override val onBackground              = Color(0xFF1A1A1A)
+  override val surface                   = Color(0xFFFFFFFF)
+  override val onSurface                 = Color(0xFF1A1A1A)
+  override val surfaceDim                = Color(0xFFE6E6E6)
+  override val surfaceBright             = Color(0xFFFFFFFF)
+  override val surfaceContainerLowest    = Color(0xFFFFFFFF)
+  override val surfaceContainerLow       = Color(0xFFF5F5F5)
+  override val surfaceContainer          = Color(0xFFF0F0F0)
+  override val surfaceContainerHigh      = Color(0xFFEAEAEA)
+  override val surfaceContainerHighest   = Color(0xFFE4E4E4)
+  override val onSurfaceVariant          = Color(0xFF5A5A5A)
+  override val outline                   = Color(0xFF8C8C8C)
+  override val outlineVariant            = Color(0xFFD6D6D6)
+  override val scrim                     = Color(0x52000000)
+
+  override val shadowAmbient             = Color(0x33B0B0B0)
+  override val shadowSpot                = Color(0x29000000)
+}
+
+object TesseraNeutralDark : TesseraBrandColors {
+  override val primary                   = Color(0xFFD6D6D6)
+  override val onPrimary                 = Color(0xFF2A2A2A)
+  override val primaryContainer          = Color(0xFF3A3A3A)
+  override val onPrimaryContainer        = Color(0xFFE9E9E9)
+
+  override val secondary                 = Color(0xFFBFBFBF)
+  override val onSecondary               = Color(0xFF2A2A2A)
+  override val secondaryContainer        = Color(0xFF383838)
+  override val onSecondaryContainer      = Color(0xFFE8E8E8)
+
+  override val tertiary                  = Color(0xFFCACACA)
+  override val onTertiary                = Color(0xFF2A2A2A)
+  override val tertiaryContainer         = Color(0xFF3A3A3A)
+  override val onTertiaryContainer       = Color(0xFFE8E8E8)
+
+  override val error                     = TesseraBrandDark.error
+  override val onError                   = TesseraBrandDark.onError
+  override val errorContainer            = TesseraBrandDark.errorContainer
+  override val onErrorContainer          = TesseraBrandDark.onErrorContainer
+
+  override val background                = Color(0xFF121212)
+  override val onBackground              = Color(0xFFE6E6E6)
+  override val surface                   = Color(0xFF1A1A1A)
+  override val onSurface                 = Color(0xFFE6E6E6)
+  override val surfaceDim                = Color(0xFF121212)
+  override val surfaceBright             = Color(0xFF383838)
+  override val surfaceContainerLowest    = Color(0xFF0D0D0D)
+  override val surfaceContainerLow       = Color(0xFF1C1C1C)
+  override val surfaceContainer          = Color(0xFF1F1F1F)
+  override val surfaceContainerHigh      = Color(0xFF292929)
+  override val surfaceContainerHighest   = Color(0xFF333333)
+  override val onSurfaceVariant          = Color(0xFFC2C2C2)
+  override val outline                   = Color(0xFF8E8E8E)
+  override val outlineVariant            = Color(0xFF484848)
+  override val scrim                     = Color(0x52000000)
+
+  override val shadowAmbient             = Color(0x66000000)
+  override val shadowSpot                = Color(0x99000000)
+}
+
+/** Cool blue-gray (Tailwind slate scale). */
+object TesseraSlateLight : TesseraBrandColors {
+  override val primary                   = Color(0xFF475569)
+  override val onPrimary                 = Color(0xFFFFFFFF)
+  override val primaryContainer          = Color(0xFFE2E8F0)
+  override val onPrimaryContainer        = Color(0xFF0F172A)
+
+  override val secondary                 = Color(0xFF64748B)
+  override val onSecondary               = Color(0xFFFFFFFF)
+  override val secondaryContainer        = Color(0xFFE8EDF3)
+  override val onSecondaryContainer      = Color(0xFF1E293B)
+
+  override val tertiary                  = Color(0xFF566377)
+  override val onTertiary                = Color(0xFFFFFFFF)
+  override val tertiaryContainer         = Color(0xFFE2E8F0)
+  override val onTertiaryContainer       = Color(0xFF0F172A)
+
+  override val error                     = TesseraBrandLight.error
+  override val onError                   = TesseraBrandLight.onError
+  override val errorContainer            = TesseraBrandLight.errorContainer
+  override val onErrorContainer          = TesseraBrandLight.onErrorContainer
+
+  override val background                = Color(0xFFF8FAFC)
+  override val onBackground              = Color(0xFF1E293B)
+  override val surface                   = Color(0xFFFFFFFF)
+  override val onSurface                 = Color(0xFF1E293B)
+  override val surfaceDim                = Color(0xFFE7ECF2)
+  override val surfaceBright             = Color(0xFFFFFFFF)
+  override val surfaceContainerLowest    = Color(0xFFFFFFFF)
+  override val surfaceContainerLow       = Color(0xFFF4F7FA)
+  override val surfaceContainer          = Color(0xFFEEF2F7)
+  override val surfaceContainerHigh      = Color(0xFFE7ECF2)
+  override val surfaceContainerHighest   = Color(0xFFDFE6EE)
+  override val onSurfaceVariant          = Color(0xFF556070)
+  override val outline                   = Color(0xFF8593A4)
+  override val outlineVariant            = Color(0xFFD2DAE3)
+  override val scrim                     = Color(0x52000000)
+
+  override val shadowAmbient             = Color(0x33A0AEC0)
+  override val shadowSpot                = Color(0x290F172A)
+}
+
+object TesseraSlateDark : TesseraBrandColors {
+  override val primary                   = Color(0xFFCBD5E1)
+  override val onPrimary                 = Color(0xFF1E293B)
+  override val primaryContainer          = Color(0xFF334155)
+  override val onPrimaryContainer        = Color(0xFFE2E8F0)
+
+  override val secondary                 = Color(0xFFB2BFCE)
+  override val onSecondary               = Color(0xFF1E293B)
+  override val secondaryContainer        = Color(0xFF2E3B4D)
+  override val onSecondaryContainer      = Color(0xFFE2E8F0)
+
+  override val tertiary                  = Color(0xFFC0CCDA)
+  override val onTertiary                = Color(0xFF1E293B)
+  override val tertiaryContainer         = Color(0xFF334155)
+  override val onTertiaryContainer       = Color(0xFFE2E8F0)
+
+  override val error                     = TesseraBrandDark.error
+  override val onError                   = TesseraBrandDark.onError
+  override val errorContainer            = TesseraBrandDark.errorContainer
+  override val onErrorContainer          = TesseraBrandDark.onErrorContainer
+
+  override val background                = Color(0xFF0F172A)
+  override val onBackground              = Color(0xFFE2E8F0)
+  override val surface                   = Color(0xFF131C30)
+  override val onSurface                 = Color(0xFFE2E8F0)
+  override val surfaceDim                = Color(0xFF0F172A)
+  override val surfaceBright             = Color(0xFF2E3A50)
+  override val surfaceContainerLowest    = Color(0xFF0A1020)
+  override val surfaceContainerLow       = Color(0xFF141D33)
+  override val surfaceContainer          = Color(0xFF18223A)
+  override val surfaceContainerHigh      = Color(0xFF202C46)
+  override val surfaceContainerHighest   = Color(0xFF2A374F)
+  override val onSurfaceVariant          = Color(0xFFAEB9C9)
+  override val outline                   = Color(0xFF7E8A9C)
+  override val outlineVariant            = Color(0xFF3A4658)
+  override val scrim                     = Color(0x52000000)
+
+  override val shadowAmbient             = Color(0x66000000)
+  override val shadowSpot                = Color(0x99000000)
+}
+
+/** Muted desaturated green (sage). */
+object TesseraSageLight : TesseraBrandColors {
+  override val primary                   = Color(0xFF5E6F52)
+  override val onPrimary                 = Color(0xFFFFFFFF)
+  override val primaryContainer          = Color(0xFFDEE6D4)
+  override val onPrimaryContainer        = Color(0xFF1A2113)
+
+  override val secondary                 = Color(0xFF6B7563)
+  override val onSecondary               = Color(0xFFFFFFFF)
+  override val secondaryContainer        = Color(0xFFE2E7DB)
+  override val onSecondaryContainer      = Color(0xFF1D241A)
+
+  override val tertiary                  = Color(0xFF5A6B5E)
+  override val onTertiary                = Color(0xFFFFFFFF)
+  override val tertiaryContainer         = Color(0xFFDCE7DD)
+  override val onTertiaryContainer       = Color(0xFF18241B)
+
+  override val error                     = TesseraBrandLight.error
+  override val onError                   = TesseraBrandLight.onError
+  override val errorContainer            = TesseraBrandLight.errorContainer
+  override val onErrorContainer          = TesseraBrandLight.onErrorContainer
+
+  override val background                = Color(0xFFF6F8F2)
+  override val onBackground              = Color(0xFF1E2419)
+  override val surface                   = Color(0xFFFCFDF8)
+  override val onSurface                 = Color(0xFF1E2419)
+  override val surfaceDim                = Color(0xFFE7EADF)
+  override val surfaceBright             = Color(0xFFFCFDF8)
+  override val surfaceContainerLowest    = Color(0xFFFFFFFF)
+  override val surfaceContainerLow       = Color(0xFFF3F6EC)
+  override val surfaceContainer          = Color(0xFFEEF1E6)
+  override val surfaceContainerHigh      = Color(0xFFE7EBDF)
+  override val surfaceContainerHighest   = Color(0xFFE1E6D8)
+  override val onSurfaceVariant          = Color(0xFF56604F)
+  override val outline                   = Color(0xFF84897B)
+  override val outlineVariant            = Color(0xFFD2D7C8)
+  override val scrim                     = Color(0x52000000)
+
+  override val shadowAmbient             = Color(0x33B2B8A6)
+  override val shadowSpot                = Color(0x291A2113)
+}
+
+object TesseraSageDark : TesseraBrandColors {
+  override val primary                   = Color(0xFFB2C29E)
+  override val onPrimary                 = Color(0xFF25311A)
+  override val primaryContainer          = Color(0xFF3C4A2F)
+  override val onPrimaryContainer        = Color(0xFFDEE6D4)
+
+  override val secondary                 = Color(0xFFBDC6AF)
+  override val onSecondary               = Color(0xFF28311F)
+  override val secondaryContainer        = Color(0xFF3A4433)
+  override val onSecondaryContainer      = Color(0xFFE2E7DB)
+
+  override val tertiary                  = Color(0xFFB7C7B4)
+  override val onTertiary                = Color(0xFF233121)
+  override val tertiaryContainer         = Color(0xFF3A4A3C)
+  override val onTertiaryContainer       = Color(0xFFDCE7DD)
+
+  override val error                     = TesseraBrandDark.error
+  override val onError                   = TesseraBrandDark.onError
+  override val errorContainer            = TesseraBrandDark.errorContainer
+  override val onErrorContainer          = TesseraBrandDark.onErrorContainer
+
+  override val background                = Color(0xFF14160F)
+  override val onBackground              = Color(0xFFE4E7DC)
+  override val surface                   = Color(0xFF1B1E15)
+  override val onSurface                 = Color(0xFFE4E7DC)
+  override val surfaceDim                = Color(0xFF14160F)
+  override val surfaceBright             = Color(0xFF353A2C)
+  override val surfaceContainerLowest    = Color(0xFF0F110A)
+  override val surfaceContainerLow       = Color(0xFF1D2016)
+  override val surfaceContainer          = Color(0xFF20241A)
+  override val surfaceContainerHigh      = Color(0xFF2A2E20)
+  override val surfaceContainerHighest   = Color(0xFF343A2A)
+  override val onSurfaceVariant          = Color(0xFFC3C8B6)
+  override val outline                   = Color(0xFF8C9180)
+  override val outlineVariant            = Color(0xFF45493B)
+  override val scrim                     = Color(0x52000000)
+
+  override val shadowAmbient             = Color(0x66000000)
+  override val shadowSpot                = Color(0x99000000)
+}
+
 // ── Legacy aliases (will be removed when consumers migrate to TesseraBrand{Light,Dark}) ──
 @Deprecated("Use TesseraBrandLight.surface")              val SurfaceLight             = TesseraBrandLight.surface
 @Deprecated("Use TesseraBrandDark.surface")               val SurfaceDark              = TesseraBrandDark.surface

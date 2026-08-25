@@ -2,6 +2,7 @@ package app.tessera.data.repository
 
 import android.util.Log
 import app.tessera.core.util.Clock
+import app.tessera.data.local.Transactor
 import app.tessera.data.local.dao.FolderDao
 import app.tessera.data.local.dao.NoteDao
 import app.tessera.data.local.dao.SharedMemberDao
@@ -33,9 +34,12 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @Singleton
 class SyncRepositoryImpl @Inject constructor(
+    private val transactor: Transactor,
     private val noteDao: NoteDao,
     private val tagDao: TagDao,
     private val folderDao: FolderDao,
@@ -47,6 +51,11 @@ class SyncRepositoryImpl @Inject constructor(
     private val sharedMapper: SharedNoteMapper,
     private val clock: Clock,
 ) : SyncRepository {
+    // Serializes every Room merge so the one-shot SyncWorker and the live Firestore listener — both
+    // active right after sign-in — can't interleave their writes. Without this, two merges race on
+    // the SQLite connection and a failed transaction in one can corrupt the other, surfacing as
+    // "cannot start a transaction within a transaction" on the next write (e.g. creating a note).
+    private val mergeMutex = Mutex()
     override suspend fun syncNow(uid: UserId): Result<Unit> =
         runCatching {
             Log.d(TAG, "syncNow start uid=${uid.value}")
@@ -62,6 +71,12 @@ class SyncRepositoryImpl @Inject constructor(
             Log.d(TAG, "Pulled ${remoteSharedList.size} shared note(s) from Firestore")
             mergeRemoteShared(uid, remoteSharedList)
             Log.d(TAG, "syncNow finished uid=${uid.value}")
+        }
+
+    override suspend fun pushLocalChanges(uid: UserId): Result<Unit> =
+        runCatching {
+            pushPendingFolders(uid)
+            pushPending(uid)
         }
 
     override suspend fun purgeTombstones(uid: UserId): Result<Unit> =
@@ -216,18 +231,22 @@ class SyncRepositoryImpl @Inject constructor(
     internal suspend fun mergeRemote(
         uid: UserId,
         remoteNotes: List<RemoteNote>,
-    ) {
-        val now = clock.nowMs()
-        for (remoteNote in remoteNotes) {
-            val local = noteDao.getById(remoteNote.id)
-            // A note that is now shared lives in `sharedNotes`; the tombstone left behind in the
-            // owner's private subtree on share must not clobber the shared copy.
-            if (local != null && local.shareState == NoteEntity.SHARE_STATE_SHARED) continue
-            if (local != null && local.updatedAt >= remoteNote.updatedAt) continue
+    ) = mergeMutex.withLock {
+        // One transaction for the whole batch: writes commit (or roll back) atomically, so a
+        // failure can't leave the connection mid-transaction and crash the next writer.
+        transactor.transaction {
+            val now = clock.nowMs()
+            for (remoteNote in remoteNotes) {
+                val local = noteDao.getById(remoteNote.id)
+                // A note that is now shared lives in `sharedNotes`; the tombstone left behind in the
+                // owner's private subtree on share must not clobber the shared copy.
+                if (local != null && local.shareState == NoteEntity.SHARE_STATE_SHARED) continue
+                if (local != null && local.updatedAt >= remoteNote.updatedAt) continue
 
-            noteDao.upsert(mapper.toEntity(remoteNote, ownerId = uid.value, syncedAt = now))
-            replaceTags(remoteNote.id, remoteNote.tags)
-            replaceFolderAssignment(remoteNote.id, remoteNote.folderId)
+                noteDao.upsert(mapper.toEntity(remoteNote, ownerId = uid.value, syncedAt = now))
+                replaceTags(remoteNote.id, remoteNote.tags)
+                replaceFolderAssignment(remoteNote.id, remoteNote.folderId)
+            }
         }
     }
 
@@ -243,55 +262,64 @@ class SyncRepositoryImpl @Inject constructor(
     internal suspend fun mergeRemoteShared(
         uid: UserId,
         remoteShared: List<RemoteSharedNote>,
-    ) {
-        val myUid = uid.value
-        val now = clock.nowMs()
-        val remoteIds = remoteShared.mapTo(mutableSetOf()) { it.id }
+    ) = mergeMutex.withLock {
+        transactor.transaction {
+            val myUid = uid.value
+            val now = clock.nowMs()
+            val remoteIds = remoteShared.mapTo(mutableSetOf()) { it.id }
 
-        noteDao.getSharedNotes()
-            .filter { it.id !in remoteIds && it.myRole != ShareRole.OWNER.name }
-            .forEach { evicted ->
-                Log.d(TAG, "Evicting shared note removed from member set: ${evicted.id}")
-                noteDao.hardDelete(evicted.id) // CASCADE clears shared_members
+            noteDao.getSharedNotes()
+                .filter { it.id !in remoteIds && it.myRole != ShareRole.OWNER.name }
+                .forEach { evicted ->
+                    Log.d(TAG, "Evicting shared note removed from member set: ${evicted.id}")
+                    noteDao.hardDelete(evicted.id) // CASCADE clears shared_members
+                }
+
+            for (remoteNote in remoteShared) {
+                val local = noteDao.getById(remoteNote.id)
+                val myRole = sharedMapper.myRole(remoteNote, myUid)
+                val hasUnsyncedLocalEdits = local != null && local.syncedAt == null
+                val remoteContentIsNewer = local == null || remoteNote.updatedAt > local.updatedAt
+                val rollbackDowngrade = hasUnsyncedLocalEdits && !myRole.canEditContent
+
+                if (remoteContentIsNewer || rollbackDowngrade) {
+                    noteDao.upsert(sharedMapper.toEntity(remoteNote, myUid, syncedAt = now))
+                    replaceTags(remoteNote.id, remoteNote.tags)
+                } else {
+                    // Keep newer local content (will be pushed) but still refresh share state/role.
+                    noteDao.setShareState(remoteNote.id, NoteEntity.SHARE_STATE_SHARED, myRole.name)
+                }
+                sharedMemberDao.replaceForNote(remoteNote.id, sharedMapper.toMemberEntities(remoteNote))
             }
-
-        for (remoteNote in remoteShared) {
-            val local = noteDao.getById(remoteNote.id)
-            val myRole = sharedMapper.myRole(remoteNote, myUid)
-            val hasUnsyncedLocalEdits = local != null && local.syncedAt == null
-            val remoteContentIsNewer = local == null || remoteNote.updatedAt > local.updatedAt
-            val rollbackDowngrade = hasUnsyncedLocalEdits && !myRole.canEditContent
-
-            if (remoteContentIsNewer || rollbackDowngrade) {
-                noteDao.upsert(sharedMapper.toEntity(remoteNote, myUid, syncedAt = now))
-                replaceTags(remoteNote.id, remoteNote.tags)
-            } else {
-                // Keep newer local content (will be pushed) but still refresh share state/role.
-                noteDao.setShareState(remoteNote.id, NoteEntity.SHARE_STATE_SHARED, myRole.name)
-            }
-            sharedMemberDao.replaceForNote(remoteNote.id, sharedMapper.toMemberEntities(remoteNote))
         }
     }
 
     private suspend fun mergeRemoteFolders(
         @Suppress("UNUSED_PARAMETER") uid: UserId,
         remoteFolderList: List<RemoteFolder>,
-    ) {
-        val now = clock.nowMs()
-        for (remoteFolder in remoteFolderList) {
-            val local = folderDao.getById(remoteFolder.id)
-            if (local != null && local.updatedAt >= remoteFolder.updatedAt) continue
-            folderDao.upsert(
-                FolderEntity(
-                    id = remoteFolder.id,
-                    name = remoteFolder.name,
-                    parentId = remoteFolder.parentId,
-                    createdAt = remoteFolder.createdAt,
-                    updatedAt = remoteFolder.updatedAt,
-                    deletedAt = remoteFolder.deletedAt,
-                    syncedAt = now,
-                ),
-            )
+    ) = mergeMutex.withLock {
+        // `FolderEntity.parentId` is a deferred self-FK (checked at COMMIT). Upserting each folder in
+        // its own transaction fails when a child arrives before its parent in the remote list, and
+        // that failed commit corrupts the connection — crashing the next write. Doing the whole
+        // batch in ONE transaction defers the check to a single commit, by which point every parent
+        // row exists, so any insertion order is safe.
+        transactor.transaction {
+            val now = clock.nowMs()
+            for (remoteFolder in remoteFolderList) {
+                val local = folderDao.getById(remoteFolder.id)
+                if (local != null && local.updatedAt >= remoteFolder.updatedAt) continue
+                folderDao.upsert(
+                    FolderEntity(
+                        id = remoteFolder.id,
+                        name = remoteFolder.name,
+                        parentId = remoteFolder.parentId,
+                        createdAt = remoteFolder.createdAt,
+                        updatedAt = remoteFolder.updatedAt,
+                        deletedAt = remoteFolder.deletedAt,
+                        syncedAt = now,
+                    ),
+                )
+            }
         }
     }
 

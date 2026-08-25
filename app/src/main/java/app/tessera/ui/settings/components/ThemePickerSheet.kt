@@ -1,6 +1,8 @@
 package app.tessera.ui.settings.components
 
 import android.os.Build
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -21,51 +24,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.preferences.ThemeMode
+import app.tessera.core.preferences.ThemePalette
 import app.tessera.core.ui.tessera.TesseraBottomSheet
 import app.tessera.core.ui.theme.TesseraShapes
 import app.tessera.core.ui.theme.TesseraSpacing
-
-/** The three user-facing theme options, mapped onto the underlying [ThemeMode] enum. */
-enum class ThemeChoice { System, Light, Dark }
-
-internal fun ThemeMode.toThemeChoice(): ThemeChoice = when (this) {
-    ThemeMode.AUTO -> ThemeChoice.System
-    ThemeMode.LIGHT_DYNAMIC, ThemeMode.LIGHT_STATIC -> ThemeChoice.Light
-    ThemeMode.DARK_DYNAMIC, ThemeMode.DARK_STATIC -> ThemeChoice.Dark
-}
-
-internal fun ThemeMode.isDynamicColor(): Boolean = when (this) {
-    ThemeMode.AUTO, ThemeMode.LIGHT_DYNAMIC, ThemeMode.DARK_DYNAMIC -> true
-    ThemeMode.LIGHT_STATIC, ThemeMode.DARK_STATIC -> false
-}
-
-/**
- * Combine a [ThemeChoice] and a dynamic-color preference back into a [ThemeMode]. [ThemeChoice.System]
- * always resolves to [ThemeMode.AUTO] (which is inherently dynamic), so [dynamic] is ignored there.
- */
-internal fun themeModeOf(choice: ThemeChoice, dynamic: Boolean): ThemeMode = when (choice) {
-    ThemeChoice.System -> ThemeMode.AUTO
-    ThemeChoice.Light -> if (dynamic) ThemeMode.LIGHT_DYNAMIC else ThemeMode.LIGHT_STATIC
-    ThemeChoice.Dark -> if (dynamic) ThemeMode.DARK_DYNAMIC else ThemeMode.DARK_STATIC
-}
+import app.tessera.core.ui.theme.paletteColors
 
 private val dynamicColorSupported: Boolean
     get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+/**
+ * Theme picker. The radio rows pick light/dark only ([ThemeMode]); the dynamic-color switch is an
+ * independent toggle that's always available (on Android 12+) and, when on, tints both the light
+ * and dark scheme with the system wallpaper colors — including in [ThemeMode.AUTO].
+ */
 @Composable
 fun ThemePickerSheet(
     selected: ThemeMode,
-    onSelect: (ThemeMode) -> Unit,
+    dynamicColor: Boolean,
+    selectedPalette: ThemePalette,
+    onSelectTheme: (ThemeMode) -> Unit,
+    onToggleDynamic: (Boolean) -> Unit,
+    onSelectPalette: (ThemePalette) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Apply each change immediately so the whole app re-themes live while the sheet is open.
-    val choice = selected.toThemeChoice()
-    val dynamic = selected.isDynamicColor()
-
     TesseraBottomSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
@@ -79,42 +67,39 @@ fun ThemePickerSheet(
             ),
         )
 
+        PaletteSelector(
+            selected = selectedPalette,
+            // Dynamic color overrides the static palette's hue, so the swatches are inert then.
+            enabled = !(dynamicColor && dynamicColorSupported),
+            onSelect = onSelectPalette,
+        )
+
         ThemeRadioRow(
             label = stringResource(R.string.settings_theme_system),
-            selected = choice == ThemeChoice.System,
-            onClick = { onSelect(themeModeOf(ThemeChoice.System, dynamic)) },
+            selected = selected == ThemeMode.AUTO,
+            onClick = { onSelectTheme(ThemeMode.AUTO) },
         )
         ThemeRadioRow(
             label = stringResource(R.string.settings_theme_light),
-            selected = choice == ThemeChoice.Light,
-            onClick = { onSelect(themeModeOf(ThemeChoice.Light, dynamic)) },
+            selected = selected == ThemeMode.LIGHT,
+            onClick = { onSelectTheme(ThemeMode.LIGHT) },
         )
         ThemeRadioRow(
             label = stringResource(R.string.settings_theme_dark),
-            selected = choice == ThemeChoice.Dark,
-            onClick = { onSelect(themeModeOf(ThemeChoice.Dark, dynamic)) },
+            selected = selected == ThemeMode.DARK,
+            onClick = { onSelectTheme(ThemeMode.DARK) },
         )
 
         if (dynamicColorSupported) {
-            val dynamicEnabled = choice != ThemeChoice.System
             SettingsRow(
                 leadingIcon = null,
                 title = stringResource(R.string.settings_dynamic_color),
                 subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
-                onClick = if (dynamicEnabled) {
-                    { onSelect(themeModeOf(choice, !dynamic)) }
-                } else {
-                    null
-                },
+                onClick = { onToggleDynamic(!dynamicColor) },
                 trailing = {
                     Switch(
-                        checked = dynamic,
-                        onCheckedChange = if (dynamicEnabled) {
-                            { onSelect(themeModeOf(choice, it)) }
-                        } else {
-                            null
-                        },
-                        enabled = dynamicEnabled,
+                        checked = dynamicColor,
+                        onCheckedChange = { onToggleDynamic(it) },
                         colors = SwitchDefaults.colors(
                             checkedTrackColor = MaterialTheme.colorScheme.primary,
                             uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -147,6 +132,78 @@ private fun ThemeRadioRow(
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
+}
+
+@Composable
+private fun PaletteSelector(
+    selected: ThemePalette,
+    enabled: Boolean,
+    onSelect: (ThemePalette) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TesseraSpacing.xxl, vertical = TesseraSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(TesseraSpacing.md),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_palette_section),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.md),
+        ) {
+            ThemePalette.entries.forEach { palette ->
+                PaletteSwatch(
+                    palette = palette,
+                    selected = palette == selected,
+                    enabled = enabled,
+                    onClick = { onSelect(palette) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaletteSwatch(
+    palette: ThemePalette,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val swatchColor = paletteColors(palette, isSystemInDarkTheme()).primary
+    val name = paletteName(palette)
+    val ring = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .selectable(selected = selected, enabled = enabled, onClick = onClick)
+            .then(if (selected) Modifier.border(2.dp, ring, CircleShape) else Modifier)
+            .semantics { contentDescription = name },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            color = swatchColor.copy(alpha = if (enabled) 1f else 0.35f),
+            shape = CircleShape,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            ),
+            modifier = Modifier.size(if (selected) 30.dp else 36.dp),
+        ) {}
+    }
+}
+
+@Composable
+private fun paletteName(palette: ThemePalette): String = when (palette) {
+    ThemePalette.WARM -> stringResource(R.string.settings_palette_warm)
+    ThemePalette.NEUTRAL -> stringResource(R.string.settings_palette_neutral)
+    ThemePalette.SLATE -> stringResource(R.string.settings_palette_slate)
+    ThemePalette.SAGE -> stringResource(R.string.settings_palette_sage)
 }
 
 @Composable

@@ -92,6 +92,40 @@ class MarkdownHtmlConverterTest {
         assertEquals("`x`", converter.htmlToMarkdown("<code>x</code>"))
     }
 
+    // --- Fenced code blocks (preformat) ---
+
+    @Test fun `single-line code block round-trips`() = roundTrip("```\ncode\n```")
+
+    @Test fun `multi-line code block round-trips`() = roundTrip("```\nline one\nline two\n```")
+
+    @Test fun `code block with a blank line round-trips`() = roundTrip("```\nline one\n\nline two\n```")
+
+    @Test
+    fun `code block preserves markdown specials verbatim`() =
+        roundTrip("```\nif (a < b && c > d) { *x* }\n```")
+
+    @Test
+    fun `markdown code block maps to pre`() {
+        assertEquals("<pre>a&lt;b<br>c</pre>", converter.markdownToHtml("```\na<b\nc\n```"))
+    }
+
+    @Test
+    fun `aztec pre parses to fenced block`() {
+        assertEquals("```\na\nb\n```", converter.htmlToMarkdown("<pre>a<br>b</pre>"))
+    }
+
+    @Test
+    fun `aztec pre with newlines parses to fenced block`() {
+        assertEquals("```\na\nb\n```", converter.htmlToMarkdown("<pre>a\nb</pre>"))
+    }
+
+    @Test
+    fun `code block is a fixed point after one html normalization pass`() {
+        val md = "```\nval x = 1\nif (x < 2) print(x)\n```"
+        val once = converter.htmlToMarkdown(converter.markdownToHtml(md))
+        assertEquals(once, converter.htmlToMarkdown(converter.markdownToHtml(once)))
+    }
+
     @Test
     fun `aztec self-closing hr parses to rule`() {
         assertEquals("---", converter.htmlToMarkdown("<hr />"))
@@ -125,7 +159,7 @@ class MarkdownHtmlConverterTest {
     @Test
     fun `angle brackets do not produce raw html tags`() {
         val html = converter.markdownToHtml("a <fake> tag")
-        assertEquals("<p>a &lt;fake&gt; tag</p>", html)
+        assertEquals("a &lt;fake&gt; tag", html)
     }
 
     @Test
@@ -153,29 +187,110 @@ class MarkdownHtmlConverterTest {
         assertEquals("&lt;", converter.htmlToMarkdown("<p>&amp;lt;</p>"))
     }
 
-    // --- Aztec paragraph-separator normalization -------------------------------------------
-    // Aztec's toHtml() emits plain text with "\n\n" between paragraphs (no <p> tags). Our
-    // markdownToHtml uses one "\n" per paragraph, so the import must collapse the doubled
-    // breaks or blank lines accumulate on every load→save cycle.
+    // --- Aztec newline handling (verified on-device/Robolectric) ----------------------------
+    // Aztec's toHtml() serializes every plain-text paragraph break as a DOUBLE bare "\n" (editable
+    // "a\nb" -> "a\n\nb"; "a\n\nb" -> "a\n\n\n\nb"), i.e. bare-newline runs are 2x the line breaks
+    // the user sees. htmlToMarkdown HALVES plain-text runs to recover the visible structure: one
+    // typed Enter -> one line break, two Enters -> one preserved blank line. A run touching a block
+    // boundary (after "</…>" / before "<…>") is structural and kept 1:1, so a blank placed right
+    // after a heading/list is preserved too. Our own markdownToHtml emits "<br>" / a placeholder
+    // (never bare "\n"), so its breaks are read 1:1.
 
     @Test
-    fun `aztec double-newline paragraphs collapse to single`() {
-        assertEquals("a\nb\nc", converter.htmlToMarkdown("a\n\nb\n\nc"))
+    fun `adjacent plain lines stay on consecutive lines`() {
+        // Single bare newlines (e.g. from our own <br> markup) are 1:1 line breaks, no blank.
+        assertEquals("a\nb\nc", converter.htmlToMarkdown("a\nb\nc"))
     }
 
     @Test
-    fun `runs of blank lines collapse to a single break`() {
-        assertEquals("a\nb", converter.htmlToMarkdown("a\n\n\n\n\n\nb"))
+    fun `a typed plain break (doubled) maps to a single line break`() {
+        // Aztec emits a typed plain-text break as "\n\n"; halving -> one break, NOT a stored blank.
+        assertEquals("a\nb", converter.htmlToMarkdown("a\n\nb"))
     }
 
     @Test
-    fun `plain multiline body round-trips without growing`() {
-        val md = "first\nsecond\nthird"
+    fun `a typed blank line between plain paragraphs is preserved`() {
+        // Two typed Enters (one blank line) serialize as "\n\n\n\n"; halving -> "\n\n" (one blank).
+        assertEquals("a\n\nb", converter.htmlToMarkdown("a\n\n\n\nb"))
+    }
+
+    @Test
+    fun `one blank line after a block element is preserved`() {
+        // One blank line after a block (here a task list) is intentional and kept. (A toggled
+        // heading's spurious doubled break is normalized separately so it does NOT add a blank;
+        // 2+ blanks after a block are capped at one for round-trip stability.)
+        assertEquals(
+            "- [x] done\n\nTotal: 100",
+            converter.htmlToMarkdown(
+                "<ul type=\"task-list\"><li><input type=\"checkbox\" checked />done</li></ul>\n\nTotal: 100",
+            ),
+        )
+    }
+
+    @Test
+    fun `paragraph right after a list gets a blank line`() {
+        // A single newline between a list close and following text is Aztec's serialization of a
+        // typed list-exit (and a lazy continuation in Markdown), so it must become a blank line —
+        // otherwise the blank the user typed after the list is lost.
+        assertEquals(
+            "- [x] done\n\nTotal: 100",
+            converter.htmlToMarkdown(
+                "<ul type=\"task-list\"><li><input type=\"checkbox\" checked />done</li></ul>\nTotal: 100",
+            ),
+        )
+    }
+
+    @Test
+    fun `a blank line round-trips and stays stable`() {
+        // A deliberate blank line must survive markdown -> html -> markdown unchanged, and remain a
+        // fixed point on a second pass — the editor's echo-loop guard relies on this.
+        val md = "first\n\nsecond\nthird"
         val once = converter.htmlToMarkdown(converter.markdownToHtml(md))
-        assertEquals(md, once)
-        // Simulate Aztec re-doubling the breaks, then importing again — must stay stable.
-        val aztecEcho = once.replace("\n", "\n\n")
-        assertEquals(md, converter.htmlToMarkdown(aztecEcho))
+        assertEquals("first\n\nsecond\nthird", once)
+        val twice = converter.htmlToMarkdown(converter.markdownToHtml(once))
+        assertEquals(once, twice)
+    }
+
+    // --- Blank lines between list items (Aztec absorbs a typed blank as an empty <li>) -----------
+    // When the user inserts a blank line between two list items / between a list and a neighbour,
+    // Aztec doesn't create a paragraph — it absorbs the break as an EMPTY list item (<li></li>).
+    // The converter turns a non-terminal empty item (or a trailing one when content follows the
+    // list) into a real blank line. A trailing empty item of a list that ENDS the note is kept as a
+    // genuine not-yet-typed item (checklist being built).
+
+    @Test
+    fun `empty bullet item between two items becomes a blank line`() {
+        assertEquals("- a\n\n- b", converter.htmlToMarkdown("<ul><li>a</li><li></li><li>b</li></ul>"))
+    }
+
+    @Test
+    fun `trailing empty bullet item becomes a blank when content follows the list`() {
+        assertEquals(
+            "- a\n\n1. b",
+            converter.htmlToMarkdown("<ul><li>a</li><li></li></ul><ol><li>b</li></ol>"),
+        )
+    }
+
+    @Test
+    fun `trailing empty bullet item is kept when the list ends the note`() {
+        assertEquals("- a\n- ", converter.htmlToMarkdown("<ul><li>a</li><li></li></ul>"))
+    }
+
+    @Test
+    fun `empty task item between two tasks becomes a blank line`() {
+        assertEquals(
+            "- [ ] a\n\n- [x] b",
+            converter.htmlToMarkdown(
+                "<ul type=\"task-list\"><li><input type=\"checkbox\" />a</li>" +
+                    "<li></li>" +
+                    "<li><input type=\"checkbox\" checked />b</li></ul>",
+            ),
+        )
+    }
+
+    @Test
+    fun `mixed list-to-list blanks round-trip`() {
+        roundTrip("- a\n\n1. b\n\n- [ ] c")
     }
 
     @Test

@@ -10,12 +10,13 @@ import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -35,7 +36,8 @@ import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.tessera.TesseraNoteCard
 import kotlin.math.roundToInt
 
-private val SwipeButtonWidth = 72.dp
+private val SwipeButtonSize = 48.dp
+private val SwipeButtonGap = 8.dp
 
 private enum class RevealAnchor { LeftRevealed, Settled, RightRevealed }
 
@@ -72,6 +74,23 @@ fun TesseraSwipeableNoteCard(
   avatars: (@Composable () -> Unit)? = null,
 ) {
   val density = LocalDensity.current
+  // Revealed width per side = the buttons plus a gap between each and one at either edge,
+  // matching SwipeActionsRow's spacedBy + horizontal padding so the card stops flush with it.
+  fun sideWidthPx(count: Int) = with(density) {
+    if (count == 0) 0f else (SwipeButtonSize * count + SwipeButtonGap * (count + 1)).toPx()
+  }
+  val leftWidthPx = sideWidthPx(leftActions.size)
+  val rightWidthPx = sideWidthPx(rightActions.size)
+
+  fun buildAnchors() = DraggableAnchors {
+    RevealAnchor.Settled at 0f
+    if (leftActions.isNotEmpty()) RevealAnchor.LeftRevealed at leftWidthPx
+    if (rightActions.isNotEmpty()) RevealAnchor.RightRevealed at -rightWidthPx
+  }
+
+  // Anchor widths are known at composition time (density + action counts), so seed the anchors
+  // synchronously here. Deferring this to a LaunchedEffect leaves the offset uninitialized during
+  // the first layout pass, where the .offset modifier's requireOffset() would throw.
   val state = remember {
     AnchoredDraggableState(
       initialValue = RevealAnchor.Settled,
@@ -79,22 +98,13 @@ fun TesseraSwipeableNoteCard(
       velocityThreshold = { with(density) { 125.dp.toPx() } },
       snapAnimationSpec = tween(),
       decayAnimationSpec = exponentialDecay(),
-    )
+    ).apply { updateAnchors(buildAnchors()) }
   }
-
-  val leftWidthPx = with(density) { (SwipeButtonWidth * leftActions.size).toPx() }
-  val rightWidthPx = with(density) { (SwipeButtonWidth * rightActions.size).toPx() }
 
   // Rebuild anchors whenever the revealed widths change. A side with no actions gets no anchor,
   // so that drag direction cannot open.
   LaunchedEffect(leftWidthPx, rightWidthPx) {
-    state.updateAnchors(
-      DraggableAnchors {
-        RevealAnchor.Settled at 0f
-        if (leftActions.isNotEmpty()) RevealAnchor.LeftRevealed at leftWidthPx
-        if (rightActions.isNotEmpty()) RevealAnchor.RightRevealed at -rightWidthPx
-      }
-    )
+    state.updateAnchors(buildAnchors())
   }
 
   // Inbound: caller asked us to close and we are (or are settling) open -> animate back to center.
@@ -166,13 +176,16 @@ private fun SwipeActionsRow(
   modifier: Modifier = Modifier,
 ) {
   Box(modifier = modifier, contentAlignment = alignment) {
-    Row(modifier = Modifier.fillMaxHeight()) {
+    Row(
+      modifier = Modifier.padding(horizontal = SwipeButtonGap),
+      horizontalArrangement = Arrangement.spacedBy(SwipeButtonGap),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
       actions.forEach { action ->
         Box(
           modifier = Modifier
             .testTag(UiTestTags.swipeAction(noteId, action.key))
-            .fillMaxHeight()
-            .width(SwipeButtonWidth)
+            .size(SwipeButtonSize)
             .clip(MaterialTheme.shapes.medium)
             .background(action.container)
             .clickable {

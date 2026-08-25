@@ -22,6 +22,7 @@ class UserPreferencesRepositoryTest {
         // DataStore is a process-singleton keyed by file name, so reset between tests
         // via the public API to keep cases independent.
         repo.setThemeMode(ThemeMode.AUTO)
+        repo.setDynamicColor(true)
         repo.setLanguageTag("")
     }
 
@@ -32,7 +33,15 @@ class UserPreferencesRepositoryTest {
 
     @Test
     fun `set then read theme persists`() = runBlocking {
-        repo.setThemeMode(ThemeMode.DARK_STATIC)
-        assertEquals(ThemeMode.DARK_STATIC, repo.themeMode.first())
+        repo.setThemeMode(ThemeMode.DARK)
+        assertEquals(ThemeMode.DARK, repo.themeMode.first())
+    }
+
+    @Test
+    fun `dynamic color persists independently of theme`() = runBlocking {
+        repo.setThemeMode(ThemeMode.AUTO)
+        repo.setDynamicColor(false)
+        assertEquals(ThemeMode.AUTO, repo.themeMode.first())
+        assertEquals(false, repo.dynamicColor.first())
     }
 }

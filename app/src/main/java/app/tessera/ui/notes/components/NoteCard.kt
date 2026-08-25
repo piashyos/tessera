@@ -38,7 +38,7 @@ import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.Tag
-import app.tessera.ui.notes.formatNoteDate
+import app.tessera.ui.notes.noteDateLabel
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -122,7 +122,7 @@ private fun TileNoteCard(note: Note, modifier: Modifier) {
                 note.tags.take(4).forEach { tag -> TagChip(name = tag.name) }
             }
             Text(
-                text = formatNoteDate(note.updatedAt),
+                text = noteDateLabel(note.updatedAt),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -157,7 +157,7 @@ private fun ListNoteCard(note: Note, modifier: Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = formatNoteDate(note.updatedAt),
+                text = noteDateLabel(note.updatedAt),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
                 maxLines = 1,

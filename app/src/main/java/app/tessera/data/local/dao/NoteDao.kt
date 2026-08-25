@@ -103,6 +103,24 @@ interface NoteDao {
     @Query("SELECT DISTINCT ownerId FROM notes WHERE ownerId IS NOT NULL LIMIT 1")
     suspend fun getCurrentOwnerId(): String?
 
+    /**
+     * True when the local cache holds notes belonging to a *different* account than [uid]:
+     * either private notes owned by someone else, or shared notes whose member set does not
+     * include [uid]. Locally-created notes with a null owner (signed-out drafts) are NOT foreign,
+     * so the sign-in adoption flow is preserved. Used to wipe the cache on account switch.
+     */
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM notes
+            WHERE ownerId IS NOT NULL
+              AND ownerId != :uid
+              AND id NOT IN (SELECT noteId FROM shared_members WHERE uid = :uid)
+        )
+        """,
+    )
+    suspend fun hasForeignNotes(uid: String): Boolean
+
     @Query("UPDATE notes SET ownerId = :uid, syncedAt = NULL WHERE ownerId IS NULL")
     suspend fun adoptLocalNotes(uid: String)
 

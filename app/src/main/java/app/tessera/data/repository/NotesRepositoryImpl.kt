@@ -1,6 +1,8 @@
 package app.tessera.data.repository
 
 import app.tessera.core.text.deriveTitleFromContent
+import app.tessera.core.text.matchScore
+import app.tessera.core.text.searchTerms
 import app.tessera.core.util.Clock
 import app.tessera.data.local.dao.NoteDao
 import app.tessera.data.local.dao.TagDao
@@ -42,13 +44,29 @@ class NotesRepositoryImpl @Inject constructor(
         }
 
     override fun searchNotes(query: String): Flow<List<Note>> {
-        val ftsQuery = query.toFtsMatchQuery()
-        if (ftsQuery.isEmpty()) {
+        val terms = searchTerms(query)
+        if (terms.isEmpty()) {
             return observeNotes()
         }
 
-        return noteDao.search(ftsQuery).map { notes ->
-            notes.map { note -> toDomain(note) }
+        // Smart, in-memory match over the active notes: case- and diacritic-insensitive across
+        // scripts, with substring/prefix and typo (edit-distance) tolerance. Ranked by relevance,
+        // then most-recently-updated. Reuses observeNotes() so results stay reactive to edits/sync.
+        return observeNotes().map { notes ->
+            notes
+                .mapNotNull { note ->
+                    matchScore(
+                        title = note.title,
+                        body = note.content,
+                        tags = note.tags.map { it.name },
+                        terms = terms,
+                    )?.let { score -> note to score }
+                }
+                .sortedWith(
+                    compareByDescending<Pair<Note, Int>> { it.second }
+                        .thenByDescending { it.first.updatedAt },
+                )
+                .map { it.first }
         }
     }
 
@@ -192,12 +210,3 @@ class NotesRepositoryImpl @Inject constructor(
         tagDao.linkTagsToNote(refs)
     }
 }
-
-private val FtsOperatorChars = Regex("[\"*:^()\\-]")
-
-internal fun String.toFtsMatchQuery(): String =
-    trim()
-        .split(Regex("\\s+"))
-        .map { token -> token.replace(FtsOperatorChars, "") }
-        .filter { it.isNotBlank() }
-        .joinToString(" ") { token -> "$token*" }
