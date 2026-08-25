@@ -433,7 +433,11 @@ fun RichNoteBody(
             // Inflate from a context whose Resources swap Aztec's static checkbox drawable for our
             // palette-driven one. Aztec builds task-list spans from this context, so their checkbox
             // resolves to ours; checkboxPalette is read live at draw time.
-            val themedContext = checkboxThemedContext(context, checkboxPalette, checkboxCornerPx, checkboxStrokePx)
+            // The Material3 XML theme is applied explicitly: the layout resolves ?attr/color* and
+            // text-appearance attrs, and the host context is not guaranteed to carry them (Compose
+            // test rules use a bare ComponentActivity with the framework default theme).
+            val m3Context = android.view.ContextThemeWrapper(context, R.style.Theme_Tessera)
+            val themedContext = checkboxThemedContext(m3Context, checkboxPalette, checkboxCornerPx, checkboxStrokePx)
             // cloneInContext binds the inflater (and every view it inflates, incl. the AztecText's
             // own context) to themedContext. LayoutInflater.from(wrapper) alone would delegate
             // getSystemService to the base context and yield a base-bound inflater.

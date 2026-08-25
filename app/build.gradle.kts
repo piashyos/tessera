@@ -20,11 +20,11 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "app.tessera"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "app.tessera"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 14
         versionName = "0.4.1"
         testInstrumentationRunner = "app.tessera.HiltTestRunner"
@@ -89,6 +89,8 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.icons.lucide)
+    implementation(libs.material.icons.core)
+    implementation(libs.material.icons.extended)
     implementation(libs.compose.animation)
     implementation(libs.compose.foundation)
     implementation(libs.nav.compose)
