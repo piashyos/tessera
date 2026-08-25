@@ -3,11 +3,6 @@ package app.tessera.ui.navigation
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -48,10 +43,13 @@ fun NotesNavGraph(
             NavHost(
                 navController = navController,
                 startDestination = NotesListRoute,
-                enterTransition = { fadeIn(animationSpec = tween(220)) },
-                exitTransition = { fadeOut(animationSpec = tween(180)) },
+                enterTransition = { TesseraTransitions.enter() },
+                exitTransition = { TesseraTransitions.exit() },
+                popEnterTransition = { TesseraTransitions.popEnter() },
+                popExitTransition = { TesseraTransitions.popExit() },
             ) {
                 notesListDestination(
+                    navController = navController,
                     onOpenEditor = { noteId, fromDraft ->
                         navController.navigate("$EditorRoute/$noteId?$FromDraftArg=$fromDraft")
                     },
@@ -67,19 +65,13 @@ fun NotesNavGraph(
 }
 
 private fun NavGraphBuilder.notesListDestination(
+    navController: NavHostController,
     onOpenEditor: (String, Boolean) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    composable(
-        route = NotesListRoute,
-        // Returning from editor/settings: the list slides back in from the left
-        // (parallax) while the popped screen slides out to the right.
-        popEnterTransition = {
-            slideInHorizontally(animationSpec = tween(280), initialOffsetX = { -it / 4 }) +
-                fadeIn(tween(280))
-        },
-    ) {
+    composable(route = NotesListRoute) { entry ->
         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
+          ScreenMotionWrapper(navController = navController, entry = entry, animatedVisibilityScope = this) {
             val viewModel: NotesListViewModel = hiltViewModel()
             val state by viewModel.state.collectAsState()
             val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
@@ -146,23 +138,14 @@ private fun NavGraphBuilder.notesListDestination(
                 onShowAllNotes = viewModel::showAllNotes,
                 onMakeShared = viewModel::shareNote,
             )
+          }
         }
     }
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 private fun NavGraphBuilder.settingsDestination(navController: NavHostController) {
-    composable(
-        route = SettingsRoute,
-        enterTransition = {
-            slideInHorizontally(animationSpec = tween(280), initialOffsetX = { it }) +
-                fadeIn(tween(280))
-        },
-        exitTransition = {
-            slideOutHorizontally(animationSpec = tween(240), targetOffsetX = { it }) +
-                fadeOut(tween(240))
-        },
-    ) {
+    composable(route = SettingsRoute) {
         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
             val viewModel: SettingsViewModel = hiltViewModel()
             val state by viewModel.state.collectAsState()
@@ -201,14 +184,6 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                 defaultValue = false
             },
         ),
-        enterTransition = {
-            slideInHorizontally(animationSpec = tween(280), initialOffsetX = { it }) +
-                fadeIn(tween(280))
-        },
-        exitTransition = {
-            slideOutHorizontally(animationSpec = tween(240), targetOffsetX = { it }) +
-                fadeOut(tween(240))
-        },
     ) { backStackEntry ->
         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
             val viewModel: NoteEditorViewModel = hiltViewModel()
