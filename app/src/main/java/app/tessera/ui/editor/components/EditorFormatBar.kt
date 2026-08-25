@@ -31,21 +31,22 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.theme.TesseraTheme
-import com.composables.icons.lucide.Bold
-import com.composables.icons.lucide.Code
-import com.composables.icons.lucide.Ellipsis
 import com.composables.icons.lucide.Heading1
 import com.composables.icons.lucide.Heading2
-import com.composables.icons.lucide.Italic
-import com.composables.icons.lucide.List
-import com.composables.icons.lucide.ListChecks
-import com.composables.icons.lucide.ListOrdered
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Minus
-import com.composables.icons.lucide.Quote
-import com.composables.icons.lucide.Strikethrough
-import com.composables.icons.lucide.Underline
 import org.wordpress.aztec.AztecTextFormat
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.FormatBold
+import androidx.compose.material.icons.rounded.FormatItalic
+import androidx.compose.material.icons.rounded.FormatListNumbered
+import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.FormatStrikethrough
+import androidx.compose.material.icons.rounded.FormatUnderlined
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.Remove
 
 /**
  * IME-anchored formatting bar that replaces the old `MarkdownToolbar` inside a
@@ -71,10 +72,10 @@ fun EditorFormatBar(
     horizontalArrangement = Arrangement.spacedBy(2.dp),
   ) {
     // [B][I][U][S]
-    FormatToggle(Lucide.Bold, R.string.toolbar_bold, AztecTextFormat.FORMAT_BOLD in activeFormats) { actions?.toggleBold() }
-    FormatToggle(Lucide.Italic, R.string.toolbar_italic, AztecTextFormat.FORMAT_ITALIC in activeFormats) { actions?.toggleItalic() }
-    FormatToggle(Lucide.Underline, R.string.toolbar_underline, AztecTextFormat.FORMAT_UNDERLINE in activeFormats) { actions?.toggleUnderline() }
-    FormatToggle(Lucide.Strikethrough, R.string.toolbar_strikethrough, AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats) { actions?.toggleStrikethrough() }
+    FormatToggle(Icons.Rounded.FormatBold, R.string.toolbar_bold, AztecTextFormat.FORMAT_BOLD in activeFormats) { actions?.toggleBold() }
+    FormatToggle(Icons.Rounded.FormatItalic, R.string.toolbar_italic, AztecTextFormat.FORMAT_ITALIC in activeFormats) { actions?.toggleItalic() }
+    FormatToggle(Icons.Rounded.FormatUnderlined, R.string.toolbar_underline, AztecTextFormat.FORMAT_UNDERLINE in activeFormats) { actions?.toggleUnderline() }
+    FormatToggle(Icons.Rounded.FormatStrikethrough, R.string.toolbar_strikethrough, AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats) { actions?.toggleStrikethrough() }
 
     GroupSeparator()
     // [H1][H2]
@@ -83,15 +84,15 @@ fun EditorFormatBar(
 
     GroupSeparator()
     // [•][1.][☐]
-    FormatToggle(Lucide.List, R.string.toolbar_bullet, AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats) { actions?.toggleBulletList() }
-    FormatToggle(Lucide.ListOrdered, R.string.toolbar_ordered, AztecTextFormat.FORMAT_ORDERED_LIST in activeFormats) { actions?.toggleOrderedList() }
-    FormatToggle(Lucide.ListChecks, R.string.toolbar_checklist, AztecTextFormat.FORMAT_TASK_LIST in activeFormats) { actions?.toggleTaskList() }
+    FormatToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, R.string.toolbar_bullet, AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats) { actions?.toggleBulletList() }
+    FormatToggle(Icons.Rounded.FormatListNumbered, R.string.toolbar_ordered, AztecTextFormat.FORMAT_ORDERED_LIST in activeFormats) { actions?.toggleOrderedList() }
+    FormatToggle(Icons.Rounded.Checklist, R.string.toolbar_checklist, AztecTextFormat.FORMAT_TASK_LIST in activeFormats) { actions?.toggleTaskList() }
 
     GroupSeparator()
     // [«][</>][—]
-    FormatToggle(Lucide.Quote, R.string.toolbar_quote, AztecTextFormat.FORMAT_QUOTE in activeFormats) { actions?.toggleQuote() }
-    FormatToggle(Lucide.Code, R.string.toolbar_code, AztecTextFormat.FORMAT_PREFORMAT in activeFormats) { actions?.toggleCode() }
-    FormatToggle(Lucide.Minus, R.string.toolbar_divider, active = false) { actions?.insertHorizontalRule() }
+    FormatToggle(Icons.Rounded.FormatQuote, R.string.toolbar_quote, AztecTextFormat.FORMAT_QUOTE in activeFormats) { actions?.toggleQuote() }
+    FormatToggle(Icons.Rounded.Code, R.string.toolbar_code, AztecTextFormat.FORMAT_PREFORMAT in activeFormats) { actions?.toggleCode() }
+    FormatToggle(Icons.Rounded.Remove, R.string.toolbar_divider, active = false) { actions?.insertHorizontalRule() }
 
     GroupSeparator()
     // [⋯] — anchors the paragraph/headings Material 3 dropdown.
@@ -103,7 +104,7 @@ fun EditorFormatBar(
       // closes the menu and the onClick immediately reopens it. Record when a dismiss happened
       // and ignore a reopen that lands within the same tap, so the button truly toggles.
       var lastDismissMs by remember { mutableLongStateOf(0L) }
-      FormatToggle(Lucide.Ellipsis, R.string.toolbar_more, active = menuExpanded) {
+      FormatToggle(Icons.Rounded.MoreHoriz, R.string.toolbar_more, active = menuExpanded) {
         if (System.currentTimeMillis() - lastDismissMs > 200L) menuExpanded = true
       }
       if (actions != null) {

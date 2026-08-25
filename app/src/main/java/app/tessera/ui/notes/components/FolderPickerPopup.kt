@@ -29,10 +29,11 @@ import app.tessera.core.ui.tessera.TesseraDialog
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
 import com.composables.icons.lucide.Folder as FolderIcon
-import com.composables.icons.lucide.FolderX
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Trash2
 import dev.chrisbanes.haze.HazeState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.FolderOff
 
 /**
  * Glass-styled modal for moving a note into a folder. Each folder row can be
@@ -60,13 +61,13 @@ fun FolderPickerPopup(
             fontWeight = FontWeight.SemiBold,
         )
         FolderPickerRow(
-            icon = Lucide.FolderX,
+            icon = Icons.Rounded.FolderOff,
             label = stringResource(R.string.folder_picker_none),
             onClick = { onPick(null); onDismiss() },
         )
         folders.forEach { folder ->
             FolderPickerRow(
-                icon = Lucide.FolderIcon,
+                icon = Icons.Rounded.Folder,
                 label = folder.name,
                 onClick = { onPick(folder.id); onDismiss() },
                 onDelete = { pendingDelete = folder },
@@ -119,7 +120,7 @@ private fun FolderPickerRow(
             if (onDelete != null) {
                 IconButton(onClick = onDelete) {
                     Icon(
-                        Lucide.Trash2,
+                        Icons.Rounded.Delete,
                         contentDescription = stringResource(R.string.folders_delete),
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(18.dp),

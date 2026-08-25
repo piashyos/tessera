@@ -67,17 +67,17 @@ import app.tessera.ui.editor.components.TableBlockEditor
 import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.noteDateLabel
-import com.composables.icons.lucide.ArrowLeft
-import com.composables.icons.lucide.EllipsisVertical
-import com.composables.icons.lucide.Lock
-import com.composables.icons.lucide.LogOut
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Pin
-import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.Users
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import org.wordpress.aztec.AztecTextFormat
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PushPin
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -160,7 +160,7 @@ fun NoteEditorScreen(
                             modifier = Modifier.testTag(UiTestTags.EditorBack),
                         ) {
                             Icon(
-                                imageVector = Lucide.ArrowLeft,
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp),
@@ -184,7 +184,7 @@ fun NoteEditorScreen(
                                     modifier = Modifier.testTag(UiTestTags.EditorPin),
                                 ) {
                                     Icon(
-                                        imageVector = Lucide.Pin,
+                                        imageVector = Icons.Rounded.PushPin,
                                         contentDescription = null,
                                         tint = if (state.isPinned) {
                                             MaterialTheme.colorScheme.primary
@@ -206,7 +206,7 @@ fun NoteEditorScreen(
                                     modifier = Modifier.testTag(UiTestTags.EditorDelete),
                                 ) {
                                     Icon(
-                                        imageVector = Lucide.Trash2,
+                                        imageVector = Icons.Rounded.Delete,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp),
@@ -225,7 +225,7 @@ fun NoteEditorScreen(
                                     modifier = Modifier.testTag(UiTestTags.EditorOverflow),
                                 ) {
                                     Icon(
-                                        imageVector = Lucide.EllipsisVertical,
+                                        imageVector = Icons.Rounded.MoreVert,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp),
@@ -238,21 +238,21 @@ fun NoteEditorScreen(
                                     if (state.canMakeShared) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.editor_make_shared)) },
-                                            leadingIcon = { Icon(Lucide.Users, contentDescription = null) },
+                                            leadingIcon = { Icon(Icons.Rounded.Group, contentDescription = null) },
                                             onClick = { overflowVisible = false; onMakeShared() },
                                         )
                                     }
                                     if (state.canManageAccess) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.editor_manage_access)) },
-                                            leadingIcon = { Icon(Lucide.Users, contentDescription = null) },
+                                            leadingIcon = { Icon(Icons.Rounded.Group, contentDescription = null) },
                                             onClick = { overflowVisible = false; onManageAccess() },
                                         )
                                     }
                                     if (state.canUnshare) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.editor_make_private)) },
-                                            leadingIcon = { Icon(Lucide.Lock, contentDescription = null) },
+                                            leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
                                             onClick = {
                                                 overflowVisible = false
                                                 unshareConfirmVisible = true
@@ -262,7 +262,7 @@ fun NoteEditorScreen(
                                     if (state.canLeave) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.editor_leave)) },
-                                            leadingIcon = { Icon(Lucide.LogOut, contentDescription = null) },
+                                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null) },
                                             onClick = { overflowVisible = false; leaveConfirmVisible = true },
                                         )
                                     }
@@ -276,7 +276,7 @@ fun NoteEditorScreen(
                                             },
                                             leadingIcon = {
                                                 Icon(
-                                                    Lucide.Trash2,
+                                                    Icons.Rounded.Delete,
                                                     contentDescription = null,
                                                     tint = MaterialTheme.colorScheme.error,
                                                 )

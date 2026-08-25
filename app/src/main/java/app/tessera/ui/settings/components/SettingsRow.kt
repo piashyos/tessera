@@ -19,8 +19,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tessera.core.ui.theme.TesseraSpacing
-import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.Lucide
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
 
 /**
  * A single row inside a [SettingsGroup]: optional leading icon, a title with an optional subtitle,
@@ -100,7 +100,7 @@ fun SettingsValue(text: String) {
 @Composable
 fun SettingsChevron() {
     Icon(
-        imageVector = Lucide.ChevronRight,
+        imageVector = Icons.Rounded.ChevronRight,
         contentDescription = null,
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.size(20.dp),

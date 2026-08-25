@@ -66,15 +66,15 @@ import app.tessera.ui.settings.components.SyncStatusRow
 import app.tessera.ui.settings.components.ThemePickerSheet
 import coil.compose.AsyncImage
 import java.io.OutputStream
-import com.composables.icons.lucide.ArrowLeft
-import com.composables.icons.lucide.Download
-import com.composables.icons.lucide.Info
-import com.composables.icons.lucide.Languages
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Palette
-import com.composables.icons.lucide.Scale
-import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.User
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Balance
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Person
 
 private const val FallbackAppVersion = "0.1.0"
 
@@ -160,7 +160,7 @@ fun SettingsScreen(
                         modifier = Modifier.testTag(UiTestTags.SettingsBack),
                     ) {
                         Icon(
-                            imageVector = Lucide.ArrowLeft,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = stringResource(R.string.settings_back),
                         )
                     }
@@ -363,14 +363,14 @@ private fun AppearanceSection(
 ) {
     SettingsGroup(label = stringResource(R.string.settings_section_appearance)) {
         SettingsRow(
-            leadingIcon = Lucide.Palette,
+            leadingIcon = Icons.Rounded.Palette,
             title = stringResource(R.string.settings_theme_sheet_title),
             onClick = onOpenThemeSheet,
             trailing = { ValueChevron(themeChoiceLabel(themeMode)) },
         )
         SettingsDivider()
         SettingsRow(
-            leadingIcon = Lucide.Languages,
+            leadingIcon = Icons.Rounded.Language,
             title = stringResource(R.string.settings_section_language),
             onClick = onOpenLanguageSheet,
             trailing = { ValueChevron(languageLabel(languageTag)) },
@@ -389,7 +389,7 @@ private fun DataSection(
     val trashEmpty = trashCount == 0
     SettingsGroup(label = stringResource(R.string.settings_section_data)) {
         SettingsRow(
-            leadingIcon = Lucide.Download,
+            leadingIcon = Icons.Rounded.Download,
             title = stringResource(R.string.settings_data_export),
             subtitle = stringResource(R.string.settings_data_export_subtitle),
             // Block re-entry while a write is in flight; show progress instead of the chevron.
@@ -398,7 +398,7 @@ private fun DataSection(
         )
         SettingsDivider()
         SettingsRow(
-            leadingIcon = Lucide.Trash2,
+            leadingIcon = Icons.Rounded.Delete,
             title = stringResource(R.string.settings_data_empty_trash),
             subtitle = if (trashEmpty) {
                 stringResource(R.string.settings_data_empty_trash_empty)
@@ -441,13 +441,13 @@ private fun AboutSection() {
     }
     SettingsGroup(label = stringResource(R.string.settings_section_about)) {
         SettingsRow(
-            leadingIcon = Lucide.Info,
+            leadingIcon = Icons.Rounded.Info,
             title = stringResource(R.string.settings_about),
             subtitle = stringResource(R.string.settings_version, appVersion),
         )
         SettingsDivider()
         SettingsRow(
-            leadingIcon = Lucide.Scale,
+            leadingIcon = Icons.Rounded.Balance,
             title = stringResource(R.string.settings_licenses),
             onClick = {},
             trailing = { SettingsChevron() },
@@ -497,7 +497,7 @@ private fun AccountAvatar(photoUrl: String?) {
     } else {
         Box(modifier = avatarModifier, contentAlignment = Alignment.Center) {
             Icon(
-                imageVector = Lucide.User,
+                imageVector = Icons.Rounded.Person,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )

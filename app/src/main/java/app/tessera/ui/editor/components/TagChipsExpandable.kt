@@ -32,9 +32,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.rememberHaptics
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.X
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 
 @Composable
 fun TagChipsExpandable(
@@ -92,7 +92,7 @@ fun TagChipsExpandable(
                             modifier = Modifier.size(20.dp),
                         ) {
                             Icon(
-                                imageVector = Lucide.X,
+                                imageVector = Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.editor_remove_tag, tag),
                                 modifier = Modifier.size(12.dp),
                             )
@@ -108,7 +108,7 @@ fun TagChipsExpandable(
                 modifier = Modifier.size(22.dp),
             ) {
                 Icon(
-                    imageVector = Lucide.Plus,
+                    imageVector = Icons.Rounded.Add,
                     contentDescription = stringResource(R.string.editor_add_tag),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(12.dp),

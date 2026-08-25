@@ -17,8 +17,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.core.ui.theme.TesseraTheme
-import com.composables.icons.lucide.Folder
-import com.composables.icons.lucide.Lucide
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Folder
 
 /**
  * Editor metadata row: a folder breadcrumb on the left and the note's relative
@@ -43,7 +43,7 @@ fun EditorMeta(
   ) {
     if (folderBreadcrumb.isNotEmpty()) {
       Icon(
-        imageVector = Lucide.Folder,
+        imageVector = Icons.Rounded.Folder,
         contentDescription = null,
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.size(16.dp),

@@ -8,11 +8,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import app.tessera.R
 import app.tessera.sync.SyncIndicator
-import com.composables.icons.lucide.CircleCheck
-import com.composables.icons.lucide.CloudOff
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.RefreshCw
-import com.composables.icons.lucide.TriangleAlert
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Warning
 
 /**
  * Renders the current [SyncIndicator] as a [SettingsRow]. On [SyncIndicator.Error] the whole row
@@ -31,7 +31,7 @@ fun SyncStatusRow(
 
     when (indicator) {
         is SyncIndicator.Ok -> {
-            icon = Lucide.CircleCheck
+            icon = Icons.Rounded.CheckCircle
             title = stringResource(R.string.sync_status_synced)
             subtitle = indicator.lastSyncAtMs?.let { ts ->
                 stringResource(R.string.sync_last_synced, relativeTime(ts))
@@ -39,19 +39,19 @@ fun SyncStatusRow(
         }
 
         SyncIndicator.Syncing -> {
-            icon = Lucide.RefreshCw
+            icon = Icons.Rounded.Refresh
             title = stringResource(R.string.sync_status_syncing)
             subtitle = null
         }
 
         SyncIndicator.Offline -> {
-            icon = Lucide.CloudOff
+            icon = Icons.Rounded.CloudOff
             title = stringResource(R.string.sync_status_offline)
             subtitle = stringResource(R.string.sync_status_offline_subtitle)
         }
 
         is SyncIndicator.Error -> {
-            icon = Lucide.TriangleAlert
+            icon = Icons.Rounded.Warning
             title = stringResource(R.string.sync_status_error)
             subtitle = indicator.message ?: stringResource(R.string.sync_status_error_subtitle)
             onClick = onRetry

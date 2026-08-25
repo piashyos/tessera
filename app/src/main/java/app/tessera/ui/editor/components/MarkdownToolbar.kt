@@ -20,14 +20,14 @@ import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.theme.TesseraTheme
-import com.composables.icons.lucide.Bold
-import com.composables.icons.lucide.Italic
-import com.composables.icons.lucide.List
-import com.composables.icons.lucide.ListChecks
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Strikethrough
-import com.composables.icons.lucide.Type
 import org.wordpress.aztec.AztecTextFormat
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.FormatBold
+import androidx.compose.material.icons.rounded.FormatItalic
+import androidx.compose.material.icons.rounded.FormatStrikethrough
+import androidx.compose.material.icons.rounded.TextFields
 
 @Composable
 fun MarkdownToolbar(
@@ -48,38 +48,38 @@ fun MarkdownToolbar(
                 .testTag(UiTestTags.EditorFormatMenuTrigger),
         ) {
             Icon(
-                imageVector = Lucide.Type,
+                imageVector = Icons.Rounded.TextFields,
                 contentDescription = stringResource(R.string.toolbar_format),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
         }
         FormatToggle(
-            icon = Lucide.Bold,
+            icon = Icons.Rounded.FormatBold,
             contentDescriptionRes = R.string.toolbar_bold,
             active = AztecTextFormat.FORMAT_BOLD in activeFormats,
             onClick = { actions?.toggleBold() },
         )
         FormatToggle(
-            icon = Lucide.Italic,
+            icon = Icons.Rounded.FormatItalic,
             contentDescriptionRes = R.string.toolbar_italic,
             active = AztecTextFormat.FORMAT_ITALIC in activeFormats,
             onClick = { actions?.toggleItalic() },
         )
         FormatToggle(
-            icon = Lucide.Strikethrough,
+            icon = Icons.Rounded.FormatStrikethrough,
             contentDescriptionRes = R.string.toolbar_strikethrough,
             active = AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats,
             onClick = { actions?.toggleStrikethrough() },
         )
         FormatToggle(
-            icon = Lucide.List,
+            icon = Icons.AutoMirrored.Rounded.FormatListBulleted,
             contentDescriptionRes = R.string.toolbar_bullet,
             active = AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats,
             onClick = { actions?.toggleBulletList() },
         )
         FormatToggle(
-            icon = Lucide.ListChecks,
+            icon = Icons.Rounded.Checklist,
             contentDescriptionRes = R.string.toolbar_checklist,
             active = AztecTextFormat.FORMAT_TASK_LIST in activeFormats,
             onClick = { actions?.toggleTaskList() },

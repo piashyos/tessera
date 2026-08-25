@@ -37,11 +37,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.text.markdownblocks.TableGrid
-import com.composables.icons.lucide.ArrowDown
-import com.composables.icons.lucide.ArrowUp
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Minus
-import com.composables.icons.lucide.Plus
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Remove
 
 @Composable
 fun TableBlockEditor(
@@ -100,30 +100,30 @@ fun TableBlockEditor(
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { onGridChange(grid.addRow()) }) {
-                Icon(Lucide.Plus, contentDescription = stringResource(R.string.table_add_row), modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.table_add_row), modifier = Modifier.size(16.dp))
             }
             Text(stringResource(R.string.table_row), style = MaterialTheme.typography.labelSmall)
             IconButton(onClick = {
                 if (grid.rowCount > 0) onGridChange(grid.removeRow(grid.rowCount - 1))
             }) {
-                Icon(Lucide.Minus, contentDescription = stringResource(R.string.table_remove_row), modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Remove, contentDescription = stringResource(R.string.table_remove_row), modifier = Modifier.size(16.dp))
             }
             Spacer(Modifier.width(12.dp))
             IconButton(onClick = { onGridChange(grid.addColumn()) }) {
-                Icon(Lucide.Plus, contentDescription = stringResource(R.string.table_add_column), modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.table_add_column), modifier = Modifier.size(16.dp))
             }
             Text(stringResource(R.string.table_column), style = MaterialTheme.typography.labelSmall)
             IconButton(onClick = {
                 if (grid.columnCount > 1) onGridChange(grid.removeColumn(grid.columnCount - 1))
             }) {
-                Icon(Lucide.Minus, contentDescription = stringResource(R.string.table_remove_column), modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Remove, contentDescription = stringResource(R.string.table_remove_column), modifier = Modifier.size(16.dp))
             }
             Spacer(Modifier.width(12.dp))
             IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null) {
-                Icon(Lucide.ArrowUp, contentDescription = stringResource(R.string.table_move_up), modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.ArrowUpward, contentDescription = stringResource(R.string.table_move_up), modifier = Modifier.size(16.dp))
             }
             IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null) {
-                Icon(Lucide.ArrowDown, contentDescription = stringResource(R.string.table_move_down), modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.ArrowDownward, contentDescription = stringResource(R.string.table_move_down), modifier = Modifier.size(16.dp))
             }
         }
     }

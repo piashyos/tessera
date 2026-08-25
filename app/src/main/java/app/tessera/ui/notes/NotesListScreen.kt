@@ -76,18 +76,18 @@ import app.tessera.ui.notes.components.SearchScreen
 import app.tessera.ui.notes.components.SwipeAction
 import app.tessera.ui.notes.components.TesseraNotesDrawer
 import app.tessera.ui.notes.components.TesseraSwipeableNoteCard
-import com.composables.icons.lucide.Archive
-import com.composables.icons.lucide.ArchiveRestore
-import com.composables.icons.lucide.FolderInput
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Menu
-import com.composables.icons.lucide.Pin
-import com.composables.icons.lucide.PinOff
-import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.Tag
-import com.composables.icons.lucide.Trash2
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PushPin as PushPinOutlined
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DriveFileMove
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Sell
+import androidx.compose.material.icons.rounded.Unarchive
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -293,7 +293,7 @@ fun NotesListScreen(
                                 onClick = { scope.launch { drawerState.open() } },
                                 contentDescription = stringResource(R.string.folders_open_drawer),
                             ) {
-                                Icon(Lucide.Menu, contentDescription = null)
+                                Icon(Icons.Rounded.Menu, contentDescription = null)
                             }
                         },
                         actions = {
@@ -301,7 +301,7 @@ fun NotesListScreen(
                             if (!state.isTrashView) {
                                 IconButton(onClick = { selectionMovePickerVisible = true }) {
                                     Icon(
-                                        Lucide.FolderInput,
+                                        Icons.Rounded.DriveFileMove,
                                         contentDescription = stringResource(R.string.note_action_move),
                                     )
                                 }
@@ -333,7 +333,7 @@ fun NotesListScreen(
                                 }
                             }) {
                                 Icon(
-                                    Lucide.Trash2,
+                                    Icons.Rounded.Delete,
                                     contentDescription = stringResource(R.string.note_action_delete),
                                     tint = MaterialTheme.colorScheme.error,
                                 )
@@ -344,7 +344,7 @@ fun NotesListScreen(
                                     modifier = Modifier.testTag(UiTestTags.TagFilterToggle),
                                 ) {
                                     Icon(
-                                        Lucide.Tag,
+                                        Icons.Rounded.Sell,
                                         contentDescription = stringResource(R.string.notes_toggle_tags),
                                         tint = if (tagsVisible) {
                                             MaterialTheme.colorScheme.primary
@@ -393,7 +393,7 @@ fun NotesListScreen(
                     onFabClick = onCreateNote,
                     fabIcon = {
                         Icon(
-                            Lucide.Plus,
+                            Icons.Rounded.Add,
                             contentDescription = stringResource(R.string.create_note),
                             modifier = Modifier.testTag(UiTestTags.CreateNoteFab),
                         )
@@ -693,7 +693,7 @@ private fun NotesBody(
                         val leftAction = when {
                             state.isTrashView -> SwipeAction(
                                 key = "restore",
-                                icon = Lucide.ArchiveRestore,
+                                icon = Icons.Rounded.Unarchive,
                                 label = stringResource(R.string.note_action_restore),
                                 container = MaterialTheme.colorScheme.secondaryContainer,
                                 content = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -701,7 +701,7 @@ private fun NotesBody(
                             )
                             state.isArchiveView -> SwipeAction(
                                 key = "unarchive",
-                                icon = Lucide.ArchiveRestore,
+                                icon = Icons.Rounded.Unarchive,
                                 label = stringResource(R.string.note_action_unarchive),
                                 container = MaterialTheme.colorScheme.secondaryContainer,
                                 content = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -709,7 +709,7 @@ private fun NotesBody(
                             )
                             else -> SwipeAction(
                                 key = "archive",
-                                icon = Lucide.Archive,
+                                icon = Icons.Rounded.Archive,
                                 label = stringResource(R.string.note_action_archive),
                                 container = MaterialTheme.colorScheme.secondaryContainer,
                                 content = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -726,7 +726,7 @@ private fun NotesBody(
                                 add(
                                     SwipeAction(
                                         key = "pin",
-                                        icon = if (note.isPinned) Lucide.PinOff else Lucide.Pin,
+                                        icon = if (note.isPinned) Icons.Outlined.PushPinOutlined else Icons.Rounded.PushPin,
                                         label = stringResource(
                                             if (note.isPinned) R.string.note_action_unpin
                                             else R.string.note_action_pin,
@@ -741,7 +741,7 @@ private fun NotesBody(
                                 add(
                                     SwipeAction(
                                         key = "delete",
-                                        icon = Lucide.Trash2,
+                                        icon = Icons.Rounded.Delete,
                                         label = stringResource(
                                             if (state.isTrashView) R.string.note_action_delete_forever
                                             else R.string.note_action_delete,

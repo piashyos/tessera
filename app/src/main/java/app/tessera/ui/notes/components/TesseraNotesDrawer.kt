@@ -32,15 +32,15 @@ import app.tessera.core.ui.tessera.TesseraDrawerShell
 import app.tessera.core.ui.theme.TesseraSpacing
 import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.FolderTreeNode
-import com.composables.icons.lucide.Archive
-import com.composables.icons.lucide.Folder
-import com.composables.icons.lucide.Inbox
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Pin
-import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.Settings
-import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.Users
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Settings
 
 @Composable
 fun TesseraNotesDrawer(
@@ -65,32 +65,32 @@ fun TesseraNotesDrawer(
         label = stringResource(R.string.folders_all_notes),
         selected = selectedSystemKey == "all" && selectedFolderId == null,
         onClick = { onSystemSelect("all"); onFolderSelect(null) },
-        leadingIcon = { Icon(Lucide.Inbox, contentDescription = null) },
+        leadingIcon = { Icon(Icons.Rounded.Inbox, contentDescription = null) },
       )
       TesseraDrawerItem(
         label = stringResource(R.string.drawer_pinned),
         selected = selectedSystemKey == "pinned",
         onClick = { onSystemSelect("pinned") },
-        leadingIcon = { Icon(Lucide.Pin, contentDescription = null) },
+        leadingIcon = { Icon(Icons.Rounded.PushPin, contentDescription = null) },
       )
       TesseraDrawerItem(
         label = stringResource(R.string.notes_archive),
         selected = selectedSystemKey == "archive",
         onClick = { onSystemSelect("archive") },
-        leadingIcon = { Icon(Lucide.Archive, contentDescription = null) },
+        leadingIcon = { Icon(Icons.Rounded.Archive, contentDescription = null) },
       )
       TesseraDrawerItem(
         label = stringResource(R.string.drawer_trash),
         selected = selectedSystemKey == "trash",
         onClick = { onSystemSelect("trash") },
-        leadingIcon = { Icon(Lucide.Trash2, contentDescription = null) },
+        leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
       )
       if (showSharedSection) {
         TesseraDrawerItem(
           label = stringResource(R.string.drawer_shared),
           selected = selectedSystemKey == "shared",
           onClick = { onSystemSelect("shared") },
-          leadingIcon = { Icon(Lucide.Users, contentDescription = null) },
+          leadingIcon = { Icon(Icons.Rounded.Group, contentDescription = null) },
         )
       }
       Row(
@@ -111,7 +111,7 @@ fun TesseraNotesDrawer(
           modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onCreateRootFolder, modifier = Modifier.size(36.dp)) {
-          Icon(Lucide.Plus, contentDescription = stringResource(R.string.folders_create))
+          Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.folders_create))
         }
       }
       folderTree.forEach { node ->
@@ -141,7 +141,7 @@ fun TesseraNotesDrawer(
         label = stringResource(R.string.settings_title),
         selected = false,
         onClick = onSettingsClick,
-        leadingIcon = { Icon(Lucide.Settings, contentDescription = null) },
+        leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
       )
     },
     screenContent = content,
@@ -172,7 +172,7 @@ private fun DrawerFolderRow(
     horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.sm),
   ) {
     Icon(
-      Lucide.Folder,
+      Icons.Rounded.Folder,
       contentDescription = null,
       modifier = Modifier.size(18.dp),
       tint = contentColor,
@@ -189,14 +189,14 @@ private fun DrawerFolderRow(
     )
     if (onAddSubfolder != null) {
       DrawerFolderAction(
-        icon = Lucide.Plus,
+        icon = Icons.Rounded.Add,
         contentDescription = stringResource(R.string.folders_create_subfolder),
         tint = contentColor,
         onClick = onAddSubfolder,
       )
     }
     DrawerFolderAction(
-      icon = Lucide.Trash2,
+      icon = Icons.Rounded.Delete,
       contentDescription = stringResource(R.string.folders_delete),
       tint = MaterialTheme.colorScheme.error,
       onClick = onDelete,

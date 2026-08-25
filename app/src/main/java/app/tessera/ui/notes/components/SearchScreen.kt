@@ -43,14 +43,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.tessera.R
 import app.tessera.core.ui.theme.TesseraSpacing
-import com.composables.icons.lucide.Calendar
-import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.Clock
-import com.composables.icons.lucide.Folder
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Search
-import com.composables.icons.lucide.Tag
-import com.composables.icons.lucide.X
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CalendarToday
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Sell
 
 /**
  * Full-screen search surface (see redesign spec §"Search"). When the query and
@@ -94,19 +94,19 @@ fun SearchScreen(
             // Filters stay pinned so an applied filter can always be changed or cleared.
             SectionHeader(stringResource(R.string.search_filters_header))
             FilterRow(
-                icon = Lucide.Folder,
+                icon = Icons.Rounded.Folder,
                 label = stringResource(R.string.search_filter_folder),
                 value = folderValue,
                 onClick = onPickFolder,
             )
             FilterRow(
-                icon = Lucide.Tag,
+                icon = Icons.Rounded.Sell,
                 label = stringResource(R.string.search_filter_tag),
                 value = tagValue,
                 onClick = onPickTag,
             )
             FilterRow(
-                icon = Lucide.Calendar,
+                icon = Icons.Rounded.CalendarToday,
                 label = stringResource(R.string.search_filter_period),
                 value = periodValue,
                 onClick = onPickPeriod,
@@ -157,7 +157,7 @@ private fun SearchField(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Lucide.Search,
+                    Icons.Rounded.Search,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
@@ -181,7 +181,7 @@ private fun SearchField(
                 )
                 IconButton(onClick = { if (query.isEmpty()) onCollapse() else onQueryChange("") }) {
                     Icon(
-                        Lucide.X,
+                        Icons.Rounded.Close,
                         contentDescription = stringResource(
                             if (query.isEmpty()) R.string.search_close else R.string.search_clear,
                         ),
@@ -297,7 +297,7 @@ private fun FilterRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Icon(
-            Lucide.ChevronRight,
+            Icons.Rounded.ChevronRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
@@ -320,7 +320,7 @@ private fun RecentRow(
         horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.md),
     ) {
         Icon(
-            Lucide.Clock,
+            Icons.Rounded.Schedule,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
@@ -334,7 +334,7 @@ private fun RecentRow(
         )
         IconButton(onClick = onRemove) {
             Icon(
-                Lucide.X,
+                Icons.Rounded.Close,
                 contentDescription = stringResource(R.string.search_recent_remove),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
