@@ -87,6 +87,7 @@ import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DriveFileMove
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.SelectAll
@@ -403,6 +404,15 @@ fun NotesListScreen(
                             )
                         },
                         showFab = !state.searchExpanded,
+                        // Thumb-zone drawer access: folders are the most common top-corner reach.
+                        leadingAction = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(
+                                    Icons.Rounded.Folder,
+                                    contentDescription = stringResource(R.string.folders_open_drawer),
+                                )
+                            }
+                        },
                     )
                 } else {
                     // Batch actions live in a reachable floating toolbar (M3E contextual pattern)
