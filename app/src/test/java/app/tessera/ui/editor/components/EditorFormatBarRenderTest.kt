@@ -65,16 +65,22 @@ class EditorFormatBarRenderTest {
     assert(actions.calls == listOf("bold", "quote", "divider")) { "got ${actions.calls}" }
   }
 
-  @Test fun overflow_opens_heading_menu() {
+  @Test fun overflow_toggle_reports_to_caller() {
     val actions = RecordingActions()
+    var toggled = 0
     rule.setContent {
       TesseraTheme(darkTheme = false, dynamicColor = false) {
-        EditorFormatBar(actions = actions, activeFormats = emptySet())
+        EditorFormatBar(
+          actions = actions,
+          activeFormats = emptySet(),
+          menuExpanded = false,
+          onToggleMenu = { toggled++ },
+        )
       }
     }
     // The ⋯ overflow is pinned outside the scrollable group, so no scroll is needed (or possible).
+    // The panel itself is rendered by the caller; the button just reports the toggle.
     rule.onNodeWithContentDescription("More formats").performClick()
-    rule.onNodeWithText("Paragraph").assertExists()
-    rule.onNodeWithText("Heading 1").assertExists()
+    assert(toggled == 1) { "expected one toggle callback, got $toggled" }
   }
 }

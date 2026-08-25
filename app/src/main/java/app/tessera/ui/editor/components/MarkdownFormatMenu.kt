@@ -1,21 +1,35 @@
 package app.tessera.ui.editor.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupProperties
 import app.tessera.R
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.TableChart
 import com.composables.icons.lucide.Heading1
 import com.composables.icons.lucide.Heading2
 import com.composables.icons.lucide.Heading3
@@ -38,12 +52,26 @@ data class FormatEntry(
     val onClick: () -> Unit,
 )
 
+/** Full block-format catalogue surfaced by the ⋯ panel: paragraph, headings, quote/code/insert. */
+fun formatMenuEntries(actions: RichBodyActions): List<FormatEntry> = listOf(
+    FormatEntry(AztecTextFormat.FORMAT_PARAGRAPH, Lucide.Pilcrow, R.string.toolbar_paragraph, actions::toggleParagraph),
+    FormatEntry(AztecTextFormat.FORMAT_HEADING_1, Lucide.Heading1, R.string.toolbar_h1, actions::toggleHeading1),
+    FormatEntry(AztecTextFormat.FORMAT_HEADING_2, Lucide.Heading2, R.string.toolbar_h2, actions::toggleHeading2),
+    FormatEntry(AztecTextFormat.FORMAT_HEADING_3, Lucide.Heading3, R.string.toolbar_h3, actions::toggleHeading3),
+    FormatEntry(AztecTextFormat.FORMAT_HEADING_4, Lucide.Heading4, R.string.toolbar_h4, actions::toggleHeading4),
+    FormatEntry(AztecTextFormat.FORMAT_HEADING_5, Lucide.Heading5, R.string.toolbar_h5, actions::toggleHeading5),
+    FormatEntry(AztecTextFormat.FORMAT_HEADING_6, Lucide.Heading6, R.string.toolbar_h6, actions::toggleHeading6),
+    FormatEntry(AztecTextFormat.FORMAT_QUOTE, Icons.Rounded.FormatQuote, R.string.toolbar_quote, actions::toggleQuote),
+    FormatEntry(AztecTextFormat.FORMAT_PREFORMAT, Icons.Rounded.Code, R.string.toolbar_code, actions::toggleCode),
+    FormatEntry(null, Icons.Rounded.Remove, R.string.toolbar_divider, actions::insertHorizontalRule),
+    FormatEntry(null, Icons.Rounded.TableChart, R.string.toolbar_table, actions::insertTable),
+)
+
 /**
- * Block-style picker (paragraph + headings) surfaced from the format bar's overflow button.
- * Built on the Material 3 [DropdownMenu] so it inherits Material You positioning (anchored to
- * the button, auto-flipping above the keyboard), the tonal `surfaceContainer` container, the
- * standard menu shape/elevation and item ripple — the previous hand-rolled translucent popup
- * mis-anchored to the screen corner and let the note text bleed through.
+ * Block-format panel expanded from the format bar's ⋯ button. Rendered INLINE directly above
+ * the bar (same bottom-anchored column), not as a popup — a `DropdownMenu` above an IME-anchored
+ * anchor clamps against the window top when space is tight, leaving an ugly gap between the menu
+ * and the bar. Being inline also means it never steals focus, so the keyboard stays up.
  */
 @Composable
 fun MarkdownFormatMenu(
@@ -53,70 +81,61 @@ fun MarkdownFormatMenu(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val entries = listOf(
-        FormatEntry(AztecTextFormat.FORMAT_PARAGRAPH, Lucide.Pilcrow, R.string.toolbar_paragraph, actions::toggleParagraph),
-        FormatEntry(AztecTextFormat.FORMAT_HEADING_1, Lucide.Heading1, R.string.toolbar_h1, actions::toggleHeading1),
-        FormatEntry(AztecTextFormat.FORMAT_HEADING_2, Lucide.Heading2, R.string.toolbar_h2, actions::toggleHeading2),
-        FormatEntry(AztecTextFormat.FORMAT_HEADING_3, Lucide.Heading3, R.string.toolbar_h3, actions::toggleHeading3),
-        FormatEntry(AztecTextFormat.FORMAT_HEADING_4, Lucide.Heading4, R.string.toolbar_h4, actions::toggleHeading4),
-        FormatEntry(AztecTextFormat.FORMAT_HEADING_5, Lucide.Heading5, R.string.toolbar_h5, actions::toggleHeading5),
-        FormatEntry(AztecTextFormat.FORMAT_HEADING_6, Lucide.Heading6, R.string.toolbar_h6, actions::toggleHeading6),
-    )
-
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismiss,
-        // Cap the height so the 7-row menu fits in the space above the IME-anchored format bar
-        // and anchors directly to the overflow button. Left uncapped it is taller than the room
-        // above the keyboard, so the menu clamps to the top of the screen, leaving a large gap
-        // between it and the button. Overflow scrolls inside the menu.
-        modifier = modifier.heightIn(max = 304.dp),
-        shape = RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 2.dp,
-        shadowElevation = 3.dp,
-        // Non-focusable popup: a focusable menu would grab window focus from the AztecText,
-        // which hides the soft keyboard. The IME-anchored format bar then collapses with the
-        // keyboard, dismissing the menu — and the keyboard reopens once focus returns. Keeping
-        // the popup non-focusable leaves the editor focused and the keyboard up; outside taps
-        // still dismiss via dismissOnClickOutside.
-        properties = PopupProperties(focusable = false),
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically(expandFrom = androidx.compose.ui.Alignment.Bottom) + fadeIn(),
+        exit = shrinkVertically(shrinkTowards = androidx.compose.ui.Alignment.Bottom) + fadeOut(),
+        modifier = modifier,
     ) {
-        entries.forEach { entry ->
-            val active = entry.format != null && entry.format in activeFormats
-            val accent = if (active) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-            val labelColor = if (active) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            }
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = stringResource(entry.labelRes),
-                        style = MaterialTheme.typography.bodyLarge,
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = RoundedCornerShape(28.dp),
+            shadowElevation = 3.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 8.dp),
+            ) {
+                formatMenuEntries(actions).forEach { entry ->
+                    val active = entry.format != null && entry.format in activeFormats
+                    val accent = if (active) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    val labelColor = if (active) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(entry.labelRes),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        },
+                        onClick = {
+                            entry.onClick()
+                            onDismiss()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = entry.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        colors = MenuDefaults.itemColors(
+                            textColor = labelColor,
+                            leadingIconColor = accent,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                },
-                onClick = {
-                    entry.onClick()
-                    onDismiss()
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = entry.icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                colors = MenuDefaults.itemColors(
-                    textColor = labelColor,
-                    leadingIconColor = accent,
-                ),
-            )
+                }
+            }
         }
     }
 }

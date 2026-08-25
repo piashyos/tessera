@@ -39,7 +39,7 @@ class MarkdownFormatMenuTest {
         override fun activeFormats(): Set<AztecTextFormat> = setOf(AztecTextFormat.FORMAT_BOLD)
     }
 
-    @Test fun `menu shows only paragraph and heading entries and dispatches the right callback`() {
+    @Test fun `panel shows block entries incl quote and code and dispatches the right callback`() {
         var dismissed = false
         composeRule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
@@ -54,9 +54,12 @@ class MarkdownFormatMenuTest {
 
         composeRule.onNodeWithText("Paragraph").assertIsDisplayed()
         composeRule.onNodeWithText("Heading 1").assertIsDisplayed()
-        // The menu height is capped so it anchors near the overflow button; the last entry
-        // scrolls into view rather than being shown at once.
+        // The panel height is capped; late entries scroll into view rather than showing at once.
         composeRule.onNodeWithText("Heading 6").performScrollTo().assertIsDisplayed()
+        // Block formats hidden in the bar's horizontal scroll must ALSO be reachable here.
+        composeRule.onNodeWithText("Quote").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Code").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Insert table").performScrollTo().assertIsDisplayed()
 
         composeRule.onNodeWithText("Heading 3").performScrollTo().performClick()
         assert(AztecTextFormat.FORMAT_HEADING_3 in recordedToggles)

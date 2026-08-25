@@ -60,6 +60,7 @@ import app.tessera.core.ui.tessera.TesseraTopBarIconButton
 import app.tessera.core.ui.theme.TesseraMotion
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.components.EditorFormatBar
+import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.EditorMeta
 import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.components.RichNoteBody
@@ -306,13 +307,27 @@ fun NoteEditorScreen(
                 ) {
                     // Floating pill toolbar above the keyboard (M3 expressive
                     // HorizontalFloatingToolbar shape language) instead of a full-width bar.
-                    androidx.compose.foundation.layout.Box(
+                    // The ⋯ block-format panel expands INLINE right above the pill (8dp apart),
+                    // visually attached to it instead of a floating DropdownMenu popup.
+                    var formatMenuExpanded by remember { mutableStateOf(false) }
+                    androidx.compose.foundation.layout.Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .imePadding()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
-                        contentAlignment = androidx.compose.ui.Alignment.Center,
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     ) {
+                        val currentActions = actions
+                        if (currentActions != null) {
+                            MarkdownFormatMenu(
+                                expanded = formatMenuExpanded,
+                                activeFormats = activeFormats,
+                                actions = currentActions,
+                                onDismiss = { formatMenuExpanded = false },
+                                modifier = Modifier.align(androidx.compose.ui.Alignment.End),
+                            )
+                        }
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
@@ -321,6 +336,8 @@ fun NoteEditorScreen(
                             EditorFormatBar(
                                 actions = actions,
                                 activeFormats = activeFormats,
+                                menuExpanded = formatMenuExpanded,
+                                onToggleMenu = { formatMenuExpanded = !formatMenuExpanded },
                             )
                         }
                     }

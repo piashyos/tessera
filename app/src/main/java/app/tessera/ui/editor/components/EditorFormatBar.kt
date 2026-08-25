@@ -65,6 +65,8 @@ fun EditorFormatBar(
   actions: RichBodyActions?,
   activeFormats: Set<AztecTextFormat>,
   modifier: Modifier = Modifier,
+  menuExpanded: Boolean = false,
+  onToggleMenu: () -> Unit = {},
 ) {
   // Layout: [undo][redo] are pinned at the start and [⋯] at the end — the panic action and the
   // overflow menu must never hide inside the horizontal scroll (the old all-scrolling bar put
@@ -114,30 +116,8 @@ fun EditorFormatBar(
     }
 
     GroupSeparator()
-    // Pinned: [⋯] — anchors the paragraph/headings Material 3 dropdown.
-    Box {
-      var menuExpanded by remember { mutableStateOf(false) }
-      // The menu's popup is non-focusable (so it doesn't dismiss the keyboard), which means a
-      // tap on this button while the menu is open is delivered BOTH to the popup's
-      // dismiss-on-outside handler AND to this button's onClick. Without a guard the dismiss
-      // closes the menu and the onClick immediately reopens it. Record when a dismiss happened
-      // and ignore a reopen that lands within the same tap, so the button truly toggles.
-      var lastDismissMs by remember { mutableLongStateOf(0L) }
-      FormatToggle(Icons.Rounded.MoreHoriz, R.string.toolbar_more, active = menuExpanded) {
-        if (System.currentTimeMillis() - lastDismissMs > 200L) menuExpanded = true
-      }
-      if (actions != null) {
-        MarkdownFormatMenu(
-          expanded = menuExpanded,
-          activeFormats = activeFormats,
-          actions = actions,
-          onDismiss = {
-            menuExpanded = false
-            lastDismissMs = System.currentTimeMillis()
-          },
-        )
-      }
-    }
+    // Pinned: [⋯] — toggles the block-format panel the caller renders directly above this bar.
+    FormatToggle(Icons.Rounded.MoreHoriz, R.string.toolbar_more, active = menuExpanded, onClick = onToggleMenu)
   }
 }
 

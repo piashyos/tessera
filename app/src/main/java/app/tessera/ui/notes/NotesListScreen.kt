@@ -18,6 +18,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import app.tessera.core.ui.tessera.TesseraNoteCard
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
@@ -712,6 +717,51 @@ private fun NotesBody(
                 if (listState.isScrollInProgress) openNoteId = null
             }
 
+            if (state.viewMode == NotesViewMode.Tiles) {
+                // Tiles view: a 2-column grid of plain cards (no swipe actions — long-press
+                // opens the same actions sheet, matching the Keep grid pattern).
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag(UiTestTags.NotesGrid),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    sections.forEach { section ->
+                        item(key = "header-${section.group}", span = { GridItemSpan(maxLineSpan) }) {
+                            SectionHeader(group = section.group)
+                        }
+                        items(items = section.notes, key = { it.id.value }) { note ->
+                            val shareState = note.shareState
+                            TesseraNoteCard(
+                                title = note.title.ifBlank { stringResource(R.string.note_untitled) },
+                                preview = markdownBodyPreviewPlainText(note.content),
+                                dateLabel = noteDateLabel(note.updatedAt),
+                                tags = note.tags.map { it.name },
+                                isPinned = note.isPinned,
+                                onClick = {
+                                    if (selectionMode) onToggleSelection(note.id) else onNoteClick(note.id)
+                                },
+                                onLongClick = { onLongClickNote(note) },
+                                selected = selectionMode && note.id in selection,
+                                avatars = if (shareState is ShareState.Shared) {
+                                    {
+                                        MemberAvatarStack(
+                                            members = shareState.members,
+                                            currentUserId = currentUserId,
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+                            )
+                        }
+                    }
+                }
+                return
+            }
             LazyColumn(
                 state = listState,
                 modifier = Modifier
