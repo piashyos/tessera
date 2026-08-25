@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.tessera.core.ui.theme.TesseraShapes
 import app.tessera.core.ui.theme.TesseraSpacing
 
 /**
@@ -40,9 +39,11 @@ fun SettingsGroup(
                 modifier = Modifier.padding(start = TesseraSpacing.lg, bottom = TesseraSpacing.sm),
             )
         }
+        // Expressive settings group (PixelPlayer's ExpressiveSettingsGroup shape language):
+        // a 24dp container on the surfaceContainerLow tier.
         Surface(
-            shape = TesseraShapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(modifier = Modifier.fillMaxWidth(), content = content)

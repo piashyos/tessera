@@ -352,8 +352,11 @@ fun RichNoteBody(
     val quoteBarArgb = MaterialTheme.colorScheme.primary.toArgb()
     val quoteTextArgb = MaterialTheme.colorScheme.onSurface.toArgb()
     val quoteFillArgb = MaterialTheme.colorScheme.primary.toArgb()
-    // Tessera body type: Inter 15sp with 4dp extra leading (spec §6).
-    val bodyTextSizeSp = 15f
+    // Editor body size follows the Material theme (bodyLarge) instead of a magic number. The
+    // extra leading stays a hand-tuned 4dp: TextView's lineSpacingExtra adds to the font's
+    // NATURAL line height (unlike Compose's absolute lineHeight), so deriving it from
+    // (lineHeight - fontSize) would double-count the built-in leading.
+    val bodyTextSizeSp = MaterialTheme.typography.bodyLarge.fontSize.value
     val lineSpacingExtraPx = with(density) { 4.dp.toPx() }
 
     // Handler lifted to the composable so DisposableEffect can clear pending debounce

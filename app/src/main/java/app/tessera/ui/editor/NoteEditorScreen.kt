@@ -304,16 +304,25 @@ fun NoteEditorScreen(
                         animationSpec = tween(150, easing = TesseraMotion.EaseStandard),
                     ) { it },
                 ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainer,
+                    // Floating pill toolbar above the keyboard (M3 expressive
+                    // HorizontalFloatingToolbar shape language) instead of a full-width bar.
+                    androidx.compose.foundation.layout.Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .imePadding(),
+                            .imePadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        contentAlignment = androidx.compose.ui.Alignment.Center,
                     ) {
-                        EditorFormatBar(
-                            actions = actions,
-                            activeFormats = activeFormats,
-                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                            shadowElevation = 3.dp,
+                        ) {
+                            EditorFormatBar(
+                                actions = actions,
+                                activeFormats = activeFormats,
+                            )
+                        }
                     }
                 }
             },

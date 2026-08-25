@@ -1,6 +1,5 @@
 package app.tessera.core.ui.tessera
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -18,10 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,7 +33,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.tessera.core.ui.theme.TesseraShape
 import app.tessera.core.ui.theme.TesseraSpacing
 
 object TesseraNoteCardTags {
@@ -40,7 +42,7 @@ object TesseraNoteCardTags {
 
 private const val MaxInlineTags = 3
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TesseraNoteCard(
   title: String,
@@ -55,11 +57,23 @@ fun TesseraNoteCard(
   avatars: (@Composable () -> Unit)? = null,
 ) {
   val haptics = LocalHapticFeedback.current
+  // Selection is expressed the PixelPlayer way — a corner-radius morph plus a tonal shift —
+  // rather than a border. Both run on the expressive spatial/effects springs.
+  val cornerRadius by animateDpAsState(
+    targetValue = if (selected) 28.dp else 14.dp,
+    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+    label = "noteCardCorner",
+  )
+  val containerColor by animateColorAsState(
+    targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                  else MaterialTheme.colorScheme.surfaceContainerLow,
+    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+    label = "noteCardColor",
+  )
   Surface(
-    color = if (selected) MaterialTheme.colorScheme.secondaryContainer
-            else MaterialTheme.colorScheme.surface,
-    shape = TesseraShape.noteCard,
-    border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+    color = containerColor,
+    shape = RoundedCornerShape(cornerRadius),
+    border = null,
     modifier = modifier
       .testTag(TesseraNoteCardTags.Root)
       .fillMaxWidth()
