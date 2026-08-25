@@ -250,6 +250,22 @@ private fun replaceOrderedListSpans(editor: AztecText, indicatorArgb: Int) {
  * filled circle of the requested radius — lets us size the dot independently of the
  * surrounding text.
  */
+/**
+ * Tint the caret and the three selection handles with the live theme accent. These drawables
+ * resolve from the STATIC XML theme (Theme.Tessera maps colorPrimary to the fixed terracotta
+ * brand), so without this they ignore dynamic color / palette switches. API 29+ exposes the
+ * drawables directly; on 26–28 the platform offers no public hook, so the static tint stays.
+ */
+private fun applyCursorAndHandleTint(editor: AztecText, accentArgb: Int) {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
+    // The getters may return fresh instances loaded from theme attrs — mutate, tint, and hand
+    // the drawable BACK through the setter so the Editor actually swaps what it renders.
+    editor.textCursorDrawable = editor.textCursorDrawable?.mutate()?.apply { setTint(accentArgb) }
+    editor.textSelectHandle?.let { editor.setTextSelectHandle(it.mutate().apply { setTint(accentArgb) }) }
+    editor.textSelectHandleLeft?.let { editor.setTextSelectHandleLeft(it.mutate().apply { setTint(accentArgb) }) }
+    editor.textSelectHandleRight?.let { editor.setTextSelectHandleRight(it.mutate().apply { setTint(accentArgb) }) }
+}
+
 private fun replaceBulletSpans(editor: AztecText, bulletRadiusPx: Float, bulletArgb: Int) {
     val editable = editor.editableText ?: return
     val spans = editable.getSpans(0, editable.length, AztecUnorderedListSpan::class.java)
@@ -352,6 +368,7 @@ fun RichNoteBody(
     val quoteBarArgb = MaterialTheme.colorScheme.primary.toArgb()
     val quoteTextArgb = MaterialTheme.colorScheme.onSurface.toArgb()
     val quoteFillArgb = MaterialTheme.colorScheme.primary.toArgb()
+    val accentArgb = MaterialTheme.colorScheme.primary.toArgb()
     // Editor body size follows the Material theme (bodyLarge) instead of a magic number. The
     // extra leading stays a hand-tuned 4dp: TextView's lineSpacingExtra adds to the font's
     // NATURAL line height (unlike Compose's absolute lineHeight), so deriving it from
@@ -367,13 +384,14 @@ fun RichNoteBody(
     // palette in Settings). The factory captures colors once and `update` only re-styles on a
     // content change, so without this a live palette switch would leave the old accent colors.
     LaunchedEffect(
-        editorRef.value, bulletArgb, checkboxTickArgb, codeBgArgb, codeTextArgb, quoteBarArgb, quoteTextArgb, quoteFillArgb,
+        editorRef.value, bulletArgb, checkboxTickArgb, codeBgArgb, codeTextArgb, quoteBarArgb, quoteTextArgb, quoteFillArgb, accentArgb,
     ) {
         val editor = editorRef.value ?: return@LaunchedEffect
         replaceBulletSpans(editor, bulletRadiusPx, bulletArgb)
         replacePreformatSpans(editor, codeBgArgb, codeTextArgb)
         replaceQuoteSpans(editor, quoteBarArgb, quoteTextArgb, quoteFillArgb)
         replaceOrderedListSpans(editor, bulletArgb)
+        applyCursorAndHandleTint(editor, accentArgb)
         // The checkbox drawable reads checkboxPalette live; just force a repaint to pick up changes.
         editor.invalidate()
     }
