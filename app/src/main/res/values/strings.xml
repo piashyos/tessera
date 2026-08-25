@@ -193,6 +193,9 @@
     <string name="folder_picker_none">No folder</string>
     <string name="folders_delete_confirm_title">Delete folder?</string>
     <string name="folders_delete_confirm_message">“%1$s” will be deleted. Notes inside it won\'t be deleted.</string>
+    <string name="notes_exit_selection">Exit selection</string>
+    <string name="notes_select_all">Select all</string>
+    <string name="notes_toggle_view_mode">Toggle list or grid view</string>
     <string name="notes_toggle_tags">Toggle tags</string>
     <!-- Note action sheet -->
     <string name="note_action_add_tags">Add tags</string>

@@ -200,6 +200,9 @@
     <string name="folder_picker_none">Без папки</string>
     <string name="folders_delete_confirm_title">Удалить папку?</string>
     <string name="folders_delete_confirm_message">«%1$s» будет удалена. Заметки внутри неё не будут удалены.</string>
+    <string name="notes_exit_selection">Выйти из выбора</string>
+    <string name="notes_select_all">Выбрать всё</string>
+    <string name="notes_toggle_view_mode">Список или сетка</string>
     <string name="notes_toggle_tags">Показать теги</string>
     <!-- Note action sheet -->
     <string name="note_action_add_tags">Добавить теги</string>

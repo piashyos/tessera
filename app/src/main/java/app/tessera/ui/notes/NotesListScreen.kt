@@ -72,6 +72,7 @@ import app.tessera.ui.notes.components.FolderPickerPopup
 import app.tessera.ui.notes.components.NoteActionsSheet
 import app.tessera.ui.notes.components.SearchOption
 import app.tessera.ui.notes.components.SearchOptionPopup
+import app.tessera.ui.notes.components.SelectionFloatingToolbar
 import app.tessera.ui.notes.components.SearchScreen
 import app.tessera.ui.notes.components.SwipeAction
 import app.tessera.ui.notes.components.TesseraNotesDrawer
@@ -80,11 +81,15 @@ import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PushPin as PushPinOutlined
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DriveFileMove
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Sell
 import androidx.compose.material.icons.rounded.Unarchive
@@ -289,69 +294,60 @@ fun NotesListScreen(
                     TesseraTopBar(
                         title = { Text(headerTitle) },
                         navigationIcon = {
-                            TesseraTopBarIconButton(
-                                onClick = { scope.launch { drawerState.open() } },
-                                contentDescription = stringResource(R.string.folders_open_drawer),
-                            ) {
-                                Icon(Icons.Rounded.Menu, contentDescription = null)
+                            if (selectionMode) {
+                                // Selection is a modal mode: the nav slot is an explicit exit,
+                                // not the drawer (M3 contextual-action-bar pattern).
+                                TesseraTopBarIconButton(
+                                    onClick = onExitSelectionMode,
+                                    contentDescription = stringResource(R.string.notes_exit_selection),
+                                ) {
+                                    Icon(Icons.Rounded.Close, contentDescription = null)
+                                }
+                            } else {
+                                TesseraTopBarIconButton(
+                                    onClick = { scope.launch { drawerState.open() } },
+                                    contentDescription = stringResource(R.string.folders_open_drawer),
+                                ) {
+                                    Icon(Icons.Rounded.Menu, contentDescription = null)
+                                }
                             }
                         },
                         actions = {
                             if (selectionMode) {
-                            if (!state.isTrashView) {
-                                IconButton(onClick = { selectionMovePickerVisible = true }) {
+                                IconButton(onClick = onToggleSelectAll) {
                                     Icon(
-                                        Icons.Rounded.DriveFileMove,
-                                        contentDescription = stringResource(R.string.note_action_move),
-                                    )
-                                }
-                            }
-                            IconButton(onClick = {
-                                if (state.isTrashView) {
-                                    val count = selection.size
-                                    onPermanentlyDeleteSelected()
-                                    if (count > 0) {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                message = permanentlyDeletedMessage,
-                                                duration = SnackbarDuration.Short,
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    val ids = onDeleteSelected()
-                                    if (ids.isNotEmpty()) {
-                                        scope.launch {
-                                            val r = snackbarHostState.showSnackbar(
-                                                message = selectionDeletedMessage,
-                                                actionLabel = undoLabel,
-                                                duration = SnackbarDuration.Short,
-                                            )
-                                            if (r == SnackbarResult.ActionPerformed) onRestoreNotes(ids)
-                                        }
-                                    }
-                                }
-                            }) {
-                                Icon(
-                                    Icons.Rounded.Delete,
-                                    contentDescription = stringResource(R.string.note_action_delete),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            } else if (tagChips.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { tagsVisible = !tagsVisible },
-                                    modifier = Modifier.testTag(UiTestTags.TagFilterToggle),
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Sell,
-                                        contentDescription = stringResource(R.string.notes_toggle_tags),
-                                        tint = if (tagsVisible) {
+                                        Icons.Rounded.SelectAll,
+                                        contentDescription = stringResource(R.string.notes_select_all),
+                                        tint = if (allSelected) {
                                             MaterialTheme.colorScheme.primary
                                         } else {
                                             LocalContentColor.current
                                         },
                                     )
+                                }
+                            } else {
+                                val isGrid = (state as? NotesListState.Content)?.viewMode == NotesViewMode.Tiles
+                                IconButton(onClick = onToggleViewMode) {
+                                    Icon(
+                                        if (isGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                                        contentDescription = stringResource(R.string.notes_toggle_view_mode),
+                                    )
+                                }
+                                if (tagChips.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { tagsVisible = !tagsVisible },
+                                        modifier = Modifier.testTag(UiTestTags.TagFilterToggle),
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Sell,
+                                            contentDescription = stringResource(R.string.notes_toggle_tags),
+                                            tint = if (tagsVisible) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                LocalContentColor.current
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         },
@@ -365,7 +361,14 @@ fun NotesListScreen(
                     }
                 }
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            // Lift snackbars clear of the bottom action bar / selection toolbar — the bar is a
+            // content-Box child (for the search overlay), so the Scaffold can't do it itself.
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(bottom = 96.dp),
+                )
+            },
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                 NotesBody(
@@ -386,20 +389,56 @@ fun NotesListScreen(
                     onToggleSelection = onToggleSelection,
                     currentUserId = currentUserId,
                 )
-                TesseraBottomActionBar(
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    searchQuery = state.query(),
-                    onSearchClick = onExpandSearch,
-                    onFabClick = onCreateNote,
-                    fabIcon = {
-                        Icon(
-                            Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.create_note),
-                            modifier = Modifier.testTag(UiTestTags.CreateNoteFab),
-                        )
-                    },
-                    showFab = !state.searchExpanded && !selectionMode,
-                )
+                if (!selectionMode) {
+                    TesseraBottomActionBar(
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        searchQuery = state.query(),
+                        onSearchClick = onExpandSearch,
+                        onFabClick = onCreateNote,
+                        fabIcon = {
+                            Icon(
+                                Icons.Rounded.Add,
+                                contentDescription = stringResource(R.string.create_note),
+                                modifier = Modifier.testTag(UiTestTags.CreateNoteFab),
+                            )
+                        },
+                        showFab = !state.searchExpanded,
+                    )
+                } else {
+                    // Batch actions live in a reachable floating toolbar (M3E contextual pattern)
+                    // instead of the top-right dead zone.
+                    SelectionFloatingToolbar(
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        isTrashView = state.isTrashView,
+                        onMove = { selectionMovePickerVisible = true },
+                        onDelete = {
+                            if (state.isTrashView) {
+                                val count = selection.size
+                                onPermanentlyDeleteSelected()
+                                if (count > 0) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            message = permanentlyDeletedMessage,
+                                            duration = SnackbarDuration.Short,
+                                        )
+                                    }
+                                }
+                            } else {
+                                val ids = onDeleteSelected()
+                                if (ids.isNotEmpty()) {
+                                    scope.launch {
+                                        val r = snackbarHostState.showSnackbar(
+                                            message = selectionDeletedMessage,
+                                            actionLabel = undoLabel,
+                                            duration = SnackbarDuration.Short,
+                                        )
+                                        if (r == SnackbarResult.ActionPerformed) onRestoreNotes(ids)
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
             }
         }
 
