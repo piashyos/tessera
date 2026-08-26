@@ -33,4 +33,9 @@ class AutoTitleTest {
         val md = "| Task | Owner |\n| --- | --- |\n| Design | Ann |"
         assertEquals("Task Owner", deriveTitleFromContent(md))
     }
+
+    @Test fun `table sizing metadata comment never becomes the title`() {
+        val md = "<!-- tessera:cols=115,264;rows=44,44 -->\n| Task | Owner |\n| --- | --- |"
+        assertEquals("Task Owner", deriveTitleFromContent(md))
+    }
 }

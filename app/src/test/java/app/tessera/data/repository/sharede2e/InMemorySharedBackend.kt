@@ -135,8 +135,8 @@ class InMemorySharedBackend {
                     title = note.title,
                     content = note.content,
                     tags = note.tags,
-                    isPinned = note.isPinned,
-                    isArchived = note.isArchived,
+                    pinned = note.pinned,
+                    archived = note.archived,
                     updatedAt = note.updatedAt,
                     deletedAt = note.deletedAt,
                 )

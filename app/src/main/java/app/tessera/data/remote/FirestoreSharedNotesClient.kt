@@ -76,8 +76,8 @@ class FirestoreSharedNotesClient @Inject constructor(
                     FIELD_TITLE to note.title,
                     FIELD_CONTENT to note.content,
                     FIELD_TAGS to note.tags,
-                    FIELD_IS_PINNED to note.isPinned,
-                    FIELD_IS_ARCHIVED to note.isArchived,
+                    FIELD_IS_PINNED to note.pinned,
+                    FIELD_IS_ARCHIVED to note.archived,
                     FIELD_UPDATED_AT to note.updatedAt,
                     FIELD_DELETED_AT to note.deletedAt,
                 ),
@@ -119,8 +119,11 @@ class FirestoreSharedNotesClient @Inject constructor(
         const val FIELD_TITLE = "title"
         const val FIELD_CONTENT = "content"
         const val FIELD_TAGS = "tags"
-        const val FIELD_IS_PINNED = "isPinned"
-        const val FIELD_IS_ARCHIVED = "isArchived"
+        // Wire names deliberately match the reflective (getter-derived) keys used by
+        // shareNote/private notes — "pinned"/"archived", NOT "isPinned" (the JavaBean is-prefix
+        // pitfall that silently broke archive sync between devices).
+        const val FIELD_IS_PINNED = "pinned"
+        const val FIELD_IS_ARCHIVED = "archived"
         const val FIELD_UPDATED_AT = "updatedAt"
         const val FIELD_DELETED_AT = "deletedAt"
     }

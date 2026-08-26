@@ -31,6 +31,9 @@ fun deriveTitleFromContent(content: String): String {
  * (skipped by the caller's non-empty filter).
  */
 private fun flattenTableLine(line: String): String = when {
+    // Table sizing metadata (<!-- tessera:cols=...;rows=... -->) and any other HTML comment
+    // line is invisible content — never a title.
+    line.startsWith("<!--") -> ""
     !line.startsWith("|") -> line
     line.any { it == '-' } && line.all { it == '|' || it == '-' || it == ':' || it == ' ' } -> ""
     else -> line.trim('|').split('|').joinToString(" ") { it.trim() }.trim()

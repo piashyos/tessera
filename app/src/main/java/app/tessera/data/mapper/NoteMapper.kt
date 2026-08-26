@@ -1,5 +1,6 @@
 package app.tessera.data.mapper
 
+import app.tessera.core.text.deriveTitleFromContent
 import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.remote.RemoteNote
 import app.tessera.domain.model.Note
@@ -23,7 +24,11 @@ class NoteMapper @Inject constructor() {
     ): Note =
         Note(
             id = NoteId(entity.id),
-            title = entity.title,
+            // The title is ALWAYS a pure function of the content (first-line-as-title). Deriving
+            // at read time instead of trusting the stored column self-heals rows whose title was
+            // computed by an older derivation (e.g. table-markup titles) — locally and for notes
+            // synced from devices running older builds.
+            title = deriveTitleFromContent(entity.content),
             content = entity.content,
             tags = normalizeTags(tagNames.map(::Tag)),
             isPinned = entity.isPinned,
@@ -67,12 +72,12 @@ class NoteMapper @Inject constructor() {
             title = entity.title,
             content = entity.content,
             tags = normalizeTagNames(tagNames),
-            isPinned = entity.isPinned,
+            pinned = entity.isPinned,
             createdAt = entity.createdAt,
             updatedAt = entity.updatedAt,
             deletedAt = entity.deletedAt,
             folderId = folderId,
-            isArchived = entity.isArchived,
+            archived = entity.isArchived,
         )
 
     fun toEntity(
@@ -84,13 +89,13 @@ class NoteMapper @Inject constructor() {
             id = remote.id,
             title = remote.title,
             content = remote.content,
-            isPinned = remote.isPinned,
+            isPinned = remote.pinned,
             createdAt = remote.createdAt,
             updatedAt = remote.updatedAt,
             deletedAt = remote.deletedAt,
             syncedAt = syncedAt,
             ownerId = ownerId,
-            isArchived = remote.isArchived,
+            isArchived = remote.archived,
         )
 
     private fun shareState(

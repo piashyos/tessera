@@ -35,7 +35,8 @@ class NoteMapperTest {
         val note = mapper.toDomain(entity, listOf(" beta ", "alpha", "alpha"))
 
         assertEquals(NoteId("note-1"), note.id)
-        assertEquals("Title", note.title)
+        // Title derives from the content first line at read time (self-healing stale columns).
+        assertEquals("Body", note.title)
         assertEquals("Body", note.content)
         assertEquals(listOf(Tag("alpha"), Tag("beta")), note.tags)
         assertEquals(true, note.isPinned)
@@ -84,7 +85,9 @@ class NoteMapperTest {
         val entity =
             NoteEntity(
                 id = "note-3",
-                title = "Round trip",
+                // Title equals the content first line: toDomain re-derives it, so the
+                // entity round-trips exactly only when the stored column already matches.
+                title = "Keeps metadata",
                 content = "Keeps metadata",
                 isPinned = true,
                 createdAt = 100L,
@@ -153,7 +156,9 @@ class NoteMapperTest {
         val entity =
             NoteEntity(
                 id = "s2",
-                title = "T",
+                // Title must equal the content first line for the equality check below —
+                // toDomain re-derives it from content.
+                title = "B",
                 content = "B",
                 isPinned = false,
                 createdAt = 1L,
@@ -193,7 +198,7 @@ class NoteMapperTest {
         assertEquals("Remote", remote.title)
         assertEquals("Body", remote.content)
         assertEquals(listOf("alpha", "beta"), remote.tags)
-        assertEquals(true, remote.isPinned)
+        assertEquals(true, remote.pinned)
         assertEquals(1L, remote.createdAt)
         assertEquals(2L, remote.updatedAt)
         assertEquals(3L, remote.deletedAt)
@@ -207,7 +212,7 @@ class NoteMapperTest {
                 title = "Pulled",
                 content = "Cloud body",
                 tags = listOf("a", "b"),
-                isPinned = false,
+                pinned = false,
                 createdAt = 5L,
                 updatedAt = 6L,
                 deletedAt = 7L,

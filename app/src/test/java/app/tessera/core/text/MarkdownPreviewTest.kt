@@ -83,4 +83,11 @@ class MarkdownPreviewTest {
         // Body preview: the separator row is dropped, the next content row is cell text.
         assertEquals("Design Ann", markdownBodyPreviewPlainText(md))
     }
+
+    @Test
+    fun `table sizing metadata comment is invisible to previews`() {
+        val md = "<!-- tessera:cols=115,264;rows=44,44 -->\n| Task | Owner |\n| --- | --- |\n| Design | Ann |"
+        assertEquals("Task Owner", markdownToPreviewPlainText(md))
+        assertEquals("Design Ann", markdownBodyPreviewPlainText(md))
+    }
 }
