@@ -19,6 +19,18 @@ class AutoTitleTest {
         assertEquals("Buy milk", deriveTitleFromContent("- [x] Buy milk"))
     }
 
+    @Test fun `strips inline emphasis and code markers`() {
+        assertEquals("Bold plan", deriveTitleFromContent("**Bold** plan"))
+        assertEquals("hint text", deriveTitleFromContent("*hint* text"))
+        assertEquals("old text", deriveTitleFromContent("~~old~~ text"))
+        assertEquals("run gradlew now", deriveTitleFromContent("run `gradlew` now"))
+    }
+
+    @Test fun `strips ordered list and quote markers`() {
+        assertEquals("First step", deriveTitleFromContent("1. First step\n2. Second"))
+        assertEquals("Quoted line", deriveTitleFromContent("> Quoted line"))
+    }
+
     @Test fun `returns empty when content is blank`() {
         assertEquals("", deriveTitleFromContent(""))
         assertEquals("", deriveTitleFromContent("   \n\n"))

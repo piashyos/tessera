@@ -77,6 +77,24 @@ class MarkdownPreviewTest {
     }
 
     @Test
+    fun `ordered list marker is stripped`() {
+        assertEquals("first step", markdownToPreviewPlainText("1. first step"))
+        assertEquals("later step", markdownToPreviewPlainText("12. later step"))
+    }
+
+    @Test
+    fun `inline code backticks are stripped`() {
+        assertEquals("run gradlew now", markdownToPreviewPlainText("run `gradlew` now"))
+    }
+
+    @Test
+    fun `code fence lines are skipped, code text shows`() {
+        val md = "```kotlin\nval x = 1\n```\nafter"
+        assertEquals("val x = 1", markdownToPreviewPlainText(md))
+        assertEquals("after", markdownBodyPreviewPlainText(md))
+    }
+
+    @Test
     fun `table markup flattens to cell text in title and body previews`() {
         val md = "| Task | Owner |\n| --- | --- |\n| Design | Ann |\nnotes below"
         assertEquals("Task Owner", markdownToPreviewPlainText(md))

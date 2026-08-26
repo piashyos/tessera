@@ -15,7 +15,9 @@ fun parseGfmTable(lines: List<String>): TableGrid? {
     if (nonBlank.size < 2) return null
     val header = parseCells(nonBlank[0]) ?: return null
     val sep = nonBlank[1].trim()
-    if (!Regex("""^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$""").matches(sep)) return null
+    // The cell group is `*`, not `+`, so a single-column separator (`|---|`) parses too;
+    // pipe-less lines like `---` are still rejected by parseCells below.
+    if (!Regex("""^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$""").matches(sep)) return null
     val sepCells = parseCells(nonBlank[1]) ?: return null
     if (sepCells.size != header.size) return null
 

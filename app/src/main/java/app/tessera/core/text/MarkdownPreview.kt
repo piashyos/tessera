@@ -1,16 +1,17 @@
 package app.tessera.core.text
 
-private val BLOCK_PREFIX = Regex("""^\s*(?:#{1,6}\s+|-\s+\[[ xX]]\s+|-\s+|>\s+)""")
+private val BLOCK_PREFIX = Regex("""^\s*(?:#{1,6}\s+|[-*]\s+\[[ xX]?]\s+|[-*+]\s+|>\s+|\d+\.\s+)""")
 private val INLINE_BOLD = Regex("""\*\*([^*]+)\*\*""")
 private val INLINE_ITALIC = Regex("""(?<!\*)\*([^*]+)\*(?!\*)""")
 private val INLINE_STRIKE = Regex("""~~([^~]+)~~""")
+private val INLINE_CODE = Regex("""`([^`]+)`""")
 private val HTML_TAG = Regex("""<[^>]+>""")
 private val WHITESPACE = Regex("""\s+""")
 
 /**
  * Produces a single-line, marker-free preview of canonical Markdown for note-card display.
- * Picks the first non-blank line, strips supported block prefixes (#, ##, -, - [ ], - [x]),
- * unwraps inline emphasis (**bold**, *italic*, ~~strike~~), removes any HTML tags (in case a
+ * Picks the first non-blank line, strips supported block prefixes (#, ##, -, - [ ], - [x], 1.),
+ * unwraps inline emphasis (**bold**, *italic*, ~~strike~~, `code`), removes any HTML tags (in case a
  * note round-tripped through Aztec and kept stray markup), and collapses internal whitespace.
  * Returns "" for empty/blank input.
  */
@@ -26,7 +27,7 @@ fun markdownToPreviewPlainText(markdown: String): String =
 private fun previewLines(markdown: String): Sequence<String> =
     markdown.lineSequence()
         .map(String::trim)
-        .filter { it.isNotEmpty() && !isTableSeparatorRow(it) }
+        .filter { it.isNotEmpty() && !isTableSeparatorRow(it) && !it.startsWith("```") }
         .map { sanitizePreviewLine(stripTableMarkup(it)) }
         .filter(String::isNotEmpty)
 
@@ -55,6 +56,7 @@ private fun sanitizePreviewLine(line: String): String =
         .replace(INLINE_BOLD) { it.groupValues[1] }
         .replace(INLINE_ITALIC) { it.groupValues[1] }
         .replace(INLINE_STRIKE) { it.groupValues[1] }
+        .replace(INLINE_CODE) { it.groupValues[1] }
         .replace(HTML_TAG, "")
         .replace(WHITESPACE, " ")
         .trim()
