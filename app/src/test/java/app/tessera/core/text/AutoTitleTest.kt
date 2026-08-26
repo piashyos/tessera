@@ -28,4 +28,9 @@ class AutoTitleTest {
         val long = "a".repeat(200)
         assertEquals(120, deriveTitleFromContent(long).length)
     }
+
+    @Test fun `note starting with a table titles from cell text, not pipe markup`() {
+        val md = "| Task | Owner |\n| --- | --- |\n| Design | Ann |"
+        assertEquals("Task Owner", deriveTitleFromContent(md))
+    }
 }

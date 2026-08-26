@@ -64,6 +64,7 @@ import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.EditorMeta
 import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.components.RichNoteBody
+import app.tessera.ui.editor.components.TableActionsBar
 import app.tessera.ui.editor.components.TableBlockEditor
 import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
@@ -110,6 +111,9 @@ fun NoteEditorScreen(
     // Index of the text block whose Aztec editor last held focus. Drives where the
     // "insert table" action places the new table (after the focused block, not at the end).
     var lastFocusedBlock by remember { mutableStateOf(0) }
+    // Index of the TABLE block whose cell currently holds focus (null = none). While set, the
+    // bottom pill shows the contextual TableActionsBar instead of the text format bar.
+    var focusedTableIdx by remember { mutableStateOf<Int?>(null) }
     val currentFocusedBlock by rememberUpdatedState(lastFocusedBlock)
     val initialHtml = remember(state.content) { converter.markdownToHtml(state.content) }
     val blocks = remember(state.content) { splitMarkdownIntoBlocks(state.content) }
@@ -309,7 +313,10 @@ fun NoteEditorScreen(
                     // HorizontalFloatingToolbar shape language) instead of a full-width bar.
                     // The ⋯ block-format panel expands INLINE right above the pill (8dp apart),
                     // visually attached to it instead of a floating DropdownMenu popup.
+                    // With the caret inside a TABLE cell the pill swaps to the contextual
+                    // TableActionsBar (Docs/OneNote mobile pattern).
                     var formatMenuExpanded by remember { mutableStateOf(false) }
+                    val focusedTableGrid = focusedTableIdx?.let { (blocks.getOrNull(it) as? Block.Table)?.grid }
                     androidx.compose.foundation.layout.Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -319,7 +326,7 @@ fun NoteEditorScreen(
                         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     ) {
                         val currentActions = actions
-                        if (currentActions != null) {
+                        if (currentActions != null && focusedTableGrid == null) {
                             MarkdownFormatMenu(
                                 expanded = formatMenuExpanded,
                                 activeFormats = activeFormats,
@@ -333,12 +340,50 @@ fun NoteEditorScreen(
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                             shadowElevation = 3.dp,
                         ) {
-                            EditorFormatBar(
-                                actions = actions,
-                                activeFormats = activeFormats,
-                                menuExpanded = formatMenuExpanded,
-                                onToggleMenu = { formatMenuExpanded = !formatMenuExpanded },
-                            )
+                            if (focusedTableGrid != null) {
+                                val updateTable: ((app.tessera.core.text.markdownblocks.TableGrid) -> app.tessera.core.text.markdownblocks.TableGrid) -> Unit = { transform ->
+                                    val idx = focusedTableIdx
+                                    val block = idx?.let { blocks.getOrNull(it) as? Block.Table }
+                                    if (idx != null && block != null) {
+                                        val updated = blocks.toMutableList()
+                                        updated[idx] = Block.Table(transform(block.grid))
+                                        val joined = joinBlocksIntoMarkdown(updated)
+                                        if (joined != state.content) onContentChange(joined)
+                                    }
+                                }
+                                val moveTable: (Int) -> Unit = { delta ->
+                                    val idx = focusedTableIdx
+                                    val target = idx?.plus(delta)
+                                    if (idx != null && target != null && target in blocks.indices) {
+                                        val updated = blocks.toMutableList()
+                                        val tmp = updated[idx]
+                                        updated[idx] = updated[target]
+                                        updated[target] = tmp
+                                        val joined = joinBlocksIntoMarkdown(updated)
+                                        if (joined != state.content) onContentChange(joined)
+                                        focusedTableIdx = target
+                                    }
+                                }
+                                TableActionsBar(
+                                    canRemoveRow = focusedTableGrid.rowCount > 0,
+                                    canRemoveColumn = focusedTableGrid.columnCount > 1,
+                                    canMoveUp = (focusedTableIdx ?: 0) > 0,
+                                    canMoveDown = (focusedTableIdx ?: blocks.lastIndex) < blocks.lastIndex,
+                                    onAddRow = { updateTable { it.addRow() } },
+                                    onRemoveRow = { updateTable { it.removeRow(it.rowCount - 1) } },
+                                    onAddColumn = { updateTable { it.addColumn() } },
+                                    onRemoveColumn = { updateTable { it.removeColumn(it.columnCount - 1) } },
+                                    onMoveUp = { moveTable(-1) },
+                                    onMoveDown = { moveTable(1) },
+                                )
+                            } else {
+                                EditorFormatBar(
+                                    actions = actions,
+                                    activeFormats = activeFormats,
+                                    menuExpanded = formatMenuExpanded,
+                                    onToggleMenu = { formatMenuExpanded = !formatMenuExpanded },
+                                )
+                            }
                         }
                     }
                 }
@@ -401,7 +446,11 @@ fun NoteEditorScreen(
                                 converter = converter,
                                 onContentChange = onContentChange,
                                 onActionsReady = { actions = wrapActions(it) },
-                                onBlockFocused = { lastFocusedBlock = it },
+                                onBlockFocused = { lastFocusedBlock = it; focusedTableIdx = null },
+                                onTableFocusChanged = { idx, focused ->
+                                    if (focused) focusedTableIdx = idx
+                                    else if (focusedTableIdx == idx) focusedTableIdx = null
+                                },
                                 onActiveFormatsChanged = { activeFormats = it },
                                 editable = !state.isReadOnly,
                             )
@@ -439,7 +488,11 @@ fun NoteEditorScreen(
                         converter = converter,
                         onContentChange = onContentChange,
                         onActionsReady = { actions = wrapActions(it) },
-                        onBlockFocused = { lastFocusedBlock = it },
+                        onBlockFocused = { lastFocusedBlock = it; focusedTableIdx = null },
+                        onTableFocusChanged = { idx, focused ->
+                            if (focused) focusedTableIdx = idx
+                            else if (focusedTableIdx == idx) focusedTableIdx = null
+                        },
                         onActiveFormatsChanged = { activeFormats = it },
                         editable = !state.isReadOnly,
                         modifier = Modifier
@@ -586,6 +639,7 @@ private fun EditorBody(
     onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit,
     modifier: Modifier = Modifier,
     editable: Boolean = true,
+    onTableFocusChanged: (Int, Boolean) -> Unit = { _, _ -> },
 ) {
     if (!hasTable) {
         // FAST PATH — single editor that fills the viewport and scrolls internally. Keeping the
@@ -633,14 +687,6 @@ private fun EditorBody(
                     )
                 }
                 is Block.Table -> {
-                    val swapBlocks: (Int, Int) -> Unit = { a, b ->
-                        val updated = blocks.toMutableList()
-                        val tmp = updated[a]
-                        updated[a] = updated[b]
-                        updated[b] = tmp
-                        val joined = joinBlocksIntoMarkdown(updated)
-                        if (joined != content) onContentChange(joined)
-                    }
                     TableBlockEditor(
                         grid = block.grid,
                         onGridChange = { newGrid ->
@@ -649,8 +695,7 @@ private fun EditorBody(
                             val joined = joinBlocksIntoMarkdown(updated)
                             if (joined != content) onContentChange(joined)
                         },
-                        onMoveUp = if (idx > 0) { { swapBlocks(idx, idx - 1) } } else null,
-                        onMoveDown = if (idx < blocks.lastIndex) { { swapBlocks(idx, idx + 1) } } else null,
+                        onCellFocusChanged = { focused -> onTableFocusChanged(idx, focused) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),

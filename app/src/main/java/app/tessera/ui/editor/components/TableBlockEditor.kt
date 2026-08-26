@@ -1,9 +1,9 @@
 package app.tessera.ui.editor.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -16,10 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -27,12 +25,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -46,124 +43,147 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Remove
 
 /**
  * Inline table editor. The grid sits DIRECTLY on the editor canvas (no card container — a nested
- * block read as "an editor inside the editor"), rows grow with their content (tallest cell wins
- * via [IntrinsicSize.Min]; no fixed row heights), and all structure operations live behind a
- * single ⋮ handle at the table's top-right corner — a compact, always-visible affordance that
- * doesn't compete with the cells the way the old 6-button strip under the grid did.
+ * block read as "an editor inside the editor"), every row shares the same background, and rows
+ * grow with their content ([IntrinsicSize.Min]; the tallest cell wins). Structure operations are
+ * NOT drawn on the table at all: focusing any cell surfaces [TableActionsBar] in the editor's
+ * bottom toolbar — the Google Docs / OneNote mobile pattern (contextual table controls above the
+ * keyboard) — via [onCellFocusChanged].
  */
 @Composable
 fun TableBlockEditor(
     grid: TableGrid,
     onGridChange: (TableGrid) -> Unit,
     modifier: Modifier = Modifier,
-    onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null,
+    onCellFocusChanged: (Boolean) -> Unit = {},
 ) {
     val density = LocalDensity.current
     val widths = grid.colWidths ?: List(grid.columnCount) { TableGrid.DEFAULT_COL_WIDTH }
 
-    Box(modifier = modifier) {
-        // The grid scrolls horizontally so adding columns grows the table sideways
-        // (fixed/min column widths) instead of cramming columns into the screen width.
-        Column(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(top = 4.dp, end = 20.dp),
-        ) {
+    // The grid scrolls horizontally so adding columns grows the table sideways
+    // (fixed/min column widths) instead of cramming columns into the screen width.
+    Column(
+        modifier = modifier
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 4.dp),
+    ) {
+        TableRow(
+            cells = grid.headers,
+            widths = widths,
+            isHeader = true,
+            onCellChange = { c, v -> onGridChange(grid.setHeader(c, v)) },
+            onColResize = { c, dxPx ->
+                onGridChange(grid.withColWidth(c, widths[c] + with(density) { dxPx.toDp().value }))
+            },
+            onCellFocusChanged = onCellFocusChanged,
+        )
+        grid.rows.forEachIndexed { rowIdx, row ->
             TableRow(
-                cells = grid.headers,
+                cells = row,
                 widths = widths,
-                isHeader = true,
-                onCellChange = { c, v -> onGridChange(grid.setHeader(c, v)) },
+                isHeader = false,
+                onCellChange = { c, v -> onGridChange(grid.setCell(rowIdx, c, v)) },
                 onColResize = { c, dxPx ->
                     onGridChange(grid.withColWidth(c, widths[c] + with(density) { dxPx.toDp().value }))
                 },
+                onCellFocusChanged = onCellFocusChanged,
             )
-            grid.rows.forEachIndexed { rowIdx, row ->
-                TableRow(
-                    cells = row,
-                    widths = widths,
-                    isHeader = false,
-                    onCellChange = { c, v -> onGridChange(grid.setCell(rowIdx, c, v)) },
-                    onColResize = { c, dxPx ->
-                        onGridChange(grid.withColWidth(c, widths[c] + with(density) { dxPx.toDp().value }))
-                    },
-                )
-            }
-        }
-
-        // Structure operations behind a compact ⋮ handle pinned to the table's corner.
-        var menuExpanded by remember { mutableStateOf(false) }
-        Box(modifier = Modifier.align(Alignment.TopEnd)) {
-            Surface(
-                onClick = { menuExpanded = true },
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(28.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Rounded.MoreVert,
-                        contentDescription = stringResource(R.string.table_menu),
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-            }
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                TableMenuItem(Icons.Rounded.Add, R.string.table_add_row) {
-                    onGridChange(grid.addRow()); menuExpanded = false
-                }
-                TableMenuItem(
-                    Icons.Rounded.Remove, R.string.table_remove_row,
-                    enabled = grid.rowCount > 0,
-                ) {
-                    onGridChange(grid.removeRow(grid.rowCount - 1)); menuExpanded = false
-                }
-                TableMenuItem(Icons.Rounded.Add, R.string.table_add_column) {
-                    onGridChange(grid.addColumn()); menuExpanded = false
-                }
-                TableMenuItem(
-                    Icons.Rounded.Remove, R.string.table_remove_column,
-                    enabled = grid.columnCount > 1,
-                ) {
-                    onGridChange(grid.removeColumn(grid.columnCount - 1)); menuExpanded = false
-                }
-                TableMenuItem(
-                    Icons.Rounded.ArrowUpward, R.string.table_move_up,
-                    enabled = onMoveUp != null,
-                ) {
-                    onMoveUp?.invoke(); menuExpanded = false
-                }
-                TableMenuItem(
-                    Icons.Rounded.ArrowDownward, R.string.table_move_down,
-                    enabled = onMoveDown != null,
-                ) {
-                    onMoveDown?.invoke(); menuExpanded = false
-                }
-            }
         }
     }
 }
 
+/**
+ * Contextual table toolbar rendered in the editor's bottom pill while a table cell is focused:
+ * `Строка +/−  |  Столбец +/−  |  ↑ ↓`. Labels disambiguate the +/- pairs; move/remove are
+ * disabled at the structure's boundaries.
+ */
 @Composable
-private fun TableMenuItem(
+fun TableActionsBar(
+    canRemoveRow: Boolean,
+    canRemoveColumn: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onAddRow: () -> Unit,
+    onRemoveRow: () -> Unit,
+    onAddColumn: () -> Unit,
+    onRemoveColumn: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.table_row),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TableActionButton(Icons.Rounded.Add, R.string.table_add_row, onClick = onAddRow)
+        TableActionButton(Icons.Rounded.Remove, R.string.table_remove_row, enabled = canRemoveRow, onClick = onRemoveRow)
+
+        TableGroupSeparator()
+        Text(
+            text = stringResource(R.string.table_column),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TableActionButton(Icons.Rounded.Add, R.string.table_add_column, onClick = onAddColumn)
+        TableActionButton(Icons.Rounded.Remove, R.string.table_remove_column, enabled = canRemoveColumn, onClick = onRemoveColumn)
+
+        TableGroupSeparator()
+        TableActionButton(Icons.Rounded.ArrowUpward, R.string.table_move_up, enabled = canMoveUp, onClick = onMoveUp)
+        TableActionButton(Icons.Rounded.ArrowDownward, R.string.table_move_down, enabled = canMoveDown, onClick = onMoveDown)
+    }
+}
+
+@Composable
+private fun TableGroupSeparator() {
+    Box(
+        Modifier
+            .padding(horizontal = 6.dp)
+            .width(1.dp)
+            .height(24.dp),
+    ) {
+        Surface(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.fillMaxHeight().width(1.dp)) {}
+    }
+}
+
+@Composable
+private fun TableActionButton(
     icon: ImageVector,
-    labelRes: Int,
+    contentDescriptionRes: Int,
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    DropdownMenuItem(
-        text = { Text(stringResource(labelRes), style = MaterialTheme.typography.bodyLarge) },
-        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) },
-        enabled = enabled,
+    Surface(
         onClick = onClick,
-    )
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        color = Color.Transparent,
+        contentColor = if (enabled) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        },
+        modifier = Modifier.size(36.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = stringResource(contentDescriptionRes),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
 }
 
 @Composable
@@ -173,9 +193,9 @@ private fun TableRow(
     isHeader: Boolean,
     onCellChange: (Int, String) -> Unit,
     onColResize: (Int, Float) -> Unit,
+    onCellFocusChanged: (Boolean) -> Unit,
 ) {
     val outline = MaterialTheme.colorScheme.outlineVariant
-    val headerBg = MaterialTheme.colorScheme.surfaceContainerLow
     // IntrinsicSize.Min lets the tallest cell set the row height — every cell then fills
     // that height, so borders stay continuous while text wraps freely.
     Row(
@@ -189,7 +209,6 @@ private fun TableRow(
                     .width(widths.getOrElse(idx) { TableGrid.DEFAULT_COL_WIDTH }.dp)
                     .fillMaxHeight()
                     .heightIn(min = 40.dp)
-                    .let { if (isHeader) it.background(headerBg) else it }
                     .border(0.5.dp, outline),
             ) {
                 BasicTextField(
@@ -204,7 +223,8 @@ private fun TableRow(
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                        .onFocusChanged { onCellFocusChanged(it.isFocused) },
                 )
                 // Right-edge handle: drag horizontally to resize this column.
                 ResizeHandle(

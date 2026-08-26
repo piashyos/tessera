@@ -75,4 +75,12 @@ class MarkdownPreviewTest {
     fun `combined markers strip cleanly`() {
         assertEquals("bold heading", markdownToPreviewPlainText("# **bold** heading"))
     }
+
+    @Test
+    fun `table markup flattens to cell text in title and body previews`() {
+        val md = "| Task | Owner |\n| --- | --- |\n| Design | Ann |\nnotes below"
+        assertEquals("Task Owner", markdownToPreviewPlainText(md))
+        // Body preview: the separator row is dropped, the next content row is cell text.
+        assertEquals("Design Ann", markdownBodyPreviewPlainText(md))
+    }
 }

@@ -14,6 +14,7 @@ private val ListPrefix = Regex("^[-*+]\\s+")
 fun deriveTitleFromContent(content: String): String {
     val firstLine = content.lineSequence()
         .map(String::trim)
+        .map(::flattenTableLine)
         .firstOrNull { it.isNotEmpty() }
         ?: return ""
     val stripped = firstLine
@@ -22,4 +23,15 @@ fun deriveTitleFromContent(content: String): String {
         .replaceFirst(ListPrefix, "")
         .trim()
     return if (stripped.length > MAX_TITLE_CHARS) stripped.take(MAX_TITLE_CHARS) else stripped
+}
+
+/**
+ * A note that STARTS with a table must not surface pipe markup as its title: a content row
+ * (`| a | b |`) flattens to its cell text ("a b") and the alignment row (`|---|---|`) to ""
+ * (skipped by the caller's non-empty filter).
+ */
+private fun flattenTableLine(line: String): String = when {
+    !line.startsWith("|") -> line
+    line.any { it == '-' } && line.all { it == '|' || it == '-' || it == ':' || it == ' ' } -> ""
+    else -> line.trim('|').split('|').joinToString(" ") { it.trim() }.trim()
 }

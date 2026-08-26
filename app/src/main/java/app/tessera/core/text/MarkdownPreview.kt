@@ -14,26 +14,40 @@ private val WHITESPACE = Regex("""\s+""")
  * note round-tripped through Aztec and kept stray markup), and collapses internal whitespace.
  * Returns "" for empty/blank input.
  */
-fun markdownToPreviewPlainText(markdown: String): String {
-    val firstLine = markdown
-        .lineSequence()
+fun markdownToPreviewPlainText(markdown: String): String =
+    previewLines(markdown).firstOrNull() ?: ""
+
+/**
+ * Preview-friendly line stream: trimmed, non-empty, table markup flattened to plain cell text
+ * (`| a | b |` -> "a b") with separator rows (`|---|---|`) dropped entirely, then sanitized.
+ * Lines that sanitize to nothing are skipped so a card never shows an empty title/preview when
+ * meaningful text follows.
+ */
+private fun previewLines(markdown: String): Sequence<String> =
+    markdown.lineSequence()
         .map(String::trim)
-        .firstOrNull { it.isNotEmpty() }
-        ?: return ""
-    return sanitizePreviewLine(firstLine)
-}
+        .filter { it.isNotEmpty() && !isTableSeparatorRow(it) }
+        .map { sanitizePreviewLine(stripTableMarkup(it)) }
+        .filter(String::isNotEmpty)
+
+/** A markdown table alignment row: only pipes, dashes, colons and spaces. */
+private fun isTableSeparatorRow(line: String): Boolean =
+    line.startsWith("|") && line.any { it == '-' } && line.all { it == '|' || it == '-' || it == ':' || it == ' ' }
+
+/** Flattens a table content row to its cell text: `| a | b |` -> "a b". */
+private fun stripTableMarkup(line: String): String =
+    if (line.startsWith("|")) {
+        line.trim('|').split('|').joinToString(" ") { it.trim() }.trim()
+    } else {
+        line
+    }
 
 /**
  * Like [markdownToPreviewPlainText] but skips the first non-blank line — that line is
  * the auto-derived title, so showing it twice on a note card is duplication.
  */
-fun markdownBodyPreviewPlainText(markdown: String): String {
-    val lines = markdown.lineSequence().map(String::trim).filter(String::isNotEmpty).iterator()
-    if (!lines.hasNext()) return ""
-    lines.next() // skip title line
-    if (!lines.hasNext()) return ""
-    return sanitizePreviewLine(lines.next())
-}
+fun markdownBodyPreviewPlainText(markdown: String): String =
+    previewLines(markdown).drop(1).firstOrNull() ?: ""
 
 private fun sanitizePreviewLine(line: String): String =
     line
