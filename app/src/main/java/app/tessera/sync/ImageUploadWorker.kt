@@ -47,6 +47,7 @@ class ImageUploadWorker @AssistedInject constructor(
     private val sharedRemote: RemoteSharedNotesDataSource,
     private val imageMapper: NoteImageMapper,
     private val notifier: ImageUploadNotifier,
+    private val imageWorkScheduler: ImageWorkScheduler,
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val uid = inputData.getString(KEY_UID)?.takeIf { it.isNotBlank() } ?: return Result.success()
@@ -82,9 +83,11 @@ class ImageUploadWorker @AssistedInject constructor(
             }
 
         var needsRetry = false
+        var anyUploaded = false
         for (row in pending) {
             when (uploadRow(uid, token, folderId, row)) {
-                RowResult.UPLOADED, RowResult.FAILED_TERMINAL -> Unit
+                RowResult.UPLOADED -> anyUploaded = true
+                RowResult.FAILED_TERMINAL -> Unit
                 RowResult.TRANSIENT -> needsRetry = true
                 RowResult.AUTH -> {
                     driveAuthManager.invalidateToken()
@@ -92,9 +95,15 @@ class ImageUploadWorker @AssistedInject constructor(
                 }
                 // Quota is account-wide and terminal: no point trying the rest this run, and no
                 // WorkManager retry (Result.success). A user message was already emitted.
-                RowResult.QUOTA -> return Result.success()
+                RowResult.QUOTA -> {
+                    if (anyUploaded) imageWorkScheduler.requestPermissionSync()
+                    return Result.success()
+                }
             }
         }
+        // A freshly uploaded file starts with only the owner's permission; reconcile it against the
+        // note's member set so shared-note readers gain access.
+        if (anyUploaded) imageWorkScheduler.requestPermissionSync()
         return if (needsRetry) Result.retry() else Result.success()
     }
 

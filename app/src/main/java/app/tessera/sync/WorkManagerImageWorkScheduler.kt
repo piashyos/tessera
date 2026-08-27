@@ -38,4 +38,21 @@ class WorkManagerImageWorkScheduler @Inject constructor(
             request,
         )
     }
+
+    override fun requestPermissionSync() {
+        val uid = authRepository.currentUser.value ?: return
+        val request =
+            OneTimeWorkRequestBuilder<ImagePermissionWorker>()
+                .setConstraints(
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+                )
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setInputData(workDataOf(ImagePermissionWorker.KEY_UID to uid.value))
+                .build()
+        workManager.enqueueUniqueWork(
+            ImagePermissionWorker.UNIQUE_NAME,
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            request,
+        )
+    }
 }

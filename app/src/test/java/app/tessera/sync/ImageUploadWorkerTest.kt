@@ -234,6 +234,7 @@ class ImageUploadWorkerTest {
                 sharedRemote,
                 NoteImageMapper(),
                 notifier,
+                FakeImageWorkScheduler(),
             )
         }
         val worker = TestListenableWorkerBuilder<ImageUploadWorker>(context)
@@ -374,6 +375,13 @@ class ImageUploadWorkerTest {
         override suspend fun updateImageManifest(noteId: String, imageId: String, ref: RemoteImageRef?) {
             writes += Triple(noteId, imageId, ref)
         }
+    }
+
+    private class FakeImageWorkScheduler : ImageWorkScheduler {
+        var uploadRequests = 0
+        var permissionSyncRequests = 0
+        override fun requestUpload() { uploadRequests++ }
+        override fun requestPermissionSync() { permissionSyncRequests++ }
     }
 
     private class FakeNotifier : ImageUploadNotifier {

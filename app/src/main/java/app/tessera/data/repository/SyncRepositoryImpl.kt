@@ -29,6 +29,8 @@ import app.tessera.domain.model.UserId
 import app.tessera.domain.model.canDeleteForAll
 import app.tessera.domain.model.canEditContent
 import app.tessera.domain.repository.SyncRepository
+import app.tessera.sync.ImageWorkScheduler
+import app.tessera.sync.NoOpImageWorkScheduler
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,6 +57,7 @@ class SyncRepositoryImpl @Inject constructor(
     private val sharedMapper: SharedNoteMapper,
     private val imageMapper: NoteImageMapper,
     private val clock: Clock,
+    private val imageWorkScheduler: ImageWorkScheduler = NoOpImageWorkScheduler,
 ) : SyncRepository {
     // Serializes every Room merge so the one-shot SyncWorker and the live Firestore listener — both
     // active right after sign-in — can't interleave their writes. Without this, two merges race on
@@ -311,6 +314,10 @@ class SyncRepositoryImpl @Inject constructor(
                 mergeImageManifest(remoteNote.id, remoteNote.images)
             }
         }
+        // Member sets may have changed for notes I own; reconcile my uploaded images' Drive
+        // permissions so added members gain access and removed ones lose it. No-op when I own no
+        // uploaded images.
+        imageWorkScheduler.requestPermissionSync()
     }
 
     private suspend fun mergeRemoteFolders(

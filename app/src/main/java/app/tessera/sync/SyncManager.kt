@@ -150,6 +150,20 @@ class SyncManager @Inject constructor(
             purgeRequest,
         )
 
+        // Reconcile Drive image sharing permissions daily as a safety net for membership changes
+        // missed while offline. Event-driven syncs (membership merge, upload success) do most of
+        // the work; this backstops drift.
+        val permissionSyncRequest =
+            PeriodicWorkRequestBuilder<ImagePermissionWorker>(1, TimeUnit.DAYS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setInputData(workDataOf(ImagePermissionWorker.KEY_UID to uid.value))
+                .build()
+        workManager.enqueueUniquePeriodicWork(
+            ImagePermissionWorker.PERIODIC_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            permissionSyncRequest,
+        )
+
         remoteJob =
             scope.launch {
                 syncRepository
@@ -167,6 +181,7 @@ class SyncManager @Inject constructor(
         workManager.cancelUniqueWork(SyncWorker.UNIQUE_NAME)
         workManager.cancelUniqueWork(DeleteTombstonesWorker.UNIQUE_NAME)
         workManager.cancelUniqueWork(DeleteTombstonesWorker.ONE_TIME_NAME)
+        workManager.cancelUniqueWork(ImagePermissionWorker.PERIODIC_NAME)
 
         // On a genuine sign-out, the account's notes were cloud-backed, so drop the local cache —
         // otherwise the signed-in user's notes linger on the device for the next (signed-out or
