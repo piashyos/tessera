@@ -133,4 +133,18 @@ class MarkdownPreviewTest {
         assertEquals("Task Owner", markdownToPreviewPlainText(md))
         assertEquals("Design Ann", markdownBodyPreviewPlainText(md))
     }
+
+    @Test
+    fun `image-only note falls back to camera emoji`() {
+        assertEquals("📷", markdownToPreviewPlainText("![](tessera-img://abc-123)"))
+    }
+
+    @Test
+    fun `mixed text and image previews the text with image lines dropped`() {
+        val md = "Some text\n![](tessera-img://abc-123)\nmore text"
+        val preview = markdownToPreviewPlainText(md)
+        assertEquals("Some text", preview)
+        assert(!preview.contains("tessera-img")) { "preview leaked raw image ref: $preview" }
+        assert(!preview.contains("![")) { "preview leaked raw image markup: $preview" }
+    }
 }

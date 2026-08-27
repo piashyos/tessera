@@ -9,16 +9,23 @@ private val INLINE_STRIKE = Regex("""~~(?=\S)(.+?)(?<=\S)~~""")
 private val INLINE_CODE = Regex("""`([^`]+)`""")
 private val HTML_TAG = Regex("""<[^>]+>""")
 private val WHITESPACE = Regex("""\s+""")
+private val IMAGE_REF_LINE = Regex("""^!\[[^\]]*]\(tessera-img://[^)]*\)$""")
 
 /**
  * Produces a single-line, marker-free preview of canonical Markdown for note-card display.
  * Picks the first non-blank line, strips supported block prefixes (#, ##, -, - [ ], - [x], 1.),
  * unwraps inline emphasis (**bold**, *italic*, ~~strike~~, `code`), removes any HTML tags (in case a
  * note round-tripped through Aztec and kept stray markup), and collapses internal whitespace.
- * Returns "" for empty/blank input.
+ * Image-ref lines (`![](tessera-img://…)`) are dropped entirely. Returns "" for genuinely
+ * empty/blank input; if the only content was image refs, returns "📷" so image-only notes still
+ * show something on the card.
  */
-fun markdownToPreviewPlainText(markdown: String): String =
-    previewLines(markdown).firstOrNull() ?: ""
+fun markdownToPreviewPlainText(markdown: String): String {
+    val preview = previewLines(markdown).firstOrNull() ?: ""
+    if (preview.isNotEmpty()) return preview
+    val hadImageRef = markdown.lineSequence().map(String::trim).any(IMAGE_REF_LINE::matches)
+    return if (hadImageRef) "📷" else ""
+}
 
 /**
  * Preview-friendly line stream: trimmed, non-empty, table markup flattened to plain cell text
@@ -29,7 +36,7 @@ fun markdownToPreviewPlainText(markdown: String): String =
 private fun previewLines(markdown: String): Sequence<String> =
     markdown.lineSequence()
         .map(String::trim)
-        .filter { it.isNotEmpty() && !isTableSeparatorRow(it) && !it.startsWith("```") }
+        .filter { it.isNotEmpty() && !isTableSeparatorRow(it) && !it.startsWith("```") && !IMAGE_REF_LINE.matches(it) }
         .map { sanitizePreviewLine(stripTableMarkup(it)) }
         .filter(String::isNotEmpty)
 
