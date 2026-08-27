@@ -18,7 +18,7 @@ Drive upload catches up when the user signs in.
 | Signed-out users | Insertion always works; upload waits for sign-in |
 | Image sources | Photo Picker, camera, clipboard paste (incl. keyboard `commitContent`) |
 | Compression | Re-encode to WebP q~80, long side ≤ 2048 px; original discarded |
-| Access revocation | Removing a member revokes their Drive permission on the note's files |
+| Access revocation | Removing a member revokes their Drive permission on the note's files (except files the removed member owns — see `ACCESS_LOST` in Deletion) |
 | Who can insert in shared notes | Any member with write role; each inserter's client manages permissions on their own files |
 | Deletion | Drive file trashed after 7-day orphan hysteresis (no references in any live note, including app trash) |
 | HTTP client | Drive REST v3 directly via OkHttp/Retrofit (no google-api-services-drive) |
@@ -105,11 +105,14 @@ sign-in, network regained.
 - `storageQuotaExceeded` (403) → status `FAILED`, one-time user-visible message
   "Drive is full"; image keeps working locally with a "not synced" badge;
   tap-to-retry resets the row to `LOCAL_ONLY`.
-- App access revoked / auth permanently invalid → all my rows revert to
-  `LOCAL_ONLY`; `DriveAuthManager` re-prompts consent lazily on next upload attempt
+- App access revoked / auth permanently invalid → only `UPLOADING`/pending rows
+  revert to `LOCAL_ONLY`; `UPLOADED` rows are untouched (their `driveFileId`,
+  manifest entries, and recipients' per-email grants all survive an OAuth
+  revocation). `DriveAuthManager` re-prompts consent lazily on next upload attempt
   (same path as "consent declined").
 - Local file missing before upload (user cleared app storage) → status `FAILED`;
-  renderer shows the permanent "unavailable" placeholder for that image.
+  renderer shows the "unavailable" placeholder with retry suppressed — retry can
+  never succeed without the source file.
 
 ## Permission reconciliation — `ImagePermissionWorker`
 
@@ -148,16 +151,23 @@ Daily periodic + after note save:
    Reference reappears (undo / restore) → reset to null.
    **Exception — inserter removed from a shared note:** if the row's `noteId`
    disappeared locally because *access was lost* (sync removed a shared note the
-   user no longer belongs to), the row is marked `ACCESS_LOST` instead of orphaned:
+   user no longer belongs to — the signal is the shared-note sync receiving
+   `PERMISSION_DENIED` on its listener/fetch, as opposed to a document-delete
+   event, which is genuine deletion), the row is marked `ACCESS_LOST` instead of orphaned:
    the Drive file is still referenced by the remaining members, and we can no longer
    read the note or its manifest to verify. `ACCESS_LOST` rows are excluded from
    cleanup and permission reconciliation. Consequences, accepted for v1: remaining
    members keep already-granted read access (the removed inserter's client cannot
    and does not revoke it); members added later never gain access to those images
    and see the "unavailable" placeholder; the file stays in the inserter's visible
-   Drive "Tessera" folder until they delete it manually.
+   Drive "Tessera" folder until they delete it manually. If the inserter is later
+   re-added and the note syncs back with this `noteId`, the row reverts to
+   `UPLOADED` (mirroring the `orphanedAt` reset), re-entering permission
+   reconciliation and cleanup.
 2. `orphanedAt` older than 7 days → `DELETE /drive/v3/files/{id}` (goes to Drive
    trash, 30 more days manually recoverable), delete local file, Room row, manifest entry.
+   For rows without a `driveFileId` (orphaned `LOCAL_ONLY`/`FAILED`), the Drive
+   DELETE and manifest patch are skipped — only the local file and Room row go.
 3. Other members' cached images are untouched (LRU handles `cacheDir`).
 
 ## Testing
