@@ -11,6 +11,7 @@ import app.tessera.data.remote.UserDirectoryDataSource
 import app.tessera.data.repository.AccountRepositoryImpl
 import app.tessera.data.repository.AuthRepositoryImpl
 import app.tessera.data.repository.FolderRepositoryImpl
+import app.tessera.data.repository.NoteImagesRepositoryImpl
 import app.tessera.data.repository.NotesRepositoryImpl
 import app.tessera.data.repository.SharedNotesGateway
 import app.tessera.data.repository.SharedNotesGatewayImpl
@@ -20,9 +21,12 @@ import app.tessera.data.repository.SyncRepositoryImpl
 import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.repository.FolderRepository
+import app.tessera.domain.repository.NoteImagesRepository
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.repository.SyncRepository
 import app.tessera.domain.repository.SyncScheduler
+import app.tessera.sync.ImageWorkScheduler
+import app.tessera.sync.NoOpImageWorkScheduler
 import app.tessera.sync.WorkManagerSyncScheduler
 import dagger.Binds
 import dagger.Module
@@ -82,4 +86,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindDriveAuthManager(impl: PlayServicesDriveAuthManager): DriveAuthManager
+
+    @Binds
+    @Singleton
+    abstract fun bindNoteImagesRepository(impl: NoteImagesRepositoryImpl): NoteImagesRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindImageWorkScheduler(impl: NoOpImageWorkScheduler): ImageWorkScheduler
 }
