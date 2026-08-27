@@ -1,5 +1,15 @@
 package app.tessera.ui.editor
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
@@ -35,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -71,7 +83,10 @@ import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.noteDateLabel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import org.wordpress.aztec.AztecTextFormat
+import org.wordpress.aztec.Html
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
@@ -104,6 +119,9 @@ fun NoteEditorScreen(
     onInviteInputChanged: () -> Unit = {},
     onDismissMembers: () -> Unit = {},
     onClearShareError: () -> Unit = {},
+    imageGetter: Html.ImageGetter? = null,
+    onInsertImageUri: (Uri) -> Unit = {},
+    insertedImageIds: Flow<String> = emptyFlow(),
 ) {
     val haptics = rememberHaptics()
     val converter = remember { MarkdownHtmlConverter() }
@@ -124,8 +142,53 @@ fun NoteEditorScreen(
     // doesn't observe stale state across recompositions.
     val currentContent by rememberUpdatedState(state.content)
     val currentOnContentChange by rememberUpdatedState(onContentChange)
+    val currentOnInsertImageUri by rememberUpdatedState(onInsertImageUri)
+
+    // --- Image source launchers (gallery + camera) ---
+    val context = LocalContext.current
+    // Gallery: photo picker restricted to images. A null result = user cancelled.
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> if (uri != null) currentOnInsertImageUri(uri) }
+    // Camera: capture into a FileProvider URI under cacheDir/camera/. Held in state across the
+    // TakePicture round-trip so the success callback knows which file was written.
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { success ->
+        val uri = pendingCameraUri
+        if (success && uri != null) currentOnInsertImageUri(uri)
+        pendingCameraUri = null
+    }
+    val launchCamera: () -> Unit = {
+        val uri = createCameraCaptureUri(context)
+        pendingCameraUri = uri
+        takePictureLauncher.launch(uri)
+    }
+    // Camera needs the CAMERA runtime permission; request it first when not already granted.
+    val requestCameraPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) launchCamera() }
+    val onInsertImageClick: () -> Unit = {
+        pickImageLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
+    }
+    val onCaptureImageClick: () -> Unit = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            launchCamera()
+        } else {
+            requestCameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+    val onImageCommitted: (Uri) -> Boolean = { uri -> currentOnInsertImageUri(uri); true }
+
     val wrapActions: (RichBodyActions) -> RichBodyActions = { base ->
         object : RichBodyActions by base {
+            override fun onInsertImage() = onInsertImageClick()
+            override fun onCaptureImage() = onCaptureImageClick()
             override fun insertTable() {
                 val existing = splitMarkdownIntoBlocks(currentContent).toMutableList()
                 // Insert the table right after the text block that currently holds the
@@ -151,6 +214,13 @@ fun NoteEditorScreen(
     // leaves the formatted span.
     var activeFormats by remember { mutableStateOf<Set<AztecTextFormat>>(emptySet()) }
     val imeVisible = WindowInsets.isImeVisible
+
+    // After the VM stores an image and emits its id, splice the span at the editor caret. Reading
+    // `actions` inside the collector picks up the live editor action object once it's ready.
+    val currentActions by rememberUpdatedState(actions)
+    LaunchedEffect(insertedImageIds) {
+        insertedImageIds.collect { imageId -> currentActions?.insertImage(imageId) }
+    }
 
     Box(modifier = modifier.fillMaxSize().testTag(UiTestTags.EditorRoot)) {
         Scaffold(
@@ -453,6 +523,8 @@ fun NoteEditorScreen(
                                 },
                                 onActiveFormatsChanged = { activeFormats = it },
                                 editable = !state.isReadOnly,
+                                imageGetter = imageGetter,
+                                onImageCommitted = onImageCommitted,
                             )
 
                             // Tap target below the content forwards focus to the editor body and
@@ -495,6 +567,8 @@ fun NoteEditorScreen(
                         },
                         onActiveFormatsChanged = { activeFormats = it },
                         editable = !state.isReadOnly,
+                        imageGetter = imageGetter,
+                        onImageCommitted = onImageCommitted,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
@@ -593,6 +667,17 @@ fun NoteEditorScreen(
     }
 }
 
+/**
+ * Create a fresh FileProvider URI under `cacheDir/camera/` for [ActivityResultContracts.TakePicture]
+ * to write into. The `camera/` path + `${applicationId}.fileprovider` authority were declared in
+ * `file_paths.xml` (Task 1).
+ */
+private fun createCameraCaptureUri(context: Context): Uri {
+    val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+    val file = File(dir, "capture_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}
+
 @Composable
 private fun ConfirmDialog(
     title: String,
@@ -640,6 +725,8 @@ private fun EditorBody(
     modifier: Modifier = Modifier,
     editable: Boolean = true,
     onTableFocusChanged: (Int, Boolean) -> Unit = { _, _ -> },
+    imageGetter: Html.ImageGetter? = null,
+    onImageCommitted: (Uri) -> Boolean = { false },
 ) {
     if (!hasTable) {
         // FAST PATH — single editor that fills the viewport and scrolls internally. Keeping the
@@ -655,6 +742,8 @@ private fun EditorBody(
             onFocusChanged = { if (it) onBlockFocused(0) },
             onActiveFormatsChanged = onActiveFormatsChanged,
             editable = editable,
+            imageGetter = imageGetter,
+            onImageCommitted = onImageCommitted,
             scrollable = true,
             modifier = modifier.fillMaxWidth(),
         )
@@ -683,6 +772,8 @@ private fun EditorBody(
                         onFocusChanged = { if (it) onBlockFocused(idx) },
                         onActiveFormatsChanged = onActiveFormatsChanged,
                         editable = editable,
+                        imageGetter = imageGetter,
+                        onImageCommitted = onImageCommitted,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

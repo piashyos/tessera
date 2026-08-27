@@ -243,6 +243,9 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                 onInviteInputChanged = viewModel::onInviteInputChanged,
                 onDismissMembers = viewModel::dismissMembersSheet,
                 onClearShareError = viewModel::clearShareError,
+                imageGetter = viewModel.imageGetter,
+                onInsertImageUri = viewModel::insertImage,
+                insertedImageIds = viewModel.imageInserts,
             )
         }
     }

@@ -48,7 +48,9 @@ import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.FormatStrikethrough
 import androidx.compose.material.icons.rounded.FormatUnderlined
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Remove
 
 /**
@@ -113,6 +115,11 @@ fun EditorFormatBar(
       FormatToggle(Icons.Rounded.Code, R.string.toolbar_code, AztecTextFormat.FORMAT_PREFORMAT in activeFormats) { actions?.toggleCode() }
       FormatToggle(Icons.Rounded.Remove, R.string.toolbar_divider, active = false) { actions?.insertHorizontalRule() }
       FormatToggle(Icons.Rounded.TableChart, R.string.toolbar_table, active = false) { actions?.insertTable() }
+
+      GroupSeparator()
+      // [🖼][📷] — attach an image from the gallery or capture one with the camera.
+      FormatToggle(Icons.Rounded.Image, R.string.toolbar_image, active = false) { actions?.onInsertImage() }
+      FormatToggle(Icons.Rounded.PhotoCamera, R.string.toolbar_camera, active = false) { actions?.onCaptureImage() }
     }
 
     GroupSeparator()

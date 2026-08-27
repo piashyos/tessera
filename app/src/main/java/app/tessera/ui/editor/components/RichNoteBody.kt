@@ -1,5 +1,6 @@
 package app.tessera.ui.editor.components
 
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
@@ -35,8 +36,10 @@ import androidx.core.content.res.ResourcesCompat
 import app.tessera.R
 import app.tessera.core.text.applySerifHeadingSpans
 import org.wordpress.aztec.Aztec
+import org.wordpress.aztec.AztecAttributes
 import org.wordpress.aztec.AztecText
 import org.wordpress.aztec.AztecTextFormat
+import org.wordpress.aztec.Html
 import org.wordpress.aztec.ITextFormat
 import org.wordpress.aztec.plugins.IToolbarButton
 import org.wordpress.aztec.source.SourceViewEditText
@@ -96,6 +99,26 @@ interface RichBodyActions {
     fun insertTable() {}
 
     /**
+     * User intent to attach an image from the gallery. Overridden at the screen level to launch
+     * the photo picker; the editor object itself leaves it a no-op.
+     */
+    fun onInsertImage() {}
+
+    /**
+     * User intent to capture an image with the camera. Overridden at the screen level to request
+     * the CAMERA permission (when needed) and launch capture; a no-op on the editor object.
+     */
+    fun onCaptureImage() {}
+
+    /**
+     * Splice a Drive-backed image span (`tessera-img://<imageId>`) into the editor AT THE CURRENT
+     * CARET, resolving the just-stored local file to a drawable. Called by the screen after
+     * [InsertImageUseCase] has stored the image and produced its [imageId]. Default no-op for
+     * previews / mocks without a live editor.
+     */
+    fun insertImage(imageId: String) {}
+
+    /**
      * Formats currently applied at the editor's selection / cursor position.
      * The toolbar dropdown reads this to highlight active entries.
      */
@@ -104,6 +127,9 @@ interface RichBodyActions {
 
 private const val DebounceMs = 300L
 private const val SerifReapplyMs = 50L
+
+/** Fallback display width for an inserted image before the editor has been measured. */
+private const val DefaultImageWidthPx = 1080
 
 /** Formats the toolbar highlights as "active"; queried against the editor's selection. */
 private val EditorQueryFormats = listOf(
@@ -330,6 +356,17 @@ fun RichNoteBody(
     onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit = {},
     editable: Boolean = true,
     /**
+     * Renders `tessera-img://<id>` image spans (from `fromHtml` and the insert-at-caret path).
+     * Null in previews / tests without a live loader — image sources then fail to load, which is
+     * fine for a text-only editor.
+     */
+    imageGetter: Html.ImageGetter? = null,
+    /**
+     * Routes an image that arrives via the IME rich-content path or an image clipboard paste
+     * to the same insert pipeline the picker/camera use. Returns true when it will be handled.
+     */
+    onImageCommitted: (Uri) -> Boolean = { false },
+    /**
      * When true the editor fills its (bounded) height and scrolls internally instead of growing to
      * wrap its content. Used by the single-editor fast path so the text-selection toolbar/handles —
      * which Android positions relative to the editor View's bounds — stay within the visible editor
@@ -413,6 +450,7 @@ fun RichNoteBody(
     val currentHtmlToMarkdown by rememberUpdatedState(htmlToMarkdown)
     val currentOnFocusChanged by rememberUpdatedState(onFocusChanged)
     val currentOnActiveFormatsChanged by rememberUpdatedState(onActiveFormatsChanged)
+    val currentOnImageCommitted by rememberUpdatedState(onImageCommitted)
 
     // Keeps the caret line riding above the soft keyboard. The IME inset is read *here* (not in
     // the screen) so only this editor subtree recomposes as the keyboard animates — the top bar
@@ -524,6 +562,10 @@ fun RichNoteBody(
                 applySerifHeadingSpans(spannable, context)
             }
 
+            // Attach the image getter BEFORE fromHtml so `tessera-img://` sources resolve during
+            // the initial load (and every subsequent reload / insert).
+            imageGetter?.let { editor.imageGetter = it }
+
             // Load initial HTML AFTER Aztec.with so plugins/history see it as the starting state.
             editor.fromHtml(html)
             // After load, force-refresh every task-list span so its line metrics
@@ -623,6 +665,9 @@ fun RichNoteBody(
                 pushActiveFormats()
                 bringCaretIntoView()
             }
+            // Images arriving from the keyboard's rich-content commit or an image/* clipboard
+            // paste flow through the same VM.insertImage pipeline as the picker/camera.
+            (editor as? FlickerlessAztecText)?.onImageCommitted = { uri -> currentOnImageCommitted(uri) }
             pushActiveFormats()
 
             // Expose formatting actions to the toolbar
@@ -729,6 +774,31 @@ fun RichNoteBody(
                 }
                 override fun insertHorizontalRule() {
                     editor.toggleFormatting(AztecTextFormat.FORMAT_HORIZONTAL_RULE)
+                }
+
+                override fun insertImage(imageId: String) {
+                    // Splice `<img src="tessera-img://id">` at the caret. Aztec serializes the media
+                    // span back to that <img> tag, which htmlToMarkdown turns into the
+                    // `![](tessera-img://id)` line the store keeps — so this rides the SAME markdown
+                    // flush path as every other edit (no parallel content channel).
+                    val attrs = AztecAttributes().apply { setValue("src", "tessera-img://$imageId") }
+                    val width = editor.maxImagesWidth.takeIf { it > 0 }
+                        ?: editor.width.takeIf { it > 0 }
+                        ?: DefaultImageWidthPx
+                    val loader = imageGetter as? TesseraImageLoader
+                    caretScope.launch {
+                        // Resolve the just-stored local file to a drawable off the main thread; fall
+                        // back to a loading tile if it isn't decodable yet (the ImageGetter will
+                        // re-resolve on the next reload).
+                        val drawable = loader?.resolve(imageId, width)
+                            ?: loader?.loadingPlaceholder(width, null)
+                            ?: android.graphics.drawable.ColorDrawable(android.graphics.Color.LTGRAY)
+                                .apply { setBounds(0, 0, width, width * 9 / 16) }
+                        editor.insertImage(drawable, attrs)
+                        reapplySerifHeadings()
+                        pushActiveFormats()
+                        flushHtmlNow()
+                    }
                 }
 
                 override fun focusBody() {

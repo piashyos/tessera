@@ -1,5 +1,6 @@
 package app.tessera.ui.editor
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
@@ -15,11 +16,13 @@ import app.tessera.domain.model.UserId
 import app.tessera.domain.model.UserProfile
 import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.repository.FolderRepository
+import app.tessera.domain.repository.NoteImagesRepository
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.repository.SyncRepository
 import app.tessera.domain.usecase.ChangeMemberRoleUseCase
 import app.tessera.domain.usecase.DeleteNoteUseCase
 import app.tessera.domain.usecase.GetNoteUseCase
+import app.tessera.domain.usecase.InsertImageUseCase
 import app.tessera.domain.usecase.InviteMemberUseCase
 import app.tessera.domain.usecase.LeaveSharedNoteUseCase
 import app.tessera.domain.usecase.ObserveMembersUseCase
@@ -29,8 +32,12 @@ import app.tessera.domain.usecase.RemoveMemberUseCase
 import app.tessera.domain.usecase.ShareNoteUseCase
 import app.tessera.domain.usecase.UnshareNoteUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
+import app.tessera.ui.editor.components.NoteImageLoaderFactory
+import app.tessera.ui.editor.components.TesseraImageLoader
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +54,9 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NoteEditorViewModelTest {
@@ -471,6 +481,71 @@ class NoteEditorViewModelTest {
     }
 }
 
+/**
+ * Image-insertion tests (Task 10). Split into a Robolectric class because they need a real
+ * `android.net.Uri`, which the plain-JVM (returnDefaultValues) test above can't construct. Reuses
+ * the file-private [FakeEditorRepository] / [sampleNote] fakes.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+@OptIn(ExperimentalCoroutinesApi::class)
+class NoteEditorImageInsertTest {
+
+    private val dispatcher = StandardTestDispatcher()
+
+    @org.junit.Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @org.junit.After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @org.junit.Test
+    fun `insertImage emits the new imageId exactly once after the use case succeeds`() =
+        runTest(dispatcher.scheduler) {
+            val repo = FakeEditorRepository(notes = listOf(sampleNote("img-ok", content = "Body")))
+            repo.insertImageResult = Result.success("img-42")
+            val vm = repo.createViewModel(noteId = "img-ok")
+            runCurrent()
+
+            val emitted = mutableListOf<String>()
+            val job = launch { vm.imageInserts.collect { emitted += it } }
+            runCurrent()
+
+            vm.insertImage(Uri.parse("content://pick/1"))
+            runCurrent()
+
+            org.junit.Assert.assertEquals(
+                "success must splice the imageId exactly once",
+                listOf("img-42"),
+                emitted,
+            )
+            job.cancel()
+        }
+
+    @org.junit.Test
+    fun `insertImage emits nothing when the use case fails`() =
+        runTest(dispatcher.scheduler) {
+            val repo = FakeEditorRepository(notes = listOf(sampleNote("img-fail", content = "Body")))
+            repo.insertImageResult = Result.failure(IllegalStateException("compression failed"))
+            val vm = repo.createViewModel(noteId = "img-fail")
+            runCurrent()
+
+            val emitted = mutableListOf<String>()
+            val job = launch { vm.imageInserts.collect { emitted += it } }
+            runCurrent()
+
+            vm.insertImage(Uri.parse("content://pick/2"))
+            runCurrent()
+
+            org.junit.Assert.assertTrue("a failed insert must not splice any markup", emitted.isEmpty())
+            job.cancel()
+        }
+}
+
 private fun member(uid: String, role: ShareRole): ShareMember =
     ShareMember(
         uid = UserId(uid),
@@ -502,6 +577,9 @@ private class FakeEditorRepository(
     val removeCalls = mutableListOf<UserId>()
     var inviteResult: Result<InviteResult> = Result.success(InviteResult.Added)
     var shareResult: Result<Unit> = Result.success(Unit)
+
+    // Image insertion: the use case's result, fed through a fake NoteImagesRepository below.
+    var insertImageResult: Result<String> = Result.success("img-1")
 
     override fun observeNotes(): Flow<List<Note>> = notesFlow
     override fun observeNote(id: NoteId): Flow<Note?> =
@@ -562,6 +640,17 @@ private class FakeEditorRepository(
         val savedState = SavedStateHandle(mapOf("noteId" to noteId))
         val auth = FakeAuthRepository(currentUser?.let(::UserId))
         val sync = FakeSyncRepository(permanentDeleteEverywhereCalls)
+        val imagesRepo = object : NoteImagesRepository {
+            override suspend fun insertLocalImage(noteId: NoteId, source: Uri): Result<String> =
+                insertImageResult
+        }
+        // The loader factory is never invoked in unit tests (the VM builds the getter lazily and
+        // only the view touches it), so a throwing stub is sufficient and keeps Context out of the
+        // pure-JVM test.
+        val loaderFactory = object : NoteImageLoaderFactory {
+            override fun create(scope: CoroutineScope): TesseraImageLoader =
+                error("image loader is not used in unit tests")
+        }
         return NoteEditorViewModel(
             getNoteUseCase = GetNoteUseCase(this),
             updateNoteUseCase = UpdateNoteUseCase(this),
@@ -575,6 +664,8 @@ private class FakeEditorRepository(
             removeMemberUseCase = RemoveMemberUseCase(this),
             leaveSharedNoteUseCase = LeaveSharedNoteUseCase(this),
             unshareNoteUseCase = UnshareNoteUseCase(this),
+            insertImageUseCase = InsertImageUseCase(imagesRepo),
+            imageLoaderFactory = loaderFactory,
             authRepository = auth,
             folderRepository = FakeFolderRepository(),
             savedStateHandle = savedState,

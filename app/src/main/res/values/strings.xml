@@ -84,6 +84,8 @@
     <string name="toolbar_undo">Undo</string>
     <string name="toolbar_redo">Redo</string>
     <string name="toolbar_table">Insert table</string>
+    <string name="toolbar_image">Insert image</string>
+    <string name="toolbar_camera">Take photo</string>
     <string name="note_group_pinned">Pinned</string>
     <string name="note_group_today">Today</string>
     <string name="note_group_yesterday">Yesterday</string>

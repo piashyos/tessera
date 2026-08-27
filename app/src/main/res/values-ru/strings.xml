@@ -84,6 +84,8 @@
     <string name="toolbar_undo">Отменить</string>
     <string name="toolbar_redo">Повторить</string>
     <string name="toolbar_table">Вставить таблицу</string>
+    <string name="toolbar_image">Вставить изображение</string>
+    <string name="toolbar_camera">Сделать фото</string>
     <string name="note_action_pin">Закрепить</string>
     <string name="note_action_unpin">Открепить</string>
     <string name="note_action_delete">Удалить</string>
