@@ -164,13 +164,14 @@ Daily periodic + after note save:
    and does not revoke it); members added later never gain access to those images
    and see the "unavailable" placeholder; the file stays in the inserter's visible
    Drive "Tessera" folder until they delete it manually. If the inserter is later
-   re-added and the note syncs back with this `noteId`, the row reverts to
-   `UPLOADED` (mirroring the `orphanedAt` reset), re-entering permission
-   reconciliation and cleanup. An `ACCESS_LOST` row whose inserter is never
+   re-added and the note syncs back with this `noteId`, the row reverts status-aware
+   (`driveFileId != null` → `UPLOADED`, else → `LOCAL_ONLY`; mirroring the
+   `orphanedAt` reset), re-entering permission reconciliation and cleanup. An `ACCESS_LOST` row whose inserter is never
    re-added keeps its WebP in `filesDir` indefinitely — accepted: bounded impact,
    symmetrical with the Drive-side consequence above.
-2. `orphanedAt` older than 7 days → `DELETE /drive/v3/files/{id}` (goes to Drive
-   trash, 30 more days manually recoverable), delete local file, Room row, manifest entry.
+2. `orphanedAt` older than 7 days → `PATCH /drive/v3/files/{id}` with `{"trashed": true}`
+   (Drive trash, 30 more days manually recoverable; `files.delete` would bypass trash),
+   delete local file, Room row, manifest entry.
    For rows without a `driveFileId` (orphaned `LOCAL_ONLY`/`FAILED`), the Drive
    DELETE and manifest patch are skipped — only the local file and Room row go.
 3. Other members' cached images are untouched (LRU handles `cacheDir`).

@@ -112,7 +112,7 @@ A thin OkHttp wrapper for the six calls we need. Pure Kotlin + OkHttp, token pas
 
 - [ ] **Step 1: Write failing tests (MockWebServer)**
 
-Cover: multipart upload returns `DriveFile(id, resourceKey)`; `createPermission` posts correct JSON with `sendNotificationEmail=false`; `listPermissions` parses `emailAddress`+`id`; `deletePermission`/`deleteFile` hit the right paths; `downloadFile` streams bytes and sends `X-Goog-Drive-Resource-Keys` header when a resourceKey is present; 401 → throws `DriveAuthException`; 403 with reason `storageQuotaExceeded` in the error body → throws `DriveQuotaException`; other 4xx/5xx → `DriveApiException(code)`.
+Cover: multipart upload returns `DriveFile(id, resourceKey)`; `createPermission` posts correct JSON with `sendNotificationEmail=false`; `listPermissions` parses `emailAddress`+`id`; `deletePermission`/`trashFile` hit the right paths; `downloadFile` streams bytes and sends `X-Goog-Drive-Resource-Keys` header when a resourceKey is present; 401 → throws `DriveAuthException`; 403 with reason `storageQuotaExceeded` in the error body → throws `DriveQuotaException`; other 4xx/5xx → `DriveApiException(code)`.
 
 ```kotlin
 class OkHttpDriveApiTest {
