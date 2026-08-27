@@ -14,6 +14,8 @@ import app.tessera.data.repository.FolderRepositoryImpl
 import app.tessera.data.repository.NotesRepositoryImpl
 import app.tessera.data.repository.SharedNotesGateway
 import app.tessera.data.repository.SharedNotesGatewayImpl
+import app.tessera.data.drive.DriveAuthManager
+import app.tessera.data.drive.PlayServicesDriveAuthManager
 import app.tessera.data.repository.SyncRepositoryImpl
 import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
@@ -76,4 +78,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSharedNotesGateway(impl: SharedNotesGatewayImpl): SharedNotesGateway
+
+    @Binds
+    @Singleton
+    abstract fun bindDriveAuthManager(impl: PlayServicesDriveAuthManager): DriveAuthManager
 }
