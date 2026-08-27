@@ -31,6 +31,12 @@ class MarkdownHtmlConverter {
 
         /** Matches an HTML line break in any of the forms Aztec / our converter emit. */
         private val BR_TAG = Regex("<br\\s*/?>")
+
+        /** Matches a standalone Drive-backed image reference line, e.g. `![](tessera-img://abc-123)`. */
+        private val IMAGE_LINE = Regex("""^!\[]\(tessera-img://([A-Za-z0-9-]+)\)$""")
+
+        /** Extracts the `src` attribute value from an `<img ...>` tag, ignoring any other attributes. */
+        private val IMG_SRC_ATTR = Regex("""src="([^"]*)"""")
     }
 
     // -----------------------------------------------------------------------------------------
@@ -142,6 +148,14 @@ class MarkdownHtmlConverter {
                     }
                     sb.append("</ul>")
                     addBlock(sb.toString())
+                }
+                // Drive-backed image reference — a standalone line is treated as a block (like
+                // <hr>, <h1>, …) so it self-separates in the emitted HTML and never trips the
+                // <br> phantom-blank-line trap documented above.
+                IMAGE_LINE.matches(line) -> {
+                    val id = IMAGE_LINE.find(line)!!.groupValues[1]
+                    addBlock("<img src=\"tessera-img://$id\" />")
+                    i++
                 }
                 // Plain line — bare inline HTML, no <p> wrapper. An EMPTY line is a blank line the
                 // user typed; emit it as an empty PARAGRAPH carrying the zero-width placeholder
@@ -343,6 +357,9 @@ class MarkdownHtmlConverter {
                 remaining.startsWith("<p>") ->
                     remaining = consumeTag(remaining, "p") { inner -> lines.add(inlineToMarkdown(inner)) }
 
+                remaining.startsWith("<img") ->
+                    remaining = consumeImage(remaining, lines)
+
                 remaining.startsWith("<") && extractTagName(remaining) !in INLINE_TAGS -> {
                     // Unknown block-level tag: strip outer tag, recursively process inner content.
                     val (inner, rest) = stripOuterTag(remaining)
@@ -396,6 +413,20 @@ class MarkdownHtmlConverter {
         }
         handler(html.substring(contentStart, end))
         return html.substring(end + closeTag.length)
+    }
+
+    /**
+     * Consume a single `<img ...>` tag (self-closing or not) and emit its Markdown image-ref
+     * line. Only the `src` attribute is read — Aztec's `toHtml()` may add `id`/`class`/other
+     * attributes to the span it serializes, and those are intentionally ignored.
+     */
+    private fun consumeImage(html: String, lines: MutableList<String>): String {
+        val tagEnd = html.indexOf('>')
+        if (tagEnd == -1) return ""
+        val tag = html.substring(0, tagEnd + 1)
+        val src = IMG_SRC_ATTR.find(tag)?.groupValues?.get(1).orEmpty()
+        lines.add("![]($src)")
+        return html.substring(tagEnd + 1)
     }
 
     private fun consumeBulletList(html: String, lines: MutableList<String>): String {
@@ -582,7 +613,7 @@ class MarkdownHtmlConverter {
      * emphasis is consumed as a single paragraph.
      */
     private fun indexOfNextBlockTagFrom(html: String, from: Int): Int {
-        val blockTags = listOf("<h1>", "<h2>", "<ul>", "<ul ", "<ol>", "<blockquote>", "<pre>", "<pre ", "<hr", "<p>")
+        val blockTags = listOf("<h1>", "<h2>", "<ul>", "<ul ", "<ol>", "<blockquote>", "<pre>", "<pre ", "<hr", "<p>", "<img")
         var idx = -1
         for (tag in blockTags) {
             val found = html.indexOf(tag, from)

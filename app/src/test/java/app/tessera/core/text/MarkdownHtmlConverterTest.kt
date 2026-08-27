@@ -1,6 +1,7 @@
 package app.tessera.core.text
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class MarkdownHtmlConverterTest {
@@ -300,5 +301,44 @@ class MarkdownHtmlConverterTest {
         val twice = converter.htmlToMarkdown(converter.markdownToHtml(once))
         assertEquals(once, twice, "converter must be idempotent on the Markdown side")
         assertEquals(md, once)
+    }
+
+    // --- tessera-img round-trip (Drive-backed images) ---------------------------------------
+
+    @Test fun `image line round-trips`() {
+        val md = "before\n![](tessera-img://abc-123)\nafter"
+        val html = converter.markdownToHtml(md)
+        assertTrue(html.contains("<img src=\"tessera-img://abc-123\" />"))
+        assertEquals(md, converter.htmlToMarkdown(html))
+    }
+
+    @Test fun `image adjacent to list round-trips`() {
+        val md = "![](tessera-img://before-1)\n- item one\n- item two\n![](tessera-img://after-1)"
+        val html = converter.markdownToHtml(md)
+        assertTrue(html.contains("<img src=\"tessera-img://before-1\" />"))
+        assertTrue(html.contains("<img src=\"tessera-img://after-1\" />"))
+        assertEquals(md, converter.htmlToMarkdown(html))
+    }
+
+    @Test fun `image adjacent to table round-trips`() {
+        val md = "![](tessera-img://before-2)\n| A | B |\n| 1 | 2 |\n![](tessera-img://after-2)"
+        val html = converter.markdownToHtml(md)
+        assertTrue(html.contains("<img src=\"tessera-img://before-2\" />"))
+        assertTrue(html.contains("<img src=\"tessera-img://after-2\" />"))
+        assertEquals(md, converter.htmlToMarkdown(html))
+    }
+
+    @Test fun `image between blank lines round-trips`() {
+        val md = "before\n\n![](tessera-img://mid-1)\n\nafter"
+        val html = converter.markdownToHtml(md)
+        assertTrue(html.contains("<img src=\"tessera-img://mid-1\" />"))
+        assertEquals(md, converter.htmlToMarkdown(html))
+    }
+
+    @Test fun `aztec img tag with extra attributes parses to image markdown`() {
+        assertEquals(
+            "![](tessera-img://xyz-9)",
+            converter.htmlToMarkdown("<img id=\"1\" class=\"foo\" src=\"tessera-img://xyz-9\" />"),
+        )
     }
 }
