@@ -9,11 +9,13 @@ import app.tessera.data.local.MIGRATION_2_3
 import app.tessera.data.local.MIGRATION_3_4
 import app.tessera.data.local.MIGRATION_4_5
 import app.tessera.data.local.MIGRATION_5_6
+import app.tessera.data.local.MIGRATION_6_7
 import app.tessera.data.local.NotesDatabase
 import app.tessera.data.local.RoomTransactor
 import app.tessera.data.local.Transactor
 import app.tessera.data.local.dao.FolderDao
 import app.tessera.data.local.dao.NoteDao
+import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.dao.SharedMemberDao
 import app.tessera.data.local.dao.TagDao
 import dagger.Module
@@ -30,7 +32,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): NotesDatabase =
         Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
 
     @Provides
@@ -48,6 +50,9 @@ object DatabaseModule {
 
     @Provides
     fun provideSharedMemberDao(database: NotesDatabase): SharedMemberDao = database.sharedMemberDao()
+
+    @Provides
+    fun provideNoteImageDao(database: NotesDatabase): NoteImageDao = database.noteImageDao()
 
     @Provides
     @Singleton
