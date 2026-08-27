@@ -55,7 +55,7 @@ recipient calls `GET /drive/v3/files/{id}?alt=media` under `drive.file`.
 | `ownerUid` | who inserted (whose Drive); null while signed out, backfilled to whichever account signs in next |
 | `localPath` | WebP in `filesDir/images/` |
 | `driveFileId`, `resourceKey` | set after upload |
-| `status` | `LOCAL_ONLY → UPLOADING → UPLOADED`, plus terminal `FAILED` and `ACCESS_LOST` (see Upload / Deletion) |
+| `status` | `LOCAL_ONLY → UPLOADING → UPLOADED`, plus `FAILED` and `ACCESS_LOST` — "no automatic retry", both recoverable (see Upload / Deletion) |
 | `permissionsSyncedAt` | last successful permission reconciliation |
 | `orphanedAt` | when the image lost all references (deletion hysteresis) |
 
@@ -112,7 +112,10 @@ sign-in, network regained.
   (same path as "consent declined").
 - Local file missing before upload (user cleared app storage) → status `FAILED`;
   renderer shows the "unavailable" placeholder with retry suppressed — retry can
-  never succeed without the source file.
+  never succeed without the source file. The two `FAILED` sub-cases share one
+  status value; retry availability is derived at render time (`FAILED` +
+  `localPath` file present → retry allowed; file absent → suppressed), no extra
+  `failureReason` column.
 
 ## Permission reconciliation — `ImagePermissionWorker`
 
@@ -163,7 +166,9 @@ Daily periodic + after note save:
    Drive "Tessera" folder until they delete it manually. If the inserter is later
    re-added and the note syncs back with this `noteId`, the row reverts to
    `UPLOADED` (mirroring the `orphanedAt` reset), re-entering permission
-   reconciliation and cleanup.
+   reconciliation and cleanup. An `ACCESS_LOST` row whose inserter is never
+   re-added keeps its WebP in `filesDir` indefinitely — accepted: bounded impact,
+   symmetrical with the Drive-side consequence above.
 2. `orphanedAt` older than 7 days → `DELETE /drive/v3/files/{id}` (goes to Drive
    trash, 30 more days manually recoverable), delete local file, Room row, manifest entry.
    For rows without a `driveFileId` (orphaned `LOCAL_ONLY`/`FAILED`), the Drive
