@@ -252,4 +252,10 @@ private class FakeRemoteShared : RemoteSharedNotesDataSource {
     override suspend fun fetchAll(uid: String): List<RemoteSharedNote> = emptyList()
 
     override fun observeSharedNotes(uid: String): Flow<List<RemoteSharedNote>> = emptyFlow()
+
+    override suspend fun updateImageManifest(
+        noteId: String,
+        imageId: String,
+        ref: app.tessera.data.remote.RemoteImageRef?,
+    ) = Unit
 }

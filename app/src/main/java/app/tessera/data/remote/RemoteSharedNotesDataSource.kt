@@ -42,4 +42,10 @@ interface RemoteSharedNotesDataSource {
 
     /** Hot stream of every shared note where [uid] is a member, re-emitting on each change. */
     fun observeSharedNotes(uid: String): Flow<List<RemoteSharedNote>>
+
+    /**
+     * Sets (or, when [ref] is null, deletes) a single entry of the shared note's `images` manifest
+     * at `sharedNotes/{noteId}`. Touches only the one map key, never the rest of the document.
+     */
+    suspend fun updateImageManifest(noteId: String, imageId: String, ref: RemoteImageRef?)
 }

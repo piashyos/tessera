@@ -3,12 +3,16 @@ package app.tessera.data.repository
 import app.tessera.core.util.Clock
 import app.tessera.data.local.Transactor
 import app.tessera.data.local.dao.NoteDao
+import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.dao.SharedMemberDao
 import app.tessera.data.local.dao.TagDao
 import app.tessera.data.local.entity.NoteEntity
+import app.tessera.data.local.entity.NoteImageEntity
+import app.tessera.data.local.entity.ImageStatus
 import app.tessera.data.local.entity.NoteTagCrossRef
 import app.tessera.data.local.entity.SharedMemberEntity
 import app.tessera.data.local.entity.TagEntity
+import app.tessera.data.mapper.NoteImageMapper
 import app.tessera.data.mapper.NoteMapper
 import app.tessera.data.mapper.SharedNoteMapper
 import app.tessera.data.remote.RemoteNote
@@ -64,6 +68,7 @@ class SyncRepositoryImplTest {
         remote: FakeRemoteNotesDataSource = FakeRemoteNotesDataSource(),
         remoteFolders: SyncFakeRemoteFoldersDataSource = SyncFakeRemoteFoldersDataSource(),
         remoteShared: FakeRemoteSharedNotesDataSource = FakeRemoteSharedNotesDataSource(),
+        noteImageDao: NoteImageDao = SyncFakeNoteImageDao(),
         clock: Clock = SyncTestClock(1000L),
     ) = SyncRepositoryImpl(
         PassThroughTransactor,
@@ -71,11 +76,13 @@ class SyncRepositoryImplTest {
         tagDao,
         folderDao,
         sharedMemberDao,
+        noteImageDao,
         remote,
         remoteFolders,
         remoteShared,
         NoteMapper(),
         SharedNoteMapper(),
+        NoteImageMapper(),
         clock,
     )
 
@@ -130,6 +137,80 @@ class SyncRepositoryImplTest {
             assertEquals("Cloud", stored?.title)
             assertEquals("owner-1", stored?.ownerId)
             assertEquals(700L, stored?.syncedAt)
+        }
+
+    @Test
+    fun `pull lands a manifest image with no local row as UPLOADED with null localPath`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val images = SyncFakeNoteImageDao()
+            val repo = create(noteDao = noteDao, remote = remote, noteImageDao = images)
+            remote.store(
+                RemoteNote(
+                    id = "r1",
+                    title = "Cloud",
+                    content = "Body",
+                    updatedAt = 10L,
+                    images = mapOf(
+                        "img-1" to app.tessera.data.remote.RemoteImageRef(
+                            driveFileId = "drive-1",
+                            resourceKey = "rk-1",
+                            ownerUid = "someone-else",
+                            width = 100,
+                            height = 200,
+                        ),
+                    ),
+                ),
+            )
+
+            repo.syncNow(uid)
+
+            val row = images.byId("img-1")
+            assertNotNull(row)
+            assertEquals(ImageStatus.UPLOADED, row?.status)
+            assertNull(row?.localPath)
+            assertEquals("drive-1", row?.driveFileId)
+            // The row carries the real owner's uid, never the pulling device's.
+            assertEquals("someone-else", row?.ownerUid)
+        }
+
+    @Test
+    fun `pull never overwrites an existing local image row`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val images = SyncFakeNoteImageDao()
+            // A local, in-flight upload the owner already has on this device.
+            images.upsert(
+                NoteImageEntity(
+                    imageId = "img-1",
+                    noteId = "r1",
+                    ownerUid = "owner-1",
+                    localPath = "/local/img-1.webp",
+                    status = ImageStatus.LOCAL_ONLY,
+                    width = 100,
+                    height = 200,
+                ),
+            )
+            val repo = create(noteDao = noteDao, remote = remote, noteImageDao = images)
+            remote.store(
+                RemoteNote(
+                    id = "r1",
+                    title = "Cloud",
+                    content = "Body",
+                    updatedAt = 10L,
+                    images = mapOf(
+                        "img-1" to app.tessera.data.remote.RemoteImageRef(driveFileId = "drive-1", ownerUid = "owner-1"),
+                    ),
+                ),
+            )
+
+            repo.syncNow(uid)
+
+            val row = images.byId("img-1")
+            assertEquals(ImageStatus.LOCAL_ONLY, row?.status)
+            assertEquals("/local/img-1.webp", row?.localPath)
         }
 
     @Test
@@ -536,6 +617,17 @@ private class FakeRemoteNotesDataSource : RemoteNotesDataSource {
     override suspend fun deleteByIds(uid: String, ids: List<String>) {
         ids.forEach { notes.remove(it) }
     }
+
+    val manifestWrites = mutableListOf<Triple<String, String, app.tessera.data.remote.RemoteImageRef?>>()
+
+    override suspend fun updateImageManifest(
+        uid: String,
+        noteId: String,
+        imageId: String,
+        ref: app.tessera.data.remote.RemoteImageRef?,
+    ) {
+        manifestWrites += Triple(noteId, imageId, ref)
+    }
 }
 
 private class SyncFakeNoteDao : NoteDao {
@@ -827,4 +919,45 @@ private class FakeRemoteSharedNotesDataSource : RemoteSharedNotesDataSource {
         notes.values.filter { uid in it.memberIds }
 
     override fun observeSharedNotes(uid: String): Flow<List<RemoteSharedNote>> = flow
+
+    override suspend fun updateImageManifest(
+        noteId: String,
+        imageId: String,
+        ref: app.tessera.data.remote.RemoteImageRef?,
+    ) = Unit
+}
+
+private class SyncFakeNoteImageDao : NoteImageDao {
+    val rows = linkedMapOf<String, NoteImageEntity>()
+
+    override suspend fun upsert(image: NoteImageEntity) {
+        rows[image.imageId] = image
+    }
+
+    override suspend fun byId(imageId: String): NoteImageEntity? = rows[imageId]
+
+    override suspend fun byNote(noteId: String): List<NoteImageEntity> =
+        rows.values.filter { it.noteId == noteId }
+
+    override suspend fun byOwnerAndStatus(uid: String, status: ImageStatus): List<NoteImageEntity> =
+        rows.values.filter { it.ownerUid == uid && it.status == status }
+
+    override suspend fun byOwner(uid: String): List<NoteImageEntity> =
+        rows.values.filter { it.ownerUid == uid }
+
+    override suspend fun backfillOwner(uid: String) {
+        rows.entries.forEach { e ->
+            if (e.value.ownerUid == null) e.setValue(e.value.copy(ownerUid = uid))
+        }
+    }
+
+    override suspend fun transition(uid: String, from: ImageStatus, to: ImageStatus) {
+        rows.entries.forEach { e ->
+            if (e.value.ownerUid == uid && e.value.status == from) e.setValue(e.value.copy(status = to))
+        }
+    }
+
+    override suspend fun delete(imageId: String) {
+        rows.remove(imageId)
+    }
 }

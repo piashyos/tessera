@@ -5,6 +5,7 @@ import app.tessera.core.util.Clock
 import app.tessera.data.local.Transactor
 import app.tessera.data.local.dao.FolderDao
 import app.tessera.data.local.dao.NoteDao
+import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.dao.SharedMemberDao
 import app.tessera.data.local.dao.TagDao
 import app.tessera.data.local.entity.FolderEntity
@@ -12,10 +13,12 @@ import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.local.entity.NoteFolderCrossRef
 import app.tessera.data.local.entity.NoteTagCrossRef
 import app.tessera.data.local.entity.TagEntity
+import app.tessera.data.mapper.NoteImageMapper
 import app.tessera.data.mapper.NoteMapper
 import app.tessera.data.mapper.SharedNoteMapper
 import app.tessera.data.remote.RemoteFolder
 import app.tessera.data.remote.RemoteFoldersDataSource
+import app.tessera.data.remote.RemoteImageRef
 import app.tessera.data.remote.RemoteNote
 import app.tessera.data.remote.RemoteNotesDataSource
 import app.tessera.data.remote.RemoteSharedNote
@@ -44,11 +47,13 @@ class SyncRepositoryImpl @Inject constructor(
     private val tagDao: TagDao,
     private val folderDao: FolderDao,
     private val sharedMemberDao: SharedMemberDao,
+    private val noteImageDao: NoteImageDao,
     private val remote: RemoteNotesDataSource,
     private val remoteFolders: RemoteFoldersDataSource,
     private val remoteShared: RemoteSharedNotesDataSource,
     private val mapper: NoteMapper,
     private val sharedMapper: SharedNoteMapper,
+    private val imageMapper: NoteImageMapper,
     private val clock: Clock,
 ) : SyncRepository {
     // Serializes every Room merge so the one-shot SyncWorker and the live Firestore listener — both
@@ -246,8 +251,21 @@ class SyncRepositoryImpl @Inject constructor(
                 noteDao.upsert(mapper.toEntity(remoteNote, ownerId = uid.value, syncedAt = now))
                 replaceTags(remoteNote.id, remoteNote.tags)
                 replaceFolderAssignment(remoteNote.id, remoteNote.folderId)
+                mergeImageManifest(remoteNote.id, remoteNote.images)
             }
         }
+    }
+
+    /**
+     * Lands a pulled note's `images` manifest into Room. Upserts only entries with NO existing local
+     * row (covers share recipients AND the owner's second device / fresh install) and NEVER overwrites
+     * an existing row. Recipient rows carry the real owner's uid and `localPath = null`, so no file is
+     * created here — only DB rows for the renderer/downloader. Runs inside the caller's transaction.
+     */
+    private suspend fun mergeImageManifest(noteId: String, manifest: Map<String, RemoteImageRef>) {
+        if (manifest.isEmpty()) return
+        val existing = noteImageDao.byNote(noteId).mapTo(mutableSetOf()) { it.imageId }
+        imageMapper.rowsToUpsert(noteId, manifest, existing).forEach { noteImageDao.upsert(it) }
     }
 
     /**
@@ -290,6 +308,7 @@ class SyncRepositoryImpl @Inject constructor(
                     noteDao.setShareState(remoteNote.id, NoteEntity.SHARE_STATE_SHARED, myRole.name)
                 }
                 sharedMemberDao.replaceForNote(remoteNote.id, sharedMapper.toMemberEntities(remoteNote))
+                mergeImageManifest(remoteNote.id, remoteNote.images)
             }
         }
     }

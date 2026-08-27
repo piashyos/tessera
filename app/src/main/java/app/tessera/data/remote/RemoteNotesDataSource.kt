@@ -27,4 +27,10 @@ interface RemoteNotesDataSource {
 
     /** Hard-deletes the remote documents with the given [ids] for [uid]. */
     suspend fun deleteByIds(uid: String, ids: List<String>)
+
+    /**
+     * Sets (or, when [ref] is null, deletes) a single entry of the note's `images` manifest at
+     * `users/{uid}/notes/{noteId}`. Touches only the one map key, never the rest of the document.
+     */
+    suspend fun updateImageManifest(uid: String, noteId: String, imageId: String, ref: RemoteImageRef?)
 }

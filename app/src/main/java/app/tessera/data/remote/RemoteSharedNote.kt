@@ -27,6 +27,8 @@ data class RemoteSharedNote(
     val deletedAt: Long? = null,
     val members: Map<String, RemoteShareMember> = emptyMap(),
     val memberIds: List<String> = emptyList(),
+    /** Manifest of Drive-backed images attached to this note, keyed by app-level `imageId`. */
+    val images: Map<String, RemoteImageRef> = emptyMap(),
 )
 
 /** One entry of [RemoteSharedNote.members]. No-arg defaults for Firestore deserialization. */

@@ -1,5 +1,7 @@
 package app.tessera.data.remote
 
+import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObject
 import javax.inject.Inject
@@ -72,9 +74,24 @@ class FirestoreNotesClient @Inject constructor(
         batch.commit().await()
     }
 
+    override suspend fun updateImageManifest(
+        uid: String,
+        noteId: String,
+        imageId: String,
+        ref: RemoteImageRef?,
+    ) {
+        // FieldPath.of(...) treats "images"/imageId as literal segments, so an imageId containing a
+        // dot can't be misread as a nested path. A null ref removes just this one map key.
+        val value: Any = ref ?: FieldValue.delete()
+        notesCollection(uid).document(noteId)
+            .update(FieldPath.of(FIELD_IMAGES, imageId), value)
+            .await()
+    }
+
     private companion object {
         const val USERS = "users"
         const val NOTES = "notes"
         const val FIELD_DELETED_AT = "deletedAt"
+        const val FIELD_IMAGES = "images"
     }
 }

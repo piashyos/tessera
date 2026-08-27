@@ -18,4 +18,6 @@ data class RemoteNote(
     /** Folder this note belongs to, null when assigned to "All Notes". */
     val folderId: String? = null,
     val archived: Boolean = false,
+    /** Manifest of Drive-backed images attached to this note, keyed by app-level `imageId`. */
+    val images: Map<String, RemoteImageRef> = emptyMap(),
 )

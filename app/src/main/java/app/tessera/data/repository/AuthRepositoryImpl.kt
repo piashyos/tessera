@@ -9,16 +9,19 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import app.tessera.R
 import app.tessera.core.util.CurrentActivityHolder
+import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.remote.emailKey
 import app.tessera.domain.model.UserId
 import app.tessera.domain.model.UserProfile
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import app.tessera.domain.repository.AuthRepository
+import app.tessera.sync.ImageWorkScheduler
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,6 +36,9 @@ class AuthRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
     private val activityHolder: CurrentActivityHolder,
+    private val noteImageDao: NoteImageDao,
+    // Lazy breaks the dependency cycle: the WorkManager-backed ImageWorkScheduler injects AuthRepository.
+    private val imageWorkScheduler: Lazy<ImageWorkScheduler>,
 ) : AuthRepository {
     private val credentialManager = CredentialManager.create(context)
 
@@ -74,8 +80,17 @@ class AuthRepositoryImpl @Inject constructor(
                 val firebaseUser = authResult.user
                     ?: return Result.failure(IllegalStateException("Firebase user missing after sign-in"))
                 val profile = firebaseUser.toProfile()
+                // Publish the uid synchronously (the auth-state listener is async) so the image
+                // scheduler below can read it and enqueue work for this account.
+                mutableCurrentUser.value = UserId(firebaseUser.uid)
                 mutableCurrentProfile.value = profile
                 saveProfile(profile)
+                // Claim any local-only image rows for this account, then push them to Drive. Never
+                // block sign-in on this bookkeeping.
+                runCatching {
+                    noteImageDao.backfillOwner(firebaseUser.uid)
+                    imageWorkScheduler.get().requestUpload()
+                }.onFailure { Log.w(TAG, "Image owner backfill / upload schedule failed", it) }
                 Result.success(UserId(firebaseUser.uid))
             } else {
                 Result.failure(IllegalStateException("Unexpected credential type: ${credential.type}"))
