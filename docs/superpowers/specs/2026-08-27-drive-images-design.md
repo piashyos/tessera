@@ -52,10 +52,10 @@ recipient calls `GET /drive/v3/files/{id}?alt=media` under `drive.file`.
 |---|---|
 | `imageId` PK | UUID from markup |
 | `noteId` | owning note |
-| `ownerUid` | who inserted (whose Drive); null while signed out, backfilled on sign-in |
+| `ownerUid` | who inserted (whose Drive); null while signed out, backfilled to whichever account signs in next |
 | `localPath` | WebP in `filesDir/images/` |
 | `driveFileId`, `resourceKey` | set after upload |
-| `status` | `LOCAL_ONLY → UPLOADING → UPLOADED` |
+| `status` | `LOCAL_ONLY → UPLOADING → UPLOADED`, plus terminal `FAILED` and `ACCESS_LOST` (see Upload / Deletion) |
 | `permissionsSyncedAt` | last successful permission reconciliation |
 | `orphanedAt` | when the image lost all references (deletion hysteresis) |
 
@@ -70,7 +70,8 @@ ownerUid, width, height }`. Recipients (and the owner's other devices) resolve
 Single entry point `InsertImageUseCase(source)`:
 
 1. Sources: `PickVisualMedia` photo picker; `TakePicture` + `CAMERA` permission
-   (buttons in `EditorFormatBar`); clipboard via `InputConnectionCompat.createWrapper`
+   and a `FileProvider` temp URI in `cacheDir` (new manifest `<provider>` entry;
+   buttons in `EditorFormatBar`); clipboard via `InputConnectionCompat.createWrapper`
    `commitContent` in `FlickerlessAztecText` + context-menu Paste when `ClipData` has `image/*`.
 2. Decode with `inSampleSize` downsampling (OOM safety) → apply EXIF orientation →
    resize long side ≤ 2048 px → encode WebP q~80 → `filesDir/images/<imageId>.webp`.
@@ -98,6 +99,17 @@ Recipients get the same lazy consent on first download of another member's image
 
 Constraints `NETWORK_CONNECTED`, exponential backoff. Triggers: image inserted,
 sign-in, network regained.
+
+**Terminal failures** (no infinite retry; backoff is for transient errors only):
+
+- `storageQuotaExceeded` (403) → status `FAILED`, one-time user-visible message
+  "Drive is full"; image keeps working locally with a "not synced" badge;
+  tap-to-retry resets the row to `LOCAL_ONLY`.
+- App access revoked / auth permanently invalid → all my rows revert to
+  `LOCAL_ONLY`; `DriveAuthManager` re-prompts consent lazily on next upload attempt
+  (same path as "consent declined").
+- Local file missing before upload (user cleared app storage) → status `FAILED`;
+  renderer shows the permanent "unavailable" placeholder for that image.
 
 ## Permission reconciliation — `ImagePermissionWorker`
 
@@ -134,6 +146,16 @@ Daily periodic + after note save:
 1. Mark orphans: my `note_images` row whose `imageId` appears in no live note's
    `content` (notes in app trash count as live) → set `orphanedAt = now`.
    Reference reappears (undo / restore) → reset to null.
+   **Exception — inserter removed from a shared note:** if the row's `noteId`
+   disappeared locally because *access was lost* (sync removed a shared note the
+   user no longer belongs to), the row is marked `ACCESS_LOST` instead of orphaned:
+   the Drive file is still referenced by the remaining members, and we can no longer
+   read the note or its manifest to verify. `ACCESS_LOST` rows are excluded from
+   cleanup and permission reconciliation. Consequences, accepted for v1: remaining
+   members keep already-granted read access (the removed inserter's client cannot
+   and does not revoke it); members added later never gain access to those images
+   and see the "unavailable" placeholder; the file stays in the inserter's visible
+   Drive "Tessera" folder until they delete it manually.
 2. `orphanedAt` older than 7 days → `DELETE /drive/v3/files/{id}` (goes to Drive
    trash, 30 more days manually recoverable), delete local file, Room row, manifest entry.
 3. Other members' cached images are untouched (LRU handles `cacheDir`).
