@@ -104,22 +104,24 @@ git commit -m "build: okhttp, play-services-auth, camera FileProvider for Drive 
 A thin OkHttp wrapper for the six calls we need. Pure Kotlin + OkHttp, token passed in per call, fully testable with MockWebServer.
 
 **Files:**
-- Create: `app/src/main/java/app/tessera/data/drive/DriveApi.kt`
+- Create: `app/src/main/java/app/tessera/data/drive/DriveApi.kt` (interface — workers in Chunk 4 fake it by hand; the project has no mocking framework)
+- Create: `app/src/main/java/app/tessera/data/drive/OkHttpDriveApi.kt` (implementation)
 - Create: `app/src/main/java/app/tessera/data/drive/DriveModels.kt`
-- Test: `app/src/test/java/app/tessera/data/drive/DriveApiTest.kt`
+- Create: `app/src/main/java/app/tessera/core/di/DriveModule.kt`
+- Test: `app/src/test/java/app/tessera/data/drive/OkHttpDriveApiTest.kt`
 
 - [ ] **Step 1: Write failing tests (MockWebServer)**
 
 Cover: multipart upload returns `DriveFile(id, resourceKey)`; `createPermission` posts correct JSON with `sendNotificationEmail=false`; `listPermissions` parses `emailAddress`+`id`; `deletePermission`/`deleteFile` hit the right paths; `downloadFile` streams bytes and sends `X-Goog-Drive-Resource-Keys` header when a resourceKey is present; 401 → throws `DriveAuthException`; 403 with reason `storageQuotaExceeded` in the error body → throws `DriveQuotaException`; other 4xx/5xx → `DriveApiException(code)`.
 
 ```kotlin
-class DriveApiTest {
+class OkHttpDriveApiTest {
     private val server = MockWebServer()
-    private lateinit var api: DriveApi
+    private lateinit var api: OkHttpDriveApi
 
     @Before fun setUp() {
         server.start()
-        api = DriveApi(OkHttpClient(), baseUrl = server.url("/").toString())
+        api = OkHttpDriveApi(OkHttpClient(), baseUrl = server.url("/").toString())
     }
     @After fun tearDown() = server.shutdown()
 
@@ -154,8 +156,8 @@ class DriveApiTest {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `./gradlew :app:testDebugUnitTest --tests 'app.tessera.data.drive.DriveApiTest'`
-Expected: FAIL — `DriveApi` unresolved.
+Run: `./gradlew :app:testDebugUnitTest --tests 'app.tessera.data.drive.OkHttpDriveApiTest'`
+Expected: FAIL — `OkHttpDriveApi` unresolved.
 
 - [ ] **Step 3: Implement models + client**
 
@@ -172,43 +174,42 @@ class DriveAuthException : DriveApiException(401, "unauthorized")
 class DriveQuotaException : DriveApiException(403, "storageQuotaExceeded")
 ```
 
-`DriveApi.kt` — constructor `(client: OkHttpClient, baseUrl: String = "https://www.googleapis.com/")`, all methods `suspend` (wrap `execute()` in `withContext(Dispatchers.IO)`), JSON via `org.json.JSONObject` (already on Android; in unit tests the `org.json` classes come from the `testImplementation` of `org.json:json` — add it if unit tests can't see JSONObject: `testImplementation("org.json:json:20240303")`):
+`DriveApi.kt` — the interface (Chunk 4 worker tests implement it as a hand-written fake):
 
 ```kotlin
-@Singleton
-class DriveApi @Inject constructor(...) {
+interface DriveApi {
     suspend fun uploadFile(token: String, name: String, parentId: String, appImageId: String, bytes: ByteArray): DriveFile
     suspend fun findFolder(token: String, name: String): String?      // GET /drive/v3/files?q=name='…' and mimeType='application/vnd.google-apps.folder' and trashed=false
     suspend fun createFolder(token: String, name: String): String     // POST /drive/v3/files {mimeType: folder}
     suspend fun downloadFile(token: String, fileId: String, resourceKey: String?): ByteArray  // GET /drive/v3/files/{id}?alt=media
     suspend fun listPermissions(token: String, fileId: String): List<DrivePermission>          // GET …/permissions?fields=permissions(id,emailAddress,type,role)
     suspend fun createPermission(token: String, fileId: String, email: String)                 // POST …/permissions?sendNotificationEmail=false {type:user, role:reader, emailAddress}
+    suspend fun createAnyonePermission(token: String, fileId: String)                          // POST …/permissions {type:anyone, role:reader} — spike-fallback mode only (Task 12)
     suspend fun deletePermission(token: String, fileId: String, permissionId: String)
-    suspend fun deleteFile(token: String, fileId: String)
-    private fun check(response: Response): Response  // maps 401/403-quota/other → typed exceptions
+    suspend fun trashFile(token: String, fileId: String)               // PATCH /drive/v3/files/{id} {"trashed":true} — NOT files.delete, which bypasses Drive trash and breaks the spec's 30-day recoverability
 }
 ```
 
+`OkHttpDriveApi.kt` — `class OkHttpDriveApi(private val client: OkHttpClient, private val baseUrl: String = "https://www.googleapis.com/") : DriveApi`, all methods wrap `execute()` in `withContext(Dispatchers.IO)`, plus `private fun check(response: Response)` mapping 401/403-quota/other → typed exceptions. JSON via `org.json.JSONObject` (on Android it's built in; for JVM unit tests add `testImplementation("org.json:json:20240303")` if unresolved). If `assertFailsWith` doesn't resolve in tests, use JUnit's `assertThrows` instead of adding kotlin-test.
+
 Multipart upload: `MultipartBody` with two parts — metadata JSON `{"name":…, "parents":[…], "appProperties":{"tesseraImageId":…}}` as `application/json`, and the bytes as `image/webp`.
 
-Required test list (Step 1's "analogous tests"): `createPermission posts type=user reader with sendNotificationEmail=false`, `listPermissions parses id and emailAddress`, `deletePermission hits DELETE path`, `deleteFile hits DELETE path`, `downloadFile returns bytes and sends resource-key header`, `downloadFile omits header when resourceKey null`, `401 maps to DriveAuthException`, `500 maps to DriveApiException with code`.
+Required test list (Step 1's "analogous tests"): `createPermission posts type=user reader with sendNotificationEmail=false`, `createAnyonePermission posts type=anyone reader`, `listPermissions parses id and emailAddress`, `deletePermission hits DELETE path`, `trashFile PATCHes trashed=true`, `downloadFile returns bytes and sends resource-key header`, `downloadFile omits header when resourceKey null`, `401 maps to DriveAuthException`, `500 maps to DriveApiException with code`.
 
-Hilt wiring (Dagger ignores Kotlin default parameter values, and nothing provides `OkHttpClient` yet): create `app/src/main/java/app/tessera/core/di/DriveModule.kt`:
+Hilt wiring (nothing provides `OkHttpClient` yet):
 
 ```kotlin
 @Module
 @InstallIn(SingletonComponent::class)
 object DriveModule {
     @Provides @Singleton fun provideOkHttpClient(): OkHttpClient = OkHttpClient()
-    @Provides @Singleton fun provideDriveApi(client: OkHttpClient): DriveApi = DriveApi(client)
+    @Provides @Singleton fun provideDriveApi(client: OkHttpClient): DriveApi = OkHttpDriveApi(client)
 }
 ```
 
-Drop `@Inject`/`@Singleton` annotations from `DriveApi` itself — it stays a plain class constructed with `(client, baseUrl = "https://www.googleapis.com/")`, which keeps MockWebServer tests trivial.
-
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `./gradlew :app:testDebugUnitTest --tests 'app.tessera.data.drive.DriveApiTest'`
+Run: `./gradlew :app:testDebugUnitTest --tests 'app.tessera.data.drive.OkHttpDriveApiTest'`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -242,7 +243,7 @@ interface DriveAuthManager {
 }
 ```
 
-`PlayServicesDriveAuthManager` (the impl, `@Singleton`) wraps
+`PlayServicesDriveAuthManager` (the impl, `@Singleton class … @Inject constructor(@ApplicationContext private val context: Context)` — `@Binds` needs the `@Inject` constructor) wraps
 `Identity.getAuthorizationClient(context).authorize(AuthorizationRequest.builder().setRequestedScopes(listOf(Scope("https://www.googleapis.com/auth/drive.file"))).build())`:
 - result `hasResolution()` → emit its `PendingIntent` on `consentRequests`, return null.
 - else → cache `accessToken` with a deadline `now + 55 min`; return cached while fresh.
@@ -542,7 +543,7 @@ git commit -m "feat(editor): insert images from picker/camera/clipboard, render 
 - Modify: `app/src/main/java/app/tessera/data/remote/RemoteNote.kt` and `RemoteSharedNote.kt` — add `val images: Map<String, RemoteImageRef> = emptyMap()`
 - Create: `app/src/main/java/app/tessera/data/remote/RemoteImageRef.kt` (`driveFileId`, `resourceKey`, `ownerUid`, `width`, `height` — no-arg defaults for Firestore)
 - Modify: `app/src/main/java/app/tessera/data/remote/FirestoreNotesClient.kt` + `FirestoreSharedNotesClient.kt` — `updateImageManifest(noteId, imageId, ref?)` (set or delete a single map key via `FieldPath.of("images", imageId)`)
-- Modify: mappers + `SyncRepositoryImpl` so pulled manifests land in Room (upsert remote-known rows for OTHER users' images with `status = UPLOADED`, `localPath = null`; never overwrite my own rows)
+- Modify: mappers + `SyncRepositoryImpl` so pulled manifests land in Room. Pull rule: upsert any manifest `imageId` that has NO local row (regardless of owner — this covers both recipients AND the owner's own second device / fresh install) with `status = UPLOADED`, `localPath = null`; NEVER overwrite a row that already exists locally.
 - Create: `app/src/main/java/app/tessera/sync/ImageUploadWorker.kt` + `ImageWorkScheduler` real impl (replaces Chunk 3's no-op; model on `WorkManagerSyncScheduler`/`SyncWorker`)
 - Modify: `app/src/main/java/app/tessera/data/repository/AuthRepositoryImpl.kt` — on successful sign-in, call `noteImageDao.backfillOwner(uid)` + schedule upload
 - Test: `app/src/test/java/app/tessera/sync/ImageUploadWorkerTest.kt` (fake `DriveApi`/DAO), mapper tests
@@ -550,7 +551,7 @@ git commit -m "feat(editor): insert images from picker/camera/clipboard, render 
 - [ ] **Step 1: Failing worker tests** — happy path (`LOCAL_ONLY` → uploaded → row has fileId, status `UPLOADED`, manifest patched); folder found once then cached (DataStore, key `drive_folder_id`); `DriveQuotaException` → status `FAILED`, `Result.success()` (terminal — no WorkManager retry), one-shot user message via the existing snackbar/status channel the app uses (check `SyncStatusProvider` for the pattern); `DriveAuthException` → token invalidated, `Result.retry()`; source file missing → `FAILED` + `localPath = null`; transient `IOException` → `Result.retry()`.
 
 Revocation semantics (spec: "only `UPLOADING`/pending rows revert to `LOCAL_ONLY`; `UPLOADED` untouched"): the worker distinguishes transient 401 from permanent revocation via `DriveAuthManager.accessToken()` — a *permanently* revoked grant makes `authorize()` return `hasResolution()` again, so `accessToken()` returns null (and emits the consent PendingIntent). Test: `accessToken() == null` at worker start → transition my `UPLOADING` rows back to `LOCAL_ONLY` via `dao.transition(uid, UPLOADING, LOCAL_ONLY)`, do NOT touch `UPLOADED` rows, return `Result.success()` (lazy re-consent will re-trigger upload later — same path as "consent declined").
-- [ ] **Step 2: Implement worker** (`@HiltWorker`, `CoroutineWorker`, uid via `inputData` like `SyncWorker`); triggers: insert (from Chunk 3 scheduler seam), sign-in, network regained (constraint `NETWORK_CONNECTED` + backoff handles this). Also on entry: reset stale `UPLOADING` rows (from a previous crashed run) to `LOCAL_ONLY` before selecting work.
+- [ ] **Step 2: Implement worker** (`@HiltWorker`, `CoroutineWorker`, uid via `inputData` like `SyncWorker`); triggers: insert (from Chunk 3 scheduler seam), sign-in, network regained (constraint `NETWORK_CONNECTED` + backoff handles this). Per-row flow: mark `UPLOADING` → `uploadFile` → `UPLOADED` + manifest patch. On entry: reset stale `UPLOADING` rows to `LOCAL_ONLY` before selecting work — deliberately the SAME `dao.transition(uid, UPLOADING, LOCAL_ONLY)` call that the revocation path uses (one operation, two triggers: crashed previous run, or `accessToken() == null`).
 - [ ] **Step 3: Manifest plumbing + mappers with tests.** Note the pull direction: manifest rows for images I don't own must NOT create files, only DB rows for the renderer/downloader.
 - [ ] **Step 4: Run, commit**
 
@@ -582,7 +583,7 @@ fun computePermissionDiff(
 ): PermissionDiff
 ```
 
-Tests: grant missing; revoke extra `type=user` readers not in target; never revoke `role=owner` or my own email. Fallback branch (`anyoneLinkMode = true`): `ensureAnyoneLink` true when no `type=anyone` permission exists AND the note is shared (target non-empty), false otherwise; `anyone` entries never revoked while the note is shared, revoked when the note went private. Main branch (`anyoneLinkMode = false`): stray `type=anyone` entries always revoked, `ensureAnyoneLink` always false. `anyoneLinkMode` is a compile-time constant in one place (e.g. `DriveImagesConfig.ANYONE_LINK_MODE`), set from the Task 4 spike verdict. The worker maps `ensureAnyoneLink` → `POST /permissions {type:anyone, role:reader}` (add this overload to `DriveApi.createPermission`).
+Tests: grant missing; revoke extra `type=user` readers not in target; never revoke `role=owner` or my own email. Fallback branch (`anyoneLinkMode = true`): `ensureAnyoneLink` true when no `type=anyone` permission exists AND the note is shared (target non-empty), false otherwise; `anyone` entries never revoked while the note is shared, revoked when the note went private. Main branch (`anyoneLinkMode = false`): stray `type=anyone` entries always revoked, `ensureAnyoneLink` always false. `anyoneLinkMode` is a compile-time constant in one place (e.g. `DriveImagesConfig.ANYONE_LINK_MODE`), set from the Task 4 spike verdict (the spike findings doc must record which value was chosen). The worker maps `ensureAnyoneLink` → `DriveApi.createAnyonePermission` (already in the Task 2 interface).
 - [ ] **Step 2: Worker** — for each of my `UPLOADED` images grouped by note: target = emails of current `shared_members` rows for that note (private note → empty target); apply diff via `DriveApi`; stamp `permissionsSyncedAt`. Triggers: membership change (call site: wherever `SharedMemberDao` rows are written by sync — find it in `SyncRepositoryImpl`), upload success (chained from Task 11), plus `PeriodicWorkRequest` every 24 h (`enqueueUniquePeriodicWork`, registered where the app schedules periodic work — check `WorkManagerModule.kt` / `TesseraApplication`).
 - [ ] **Step 3: Run, commit**
 
@@ -610,8 +611,8 @@ Expected: PASS. Commit: `feat(images): Drive download + cache for shared notes, 
 **Files:**
 - Create: `app/src/main/java/app/tessera/sync/ImageCleanupWorker.kt`
 - Create: `app/src/main/java/app/tessera/domain/usecase/FindOrphanImages.kt` (pure)
-- Modify: `app/src/main/java/app/tessera/data/repository/SyncRepositoryImpl.kt` — distinguish access-loss from deletion when a shared note vanishes: a `FirebaseFirestoreException` with `code == PERMISSION_DENIED` surfacing from the shared-note fetch/listener → mark that note's image rows `ACCESS_LOST`; a document-delete event in the snapshot → genuine deletion, leave rows for normal orphan flow. (Executor: locate where `SyncRepositoryImpl` currently handles a shared note disappearing — the same branch that removes the local note row — and hook both cases there.) On a shared note REAPPEARING (re-added), flip its `ACCESS_LOST` rows back to `UPLOADED`.
-- Test: `app/src/test/java/app/tessera/domain/usecase/FindOrphanImagesTest.kt`, `app/src/test/java/app/tessera/sync/ImageCleanupWorkerTest.kt`, and NEW cases in the existing `app/src/test/java/app/tessera/data/repository/SyncRepositoryImplTest.kt`: PERMISSION_DENIED marks rows `ACCESS_LOST`; delete event does NOT; reappearing note flips `ACCESS_LOST` → `UPLOADED`.
+- Modify: `app/src/main/java/app/tessera/data/repository/SyncRepositoryImpl.kt` — distinguish access-loss from deletion when a shared note vanishes: a `FirebaseFirestoreException` with `code == PERMISSION_DENIED` surfacing from the shared-note fetch/listener → mark that note's image rows `ACCESS_LOST`; a document-delete event in the snapshot → genuine deletion, leave rows for normal orphan flow. (Executor: locate where `SyncRepositoryImpl` currently handles a shared note disappearing — the same branch that removes the local note row — and hook both cases there.) On a shared note REAPPEARING (re-added), flip its `ACCESS_LOST` rows back — status-aware, NOT blanket `UPLOADED`: rows with `driveFileId != null` → `UPLOADED`, rows without → `LOCAL_ONLY` (a blanket flip would hand null fileIds to the permission worker and manifest patch). Simplest DAO shape: `byNote(noteId)` + per-row update.
+- Test: `app/src/test/java/app/tessera/domain/usecase/FindOrphanImagesTest.kt`, `app/src/test/java/app/tessera/sync/ImageCleanupWorkerTest.kt`, and NEW cases in the existing `app/src/test/java/app/tessera/data/repository/SyncRepositoryImplTest.kt`: PERMISSION_DENIED marks rows `ACCESS_LOST`; delete event does NOT; reappearing note flips `ACCESS_LOST` → `UPLOADED` when `driveFileId != null` and → `LOCAL_ONLY` when null.
 
 - [ ] **Step 1: Pure orphan logic (TDD)**
 
@@ -622,7 +623,7 @@ fun findOrphans(images: List<NoteImageEntity>, notesContent: Map<String, String>
 ```
 
 Tests: unreferenced → stamped; re-referenced → reset to null; `ACCESS_LOST` → untouched; app-trash note references still count.
-- [ ] **Step 2: Worker** — rows with `orphanedAt` older than the hysteresis window: if `driveFileId != null` → `deleteFile` + manifest entry removal; always delete local file + row. Drive `deleteFile` 404 → treat as already-gone, proceed. Runs daily (same periodic registration as Task 12) + after note save (the single persist path in `NotesRepositoryImpl` — the method the editor's save flow calls; executor confirms the exact name there). Inject the window as a constructor param defaulting to 7 days — Task 15's manual pass shortens it without a debug hack.
+- [ ] **Step 2: Worker** — scope: Drive-side actions apply ONLY to MY rows (`ownerUid == currentUid`) — only the owner can trash their file or is responsible for its manifest entry. My rows with `orphanedAt` older than the hysteresis window: if `driveFileId != null` → `trashFile` (PATCH `trashed:true`, preserving the spec's 30-day Drive-trash recoverability — never `files.delete`) + manifest entry removal; always delete local file + row. Other-owner rows whose note is genuinely gone: drop only the Room row (their cached file is the LRU's job per spec). Drive 404 on trash → treat as already-gone, proceed. Runs daily (same periodic registration as Task 12) + after note save (the single persist path in `NotesRepositoryImpl` — the method the editor's save flow calls; executor confirms the exact name there). Inject the window as a constructor param defaulting to 7 days — Task 15's manual pass shortens it without a debug hack.
 - [ ] **Step 3: Run the FULL unit suite** — `./gradlew :app:testDebugUnitTest` — everything green (isolate Robolectric flakes per memory note).
 - [ ] **Step 4: Commit** — `feat(sync): image cleanup with 7-day hysteresis + ACCESS_LOST handling`
 
