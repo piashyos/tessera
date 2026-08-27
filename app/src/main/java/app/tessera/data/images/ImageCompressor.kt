@@ -48,9 +48,14 @@ class ImageCompressor
 
         private fun readBounds(source: Uri): BitmapFactory.Options {
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(source)?.use { input ->
-                BitmapFactory.decodeStream(input, null, options)
-            } ?: throw IOException("Unable to open input stream for $source")
+            // NOTE: with inJustDecodeBounds=true, decodeStream ALWAYS returns null and only fills
+            // `options` — so we must null-check the STREAM itself, not the decode result. Folding the
+            // two together (`openInputStream(...)?.use { decodeStream(...) } ?: throw`) throws on every
+            // real device even when the stream opened fine. (Robolectric's shadow returns a non-null
+            // bitmap in bounds mode, which is why this slipped past the unit tests.)
+            val stream = context.contentResolver.openInputStream(source)
+                ?: throw IOException("Unable to open input stream for $source")
+            stream.use { BitmapFactory.decodeStream(it, null, options) }
             if (options.outWidth <= 0 || options.outHeight <= 0) {
                 throw IOException("Unable to decode image bounds for $source")
             }
