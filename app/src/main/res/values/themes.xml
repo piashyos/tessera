@@ -35,4 +35,13 @@
         <!-- Avoid black flash on Activity recreation (locale change, etc.) -->
         <item name="android:windowBackground">@color/brand_background</item>
     </style>
+
+    <!-- Share-target window: fully transparent so only the Compose bottom sheet is visible
+         over the calling app; the sheet's own scrim provides the dim. -->
+    <style name="Theme.Tessera.Share">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 </resources>

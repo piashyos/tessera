@@ -248,4 +248,16 @@
     <string name="table_remove_column">Удалить столбец</string>
     <string name="table_move_up">Переместить таблицу вверх</string>
     <string name="table_move_down">Переместить таблицу вниз</string>
+    <!-- Share-sheet target -->
+    <string name="share_sheet_title">Сохранить в Tessera</string>
+    <string name="share_save">Сохранить заметку</string>
+    <string name="share_close">Закрыть</string>
+    <string name="share_back">Назад</string>
+    <string name="share_saved">Сохранено в Tessera</string>
+    <string name="share_target_label">Куда сохранить</string>
+    <string name="share_target_new_note">Новая заметка</string>
+    <string name="share_pick_note_title">Выбор заметки</string>
+    <string name="share_search_notes">Поиск заметок</string>
+    <string name="share_text_placeholder">Текст заметки</string>
+    <string name="share_tags_label">Теги</string>
 </resources>

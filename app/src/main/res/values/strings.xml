@@ -241,4 +241,16 @@
     <string name="table_remove_column">Remove column</string>
     <string name="table_move_up">Move table up</string>
     <string name="table_move_down">Move table down</string>
+    <!-- Share-sheet target -->
+    <string name="share_sheet_title">Save to Tessera</string>
+    <string name="share_save">Save note</string>
+    <string name="share_close">Close</string>
+    <string name="share_back">Back</string>
+    <string name="share_saved">Saved to Tessera</string>
+    <string name="share_target_label">Save to</string>
+    <string name="share_target_new_note">New note</string>
+    <string name="share_pick_note_title">Choose a note</string>
+    <string name="share_search_notes">Search notes</string>
+    <string name="share_text_placeholder">Shared text</string>
+    <string name="share_tags_label">Tags</string>
 </resources>
