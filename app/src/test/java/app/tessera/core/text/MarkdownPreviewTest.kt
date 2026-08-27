@@ -95,6 +95,31 @@ class MarkdownPreviewTest {
     }
 
     @Test
+    fun `bold containing a lone asterisk is stripped`() {
+        // Regression: "**220 000 * 0.2**" leaked raw markers onto note cards because the
+        // bold pattern refused any inner asterisk.
+        assertEquals(
+            "Откладывать ежемесячно 220 000 * 0.2",
+            markdownToPreviewPlainText("Откладывать ежемесячно **220 000 * 0.2**"),
+        )
+    }
+
+    @Test
+    fun `strikethrough containing a lone tilde is stripped`() {
+        assertEquals("a ~ b", markdownToPreviewPlainText("~~a ~ b~~"))
+    }
+
+    @Test
+    fun `lone asterisks between spaces are not italic`() {
+        assertEquals("2 * 2 * 2", markdownToPreviewPlainText("2 * 2 * 2"))
+    }
+
+    @Test
+    fun `multiple bold runs strip independently`() {
+        assertEquals("a b c", markdownToPreviewPlainText("**a** b **c**"))
+    }
+
+    @Test
     fun `table markup flattens to cell text in title and body previews`() {
         val md = "| Task | Owner |\n| --- | --- |\n| Design | Ann |\nnotes below"
         assertEquals("Task Owner", markdownToPreviewPlainText(md))

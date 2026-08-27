@@ -1,9 +1,11 @@
 package app.tessera.core.text
 
 private val BLOCK_PREFIX = Regex("""^\s*(?:#{1,6}\s+|[-*]\s+\[[ xX]?]\s+|[-*+]\s+|>\s+|\d+\.\s+)""")
-private val INLINE_BOLD = Regex("""\*\*([^*]+)\*\*""")
-private val INLINE_ITALIC = Regex("""(?<!\*)\*([^*]+)\*(?!\*)""")
-private val INLINE_STRIKE = Regex("""~~([^~]+)~~""")
+// Non-greedy with non-space boundaries: content may contain lone markers ("**220 000 * 0.2**"),
+// but "2 * 2 * 2" must not be treated as emphasis (openers/closers can't touch whitespace).
+private val INLINE_BOLD = Regex("""\*\*(?=\S)(.+?)(?<=\S)\*\*""")
+private val INLINE_ITALIC = Regex("""(?<!\*)\*(?=[^\s*])([^*]+?)(?<=\S)\*(?!\*)""")
+private val INLINE_STRIKE = Regex("""~~(?=\S)(.+?)(?<=\S)~~""")
 private val INLINE_CODE = Regex("""`([^`]+)`""")
 private val HTML_TAG = Regex("""<[^>]+>""")
 private val WHITESPACE = Regex("""\s+""")
