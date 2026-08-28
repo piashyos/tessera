@@ -148,6 +148,18 @@ class InMemorySharedBackend {
 
         override fun observeSharedNotes(uid: String): Flow<List<RemoteSharedNote>> =
             sharedFlow.map { notes -> notes.filter { uid in it.memberIds } }
+
+        override suspend fun updateImageManifest(
+            noteId: String,
+            imageId: String,
+            ref: app.tessera.data.remote.RemoteImageRef?,
+        ) {
+            val existing = sharedNotes[noteId] ?: return
+            val images = existing.images.toMutableMap()
+            if (ref == null) images.remove(imageId) else images[imageId] = ref
+            sharedNotes[noteId] = existing.copy(images = images)
+            emitShared()
+        }
     }
 
     private inner class PrivateAdapter(@Suppress("unused") private val owner: String) :
@@ -175,6 +187,19 @@ class InMemorySharedBackend {
         override suspend fun deleteByIds(uid: String, ids: List<String>) {
             val bucket = privateBucket(uid)
             ids.forEach { bucket.remove(it) }
+        }
+
+        override suspend fun updateImageManifest(
+            uid: String,
+            noteId: String,
+            imageId: String,
+            ref: app.tessera.data.remote.RemoteImageRef?,
+        ) {
+            val bucket = privateBucket(uid)
+            val existing = bucket[noteId] ?: return
+            val images = existing.images.toMutableMap()
+            if (ref == null) images.remove(imageId) else images[imageId] = ref
+            bucket[noteId] = existing.copy(images = images)
         }
     }
 }

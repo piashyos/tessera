@@ -1,5 +1,7 @@
 package app.tessera.ui.editor
 
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -18,6 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.wordpress.aztec.Html
 
 /**
  * Screenshot baselines for [NoteEditorScreen] (Plan 07, Task 2).
@@ -45,9 +48,10 @@ class NoteEditorScreenshotTest {
     }
 
     @Composable
-    private fun editor(state: NoteEditorState) {
+    private fun editor(state: NoteEditorState, imageGetter: Html.ImageGetter? = null) {
         NoteEditorScreen(
             state = state,
+            imageGetter = imageGetter,
             onContentChange = {},
             onAddTag = {},
             onRemoveTag = {},
@@ -55,6 +59,26 @@ class NoteEditorScreenshotTest {
             onBack = {},
             onDelete = {},
         )
+    }
+
+    /**
+     * Synchronous stand-in for [TesseraImageLoader]: delivers a solid-color tile immediately so the
+     * baseline renders a real image span (not a placeholder) without touching disk or coroutines.
+     */
+    private fun solidImageGetter(): Html.ImageGetter = object : Html.ImageGetter {
+        override fun loadImage(source: String, callbacks: Html.ImageGetter.Callbacks, maxWidth: Int) {
+            val w = maxWidth.takeIf { it > 0 } ?: 600
+            val drawable = ColorDrawable(Color.rgb(0x6A, 0x8E, 0xAE))
+            drawable.setBounds(0, 0, w, (w * 0.5f).toInt())
+            callbacks.onImageLoaded(drawable)
+        }
+
+        override fun loadImage(
+            source: String,
+            callbacks: Html.ImageGetter.Callbacks,
+            maxWidth: Int,
+            minWidth: Int,
+        ) = loadImage(source, callbacks, maxWidth)
     }
 
     @Test fun contentLight() = capture("editor_content_light", darkTheme = false) { editor(contentState()) }
@@ -68,6 +92,12 @@ class NoteEditorScreenshotTest {
     @Test fun tableLight() = capture("editor_table_light", darkTheme = false) { editor(tableState()) }
 
     @Test fun tableDark() = capture("editor_table_dark", darkTheme = true) { editor(tableState()) }
+
+    @Test fun imageLight() =
+        capture("editor_image_light", darkTheme = false) { editor(imageState(), solidImageGetter()) }
+
+    @Test fun imageDark() =
+        capture("editor_image_dark", darkTheme = true) { editor(imageState(), solidImageGetter()) }
 
     @Test fun tagPickerLight() = capture("editor_tag_picker_light", darkTheme = false) { tagPicker() }
 
@@ -100,6 +130,15 @@ private fun emptyState() =
     NoteEditorState(
         content = "",
         tags = emptyList(),
+        isPinned = false,
+        availableTags = listOf("ideas", "kotlin"),
+        isLoading = false,
+    )
+
+private fun imageState() =
+    NoteEditorState(
+        content = "Trip photos\n\n![](tessera-img://demo-1)\n\nSunset over the bay.",
+        tags = listOf("travel"),
         isPinned = false,
         availableTags = listOf("ideas", "kotlin"),
         isLoading = false,

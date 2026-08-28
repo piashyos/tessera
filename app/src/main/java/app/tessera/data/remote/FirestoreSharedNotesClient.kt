@@ -1,5 +1,6 @@
 package app.tessera.data.remote
 
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObject
@@ -109,8 +110,18 @@ class FirestoreSharedNotesClient @Inject constructor(
             awaitClose { registration.remove() }
         }
 
+    override suspend fun updateImageManifest(noteId: String, imageId: String, ref: RemoteImageRef?) {
+        // FieldPath.of(...) treats "images"/imageId as literal segments, so an imageId containing a
+        // dot can't be misread as a nested path. A null ref removes just this one map key.
+        val value: Any = ref ?: FieldValue.delete()
+        sharedNotes.document(noteId)
+            .update(FieldPath.of(FIELD_IMAGES, imageId), value)
+            .await()
+    }
+
     private companion object {
         const val SHARED_NOTES = "sharedNotes"
+        const val FIELD_IMAGES = "images"
         const val USERS = "users"
         const val NOTES = "notes"
         const val FIELD_MEMBERS = "members"

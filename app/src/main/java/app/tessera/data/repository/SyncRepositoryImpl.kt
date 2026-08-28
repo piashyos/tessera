@@ -5,17 +5,21 @@ import app.tessera.core.util.Clock
 import app.tessera.data.local.Transactor
 import app.tessera.data.local.dao.FolderDao
 import app.tessera.data.local.dao.NoteDao
+import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.dao.SharedMemberDao
 import app.tessera.data.local.dao.TagDao
 import app.tessera.data.local.entity.FolderEntity
+import app.tessera.data.local.entity.ImageStatus
 import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.local.entity.NoteFolderCrossRef
 import app.tessera.data.local.entity.NoteTagCrossRef
 import app.tessera.data.local.entity.TagEntity
+import app.tessera.data.mapper.NoteImageMapper
 import app.tessera.data.mapper.NoteMapper
 import app.tessera.data.mapper.SharedNoteMapper
 import app.tessera.data.remote.RemoteFolder
 import app.tessera.data.remote.RemoteFoldersDataSource
+import app.tessera.data.remote.RemoteImageRef
 import app.tessera.data.remote.RemoteNote
 import app.tessera.data.remote.RemoteNotesDataSource
 import app.tessera.data.remote.RemoteSharedNote
@@ -26,6 +30,8 @@ import app.tessera.domain.model.UserId
 import app.tessera.domain.model.canDeleteForAll
 import app.tessera.domain.model.canEditContent
 import app.tessera.domain.repository.SyncRepository
+import app.tessera.sync.ImageWorkScheduler
+import app.tessera.sync.NoOpImageWorkScheduler
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,12 +50,15 @@ class SyncRepositoryImpl @Inject constructor(
     private val tagDao: TagDao,
     private val folderDao: FolderDao,
     private val sharedMemberDao: SharedMemberDao,
+    private val noteImageDao: NoteImageDao,
     private val remote: RemoteNotesDataSource,
     private val remoteFolders: RemoteFoldersDataSource,
     private val remoteShared: RemoteSharedNotesDataSource,
     private val mapper: NoteMapper,
     private val sharedMapper: SharedNoteMapper,
+    private val imageMapper: NoteImageMapper,
     private val clock: Clock,
+    private val imageWorkScheduler: ImageWorkScheduler = NoOpImageWorkScheduler,
 ) : SyncRepository {
     // Serializes every Room merge so the one-shot SyncWorker and the live Firestore listener — both
     // active right after sign-in — can't interleave their writes. Without this, two merges race on
@@ -246,6 +255,48 @@ class SyncRepositoryImpl @Inject constructor(
                 noteDao.upsert(mapper.toEntity(remoteNote, ownerId = uid.value, syncedAt = now))
                 replaceTags(remoteNote.id, remoteNote.tags)
                 replaceFolderAssignment(remoteNote.id, remoteNote.folderId)
+                mergeImageManifest(remoteNote.id, remoteNote.images)
+            }
+        }
+    }
+
+    /**
+     * Lands a pulled note's `images` manifest into Room. Upserts only entries with NO existing local
+     * row (covers share recipients AND the owner's second device / fresh install) and NEVER overwrites
+     * an existing row. Recipient rows carry the real owner's uid and `localPath = null`, so no file is
+     * created here — only DB rows for the renderer/downloader. Runs inside the caller's transaction.
+     */
+    private suspend fun mergeImageManifest(noteId: String, manifest: Map<String, RemoteImageRef>) {
+        if (manifest.isEmpty()) return
+        val existing = noteImageDao.byNote(noteId).mapTo(mutableSetOf()) { it.imageId }
+        imageMapper.rowsToUpsert(noteId, manifest, existing).forEach { noteImageDao.upsert(it) }
+    }
+
+    /**
+     * Marks every image row of a note as [ImageStatus.ACCESS_LOST] (idempotent). Called when our
+     * access to a shared note is revoked so the orphan sweep won't reclaim the owner's images and we
+     * can restore them if we regain access.
+     */
+    private suspend fun markImagesAccessLost(noteId: String) {
+        noteImageDao.byNote(noteId).forEach { row ->
+            if (row.status != ImageStatus.ACCESS_LOST) {
+                noteImageDao.upsert(row.copy(status = ImageStatus.ACCESS_LOST))
+            }
+        }
+    }
+
+    /**
+     * Reverses [markImagesAccessLost] for a note whose access was regained. STATUS-AWARE, never a
+     * blanket flip to UPLOADED: a row with a `driveFileId` is a real uploaded file → [ImageStatus.UPLOADED];
+     * one without is a never-uploaded local image → [ImageStatus.LOCAL_ONLY]. A blanket UPLOADED would
+     * hand a null fileId to the permission worker and the manifest patch.
+     */
+    private suspend fun restoreAccessLostImages(noteId: String) {
+        noteImageDao.byNote(noteId).forEach { row ->
+            if (row.status == ImageStatus.ACCESS_LOST) {
+                val restored =
+                    if (row.driveFileId != null) ImageStatus.UPLOADED else ImageStatus.LOCAL_ONLY
+                noteImageDao.upsert(row.copy(status = restored))
             }
         }
     }
@@ -271,7 +322,19 @@ class SyncRepositoryImpl @Inject constructor(
             noteDao.getSharedNotes()
                 .filter { it.id !in remoteIds && it.myRole != ShareRole.OWNER.name }
                 .forEach { evicted ->
-                    Log.d(TAG, "Evicting shared note removed from member set: ${evicted.id}")
+                    // A LIVE shared note vanishing from the membership-filtered snapshot means our
+                    // access was revoked (removed from the member set) — Firestore silently drops it
+                    // from the query rather than surfacing a per-note PERMISSION_DENIED. Do NOT delete
+                    // its image rows: mark them ACCESS_LOST so the orphan sweep leaves them be and we
+                    // can restore them if re-added (see restoreAccessLostImages). A note that is
+                    // already a local tombstone is a genuine delete/purge, not an access loss — leave
+                    // its images to the normal orphan flow.
+                    if (evicted.deletedAt == null) {
+                        Log.d(TAG, "Shared note ${evicted.id} access lost; marking its images ACCESS_LOST")
+                        markImagesAccessLost(evicted.id)
+                    } else {
+                        Log.d(TAG, "Evicting deleted shared note ${evicted.id}; leaving images to orphan flow")
+                    }
                     noteDao.hardDelete(evicted.id) // CASCADE clears shared_members
                 }
 
@@ -290,8 +353,17 @@ class SyncRepositoryImpl @Inject constructor(
                     noteDao.setShareState(remoteNote.id, NoteEntity.SHARE_STATE_SHARED, myRole.name)
                 }
                 sharedMemberDao.replaceForNote(remoteNote.id, sharedMapper.toMemberEntities(remoteNote))
+                mergeImageManifest(remoteNote.id, remoteNote.images)
+                // A note we can see again (re-added / access regained) may hold ACCESS_LOST image
+                // rows from a prior eviction — restore them so they render and sync again. No-op for
+                // notes that were never lost.
+                restoreAccessLostImages(remoteNote.id)
             }
         }
+        // Member sets may have changed for notes I own; reconcile my uploaded images' Drive
+        // permissions so added members gain access and removed ones lose it. No-op when I own no
+        // uploaded images.
+        imageWorkScheduler.requestPermissionSync()
     }
 
     private suspend fun mergeRemoteFolders(

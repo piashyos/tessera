@@ -1,5 +1,6 @@
 package app.tessera.ui.editor
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,6 +17,7 @@ import app.tessera.domain.repository.FolderRepository
 import app.tessera.domain.usecase.ChangeMemberRoleUseCase
 import app.tessera.domain.usecase.DeleteNoteUseCase
 import app.tessera.domain.usecase.GetNoteUseCase
+import app.tessera.domain.usecase.InsertImageUseCase
 import app.tessera.domain.usecase.InviteMemberUseCase
 import app.tessera.domain.usecase.LeaveSharedNoteUseCase
 import app.tessera.domain.usecase.ObserveMembersUseCase
@@ -25,16 +27,21 @@ import app.tessera.domain.usecase.RemoveMemberUseCase
 import app.tessera.domain.usecase.ShareNoteUseCase
 import app.tessera.domain.usecase.UnshareNoteUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
+import app.tessera.ui.editor.components.NoteImageLoaderFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.wordpress.aztec.Html
 
 private const val AutosaveDebounceMs = 500L
 
@@ -52,6 +59,9 @@ class NoteEditorViewModel @Inject constructor(
     private val removeMemberUseCase: RemoveMemberUseCase,
     private val leaveSharedNoteUseCase: LeaveSharedNoteUseCase,
     private val unshareNoteUseCase: UnshareNoteUseCase,
+    private val insertImageUseCase: InsertImageUseCase,
+    private val imageLoaderFactory: NoteImageLoaderFactory,
+    private val driveAuthManager: app.tessera.data.drive.DriveAuthManager,
     private val authRepository: AuthRepository,
     private val folderRepository: FolderRepository,
     private val savedStateHandle: SavedStateHandle,
@@ -61,6 +71,29 @@ class NoteEditorViewModel @Inject constructor(
         savedStateHandle.get<String>("noteId")
             ?: error("NoteEditorViewModel requires 'noteId' in SavedStateHandle"),
     )
+
+    /**
+     * Aztec image getter for this editor, lazily built against [viewModelScope] so its async
+     * decode/download work is cancelled with the ViewModel. The screen hands it to the editor.
+     */
+    val imageGetter: Html.ImageGetter by lazy { imageLoaderFactory.create(viewModelScope) }
+
+    /**
+     * Consent prompts from the Drive auth flow. A recipient's first image download (or an owner's
+     * first upload) with no cached token makes [DriveAuthManager.accessToken] emit a `PendingIntent`
+     * here; the screen launches it via `StartIntentSenderForResult` to obtain the `drive.file` scope.
+     */
+    val consentRequests: kotlinx.coroutines.flow.SharedFlow<android.app.PendingIntent> =
+        driveAuthManager.consentRequests
+
+    /**
+     * One-shot stream of newly-inserted imageIds. [insertImage] emits here AFTER
+     * [InsertImageUseCase] succeeds; the screen collects it and splices the span at the caret via
+     * [RichBodyActions.insertImage]. A replay of 0 keeps re-collection (config change) from
+     * re-inserting an already-placed image.
+     */
+    private val _imageInserts = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val imageInserts: SharedFlow<String> = _imageInserts.asSharedFlow()
 
     private val _state = MutableStateFlow(
         NoteEditorState(
@@ -171,6 +204,20 @@ class NoteEditorViewModel @Inject constructor(
     fun onTogglePin() {
         _state.update { it.copy(isPinned = !it.isPinned) }
         scheduleAutosave()
+    }
+
+    /**
+     * Compress + store [uri] as a Drive-backed image for this note, then signal the editor to
+     * splice `![](tessera-img://<id>)` at the caret. The markup is emitted ONLY after the use case
+     * succeeds — a failed compression/insertion inserts nothing. Local inserts are sub-second
+     * (per spec), so no progress UI is shown on this path.
+     */
+    fun insertImage(uri: Uri) {
+        viewModelScope.launch {
+            insertImageUseCase(noteId, uri).onSuccess { imageId ->
+                _imageInserts.emit(imageId)
+            }
+        }
     }
 
     fun flush() {

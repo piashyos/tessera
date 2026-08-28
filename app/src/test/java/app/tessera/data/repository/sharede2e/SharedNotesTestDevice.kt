@@ -59,11 +59,13 @@ class SharedNotesTestDevice(
         tagDao,
         db.folderDao(),
         sharedMemberDao,
+        db.noteImageDao(),
         backend.privateFor(uid),
         EmptyRemoteFolders(),
         backend.sharedFor(uid),
         NoteMapper(),
         SharedNoteMapper(),
+        app.tessera.data.mapper.NoteImageMapper(),
         clock,
     )
 

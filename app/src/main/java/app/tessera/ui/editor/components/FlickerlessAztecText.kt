@@ -1,8 +1,16 @@
 package app.tessera.ui.editor.components
 
 import android.content.Context
+import android.net.Uri
 import android.util.AttributeSet
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import androidx.core.view.inputmethod.EditorInfoCompat
+import androidx.core.view.inputmethod.InputConnectionCompat
+import androidx.core.view.inputmethod.InputContentInfoCompat
 import org.wordpress.aztec.AztecText
+import java.io.File
+import java.util.UUID
 
 /**
  * AztecText subclass that suppresses the relayout flicker on task-list checkbox taps.
@@ -44,10 +52,94 @@ class FlickerlessAztecText : AztecText {
      */
     var onCaretSelectionChanged: ((Int, Int) -> Unit)? = null
 
+    /**
+     * Notified when an image reaches the editor via the IME rich-content path
+     * ([InputConnectionCompat.createWrapper]) or an image clipboard paste. Hosting code
+     * routes the content [Uri] through the same insert pipeline the picker/camera use and
+     * returns `true` when it will handle it (so the platform doesn't fall back to a text paste).
+     */
+    var onImageCommitted: ((Uri) -> Boolean)? = null
+
     override fun onSelectionChanged(selStart: Int, selEnd: Int) {
         super.onSelectionChanged(selStart, selEnd)
         onCaretSelectionChanged?.invoke(selStart, selEnd)
     }
+
+    /**
+     * Advertise image MIME support to the keyboard and wrap the connection so GBoard-style
+     * rich-content commits (e.g. pasted/inserted images, GIFs) are delivered to [onImageCommitted].
+     * Some keyboards only grant a transient read permission, so request it before reading the URI
+     * and release it after — otherwise reading the content later throws [SecurityException].
+     */
+    override fun onCreateInputConnection(editorInfo: EditorInfo): InputConnection {
+        val connection = super.onCreateInputConnection(editorInfo)
+        EditorInfoCompat.setContentMimeTypes(editorInfo, arrayOf("image/*"))
+        val callback = InputConnectionCompat.OnCommitContentListener { info: InputContentInfoCompat, flags: Int, _ ->
+            val handler = onImageCommitted ?: return@OnCommitContentListener false
+            val needsGrant =
+                flags and InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION != 0
+            if (needsGrant) {
+                try {
+                    info.requestPermission()
+                } catch (_: Exception) {
+                    return@OnCommitContentListener false
+                }
+            }
+            // The insert pipeline reads the URI LATER (compression runs off the main thread), but a
+            // keyboard's grant is often transient — so copy the bytes into an app-owned cache file
+            // WHILE the grant is held, then hand the downstream a file-backed URI. The release is in
+            // `finally` so it can never be skipped if the copy throws.
+            val localUri: Uri? = try {
+                copyToCache(info.contentUri)
+            } finally {
+                if (needsGrant) runCatching { info.releasePermission() }
+            }
+            if (localUri != null) handler(localUri) else false
+        }
+        return InputConnectionCompat.createWrapper(connection, editorInfo, callback)
+    }
+
+    /**
+     * Intercept a paste whose clipboard primary clip carries an image URI and route it to
+     * [onImageCommitted] instead of Android's default (text-only) paste, which would drop it.
+     */
+    override fun onTextContextMenuItem(id: Int): Boolean {
+        if (id == android.R.id.paste || id == android.R.id.pasteAsPlainText) {
+            val handler = onImageCommitted
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val clip = clipboard?.primaryClip
+            if (handler != null && clip != null && clip.itemCount > 0) {
+                val uri = clip.getItemAt(0).uri
+                val mime = uri?.let { context.contentResolver.getType(it) }
+                if (uri != null && mime != null && mime.startsWith("image/")) {
+                    // Copy synchronously here (clip access is valid during the paste action) so the
+                    // later off-main read doesn't depend on a URI grant that may have lapsed.
+                    val localUri = copyToCache(uri)
+                    if (localUri != null && handler(localUri)) return true
+                }
+            }
+        }
+        return super.onTextContextMenuItem(id)
+    }
+
+    /**
+     * Copy [source]'s bytes into an app-owned cache file under `cacheDir/camera/` and return a
+     * file-backed URI (readable later by the compressor via `contentResolver.openInputStream`,
+     * which handles the `file` scheme). Must be called while any read grant on [source] is still
+     * valid. Returns null if the stream can't be opened or the copy fails.
+     */
+    private fun copyToCache(source: Uri): Uri? =
+        try {
+            val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+            val file = File(dir, "clip-${UUID.randomUUID()}")
+            val copied = context.contentResolver.openInputStream(source)?.use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
+                true
+            } ?: false
+            if (copied) Uri.fromFile(file) else null
+        } catch (_: Exception) {
+            null
+        }
 
     override fun refreshText(stealEditorFocus: Boolean) {
         if (stealEditorFocus) {

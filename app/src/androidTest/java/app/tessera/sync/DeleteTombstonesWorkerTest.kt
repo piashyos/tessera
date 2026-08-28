@@ -69,8 +69,10 @@ class DeleteTombstonesWorkerTest {
             remote,
             NoOpRemoteFolders(),
             NoOpRemoteShared(),
+            database.noteImageDao(),
             NoteMapper(),
             SharedNoteMapper(),
+            app.tessera.data.mapper.NoteImageMapper(),
             FixedClock(now),
         )
         val worker = buildWorker(syncRepository)
@@ -133,6 +135,13 @@ class DeleteTombstonesWorkerTest {
         }
 
         override suspend fun deleteByIds(uid: String, ids: List<String>) = Unit
+
+        override suspend fun updateImageManifest(
+            uid: String,
+            noteId: String,
+            imageId: String,
+            ref: app.tessera.data.remote.RemoteImageRef?,
+        ) = Unit
     }
 
     private class NoOpRemoteFolders : RemoteFoldersDataSource {
@@ -152,5 +161,10 @@ class DeleteTombstonesWorkerTest {
         override suspend fun pushSharedNote(note: RemoteSharedNote) = Unit
         override suspend fun fetchAll(uid: String): List<RemoteSharedNote> = emptyList()
         override fun observeSharedNotes(uid: String): Flow<List<RemoteSharedNote>> = emptyFlow()
+        override suspend fun updateImageManifest(
+            noteId: String,
+            imageId: String,
+            ref: app.tessera.data.remote.RemoteImageRef?,
+        ) = Unit
     }
 }
