@@ -7,8 +7,10 @@ import android.text.Editable
 import android.text.Spannable
 import android.text.Spanned
 import android.text.TextWatcher
+import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.ViewGroup
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -43,6 +45,7 @@ import org.wordpress.aztec.Html
 import org.wordpress.aztec.ITextFormat
 import org.wordpress.aztec.plugins.IToolbarButton
 import org.wordpress.aztec.source.SourceViewEditText
+import org.wordpress.aztec.spans.AztecImageSpan
 import org.wordpress.aztec.spans.AztecPreformatSpan
 import org.wordpress.aztec.spans.AztecTaskListSpan
 import org.wordpress.aztec.spans.AztecUnorderedListSpan
@@ -130,6 +133,66 @@ private const val SerifReapplyMs = 50L
 
 /** Fallback display width for an inserted image before the editor has been measured. */
 private const val DefaultImageWidthPx = 1080
+
+/**
+ * A currently-selected image span the resize/rotate overlay tracks. [spanStart] is the offset of
+ * the span in the editor's editable; [source] is its `tessera-img://…?w=..&rot=..` src (raw `&`);
+ * [rect] is its on-screen rectangle in the AndroidView's visible coordinate space; [wPercent] and
+ * [rotDegrees] are the parsed display params.
+ */
+data class SelectedImage(
+    val spanStart: Int,
+    val source: String,
+    val rect: Rect,
+    val wPercent: Int,
+    val rotDegrees: Int,
+)
+
+/**
+ * The on-screen rectangle of the [AztecImageSpan] starting at [spanStart], in the AztecText's
+ * VISIBLE coordinate space (scroll subtracted), or null if the editor isn't laid out yet or no
+ * image span/drawable is present there. Width/height come from the span drawable's (adjusted)
+ * bounds — the size Aztec actually renders.
+ */
+fun imageSpanRect(editor: AztecText, spanStart: Int): Rect? {
+    val layout = editor.layout ?: return null
+    val editable = editor.editableText ?: return null
+    val span = editable.getSpans(spanStart, spanStart + 1, AztecImageSpan::class.java).firstOrNull()
+        ?: return null
+    val bounds = span.drawable?.bounds ?: return null
+    if (bounds.width() <= 0 || bounds.height() <= 0) return null
+    val line = layout.getLineForOffset(spanStart)
+    val top = (layout.getLineTop(line) + editor.totalPaddingTop - editor.scrollY).toFloat()
+    val left = layout.getPrimaryHorizontal(spanStart) + editor.totalPaddingLeft - editor.scrollX
+    return Rect(left, top, left + bounds.width(), top + bounds.height())
+}
+
+/**
+ * Resolve a tap at ([x], [y]) (view coordinates) to the [SelectedImage] it lands on, or null when
+ * the tap isn't on an image. `getOffsetForPosition` snaps to the NEAREST offset even for a tap in
+ * the whitespace beside/below an image, so the tap is re-validated against the span's actual rect
+ * before selecting — a near-miss returns null (clears the selection).
+ */
+fun selectImageAt(editor: AztecText, x: Float, y: Float): SelectedImage? {
+    val editable = editor.editableText ?: return null
+    val offset = editor.getOffsetForPosition(x, y)
+    if (offset < 0) return null
+    val span = editable.getSpans(offset, offset + 1, AztecImageSpan::class.java).firstOrNull()
+        ?: editable.getSpans((offset - 1).coerceAtLeast(0), offset, AztecImageSpan::class.java).firstOrNull()
+        ?: return null
+    val spanStart = editable.getSpanStart(span)
+    val rect = imageSpanRect(editor, spanStart) ?: return null
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null
+    val src = (span.attributes.getValue("src") ?: "").replace("&amp;", "&")
+    val ref = parseImageRef(src)
+    return SelectedImage(
+        spanStart = spanStart,
+        source = src,
+        rect = rect,
+        wPercent = ref?.wPercent ?: 100,
+        rotDegrees = ref?.rotDegrees ?: 0,
+    )
+}
 
 /** Formats the toolbar highlights as "active"; queried against the editor's selection. */
 private val EditorQueryFormats = listOf(
@@ -423,6 +486,9 @@ fun RichNoteBody(
     // runnables when the editor leaves composition (e.g. back-nav during typing).
     val handler = remember { Handler(Looper.getMainLooper()) }
     val editorRef = remember { mutableStateOf<AztecText?>(null) }
+    // The image the user tapped, driving the resize/rotate overlay. Editable notes only — a
+    // read-only (Viewer) editor never installs the tap detector, so this stays null there.
+    val selectedImage = remember { mutableStateOf<SelectedImage?>(null) }
     // Re-apply block-element theming whenever the palette colors change (e.g. the user switches
     // palette in Settings). The factory captures colors once and `update` only re-styles on a
     // content change, so without this a live palette switch would leave the old accent colors.
@@ -592,6 +658,26 @@ fun RichNoteBody(
             // Report focus so the screen knows which text block the cursor is in — the
             // "insert table" action uses this to place the table at the cursor, not the end.
             editor.setOnFocusChangeListener { _, hasFocus -> currentOnFocusChanged(hasFocus) }
+
+            // Tap-to-select an image (editable notes only — a read-only Viewer never gets handles).
+            // A GestureDetector observing single-tap-up: it never consumes the event (the touch
+            // listener returns false) so caret placement / text selection keep working normally.
+            if (editable) {
+                val tapDetector = GestureDetector(
+                    editor.context,
+                    object : GestureDetector.SimpleOnGestureListener() {
+                        override fun onSingleTapUp(e: MotionEvent): Boolean {
+                            selectImageAt(editor, e.x, e.y)?.let { selectedImage.value = it }
+                                ?: run { selectedImage.value = null }
+                            return false
+                        }
+                    },
+                )
+                editor.setOnTouchListener { _, event ->
+                    tapDetector.onTouchEvent(event)
+                    false
+                }
+            }
 
             // Convert the editor's current HTML to markdown and push it upward. Marks the
             // just-flushed markdown as already loaded so the next recomposition (markdownKey
