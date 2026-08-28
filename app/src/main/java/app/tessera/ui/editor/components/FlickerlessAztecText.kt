@@ -3,12 +3,19 @@ package app.tessera.ui.editor.components
 import android.content.Context
 import android.net.Uri
 import android.util.AttributeSet
+import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputConnectionWrapper
 import androidx.core.view.inputmethod.EditorInfoCompat
 import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import org.wordpress.aztec.AztecText
+import org.wordpress.aztec.spans.AztecListItemSpan
+import org.wordpress.aztec.spans.AztecListSpan
+import org.wordpress.aztec.spans.AztecOrderedListSpan
+import org.wordpress.aztec.spans.AztecTaskListSpan
+import org.wordpress.aztec.spans.AztecUnorderedListSpan
 import java.io.File
 import java.util.UUID
 
@@ -96,7 +103,100 @@ class FlickerlessAztecText : AztecText {
             }
             if (localUri != null) handler(localUri) else false
         }
-        return InputConnectionCompat.createWrapper(connection, editorInfo, callback)
+        val wrapped = InputConnectionCompat.createWrapper(connection, editorInfo, callback)
+        return BackspaceInterceptingConnection(wrapped)
+    }
+
+    /**
+     * The list container span (task / ordered / unordered) covering [offset], or null if that
+     * position isn't inside a list. Detected via span CLASS so the app's custom
+     * [TesseraBulletListSpan] / [TesseraOrderedListSpan] subclasses are recognized too. Task is
+     * checked first because [AztecTaskListSpan] is itself an unordered-list span.
+     */
+    private fun listContainerAt(offset: Int): AztecListSpan? {
+        val e = editableText ?: return null
+        val end = (offset + 1).coerceAtMost(e.length)
+        e.getSpans(offset, end, AztecTaskListSpan::class.java).firstOrNull()?.let { return it }
+        e.getSpans(offset, end, AztecOrderedListSpan::class.java).firstOrNull()?.let { return it }
+        e.getSpans(offset, end, AztecUnorderedListSpan::class.java).firstOrNull()?.let { return it }
+        return null
+    }
+
+    /**
+     * Market-standard Backspace behavior (Apple Notes / Google Docs / Notion): pressing Backspace at
+     * the START of the FIRST item of a list removes just that item's list formatting — it becomes a
+     * plain paragraph on its own line — instead of Android's default, which joins the line into the
+     * block above and lets it inherit that block's style. Without this, a checklist item sitting
+     * under a heading was swallowed into the heading and re-rendered as an oversized H1 (the
+     * "разметка сходит с ума" bug).
+     *
+     * We delist by editing spans directly rather than via [toggleFormatting]: Aztec's toggle only
+     * recognizes its own span classes (so it corrupts the app's custom bullet/ordered spans) and,
+     * even on stock spans, leaves a degenerate empty `<ul>`/`<ol>` wrapper that then drops the text.
+     *
+     * Only the FIRST item is special — a Backspace at a later item's head just merges it into the
+     * item above (normal), so that falls through to the default. Returns true when it consumed the
+     * Backspace.
+     */
+    private fun handleBackspaceAtListItemStart(): Boolean {
+        val e = editableText ?: return false
+        if (selectionStart != selectionEnd) return false
+        val caret = selectionStart
+        val atLineStart = caret == 0 || (caret <= e.length && e[caret - 1] == '\n')
+        if (!atLineStart) return false
+        val container = listContainerAt(caret) ?: return false
+        // Fire only for the FIRST item: if the line above is itself in a list, this is a mid-list
+        // item and the default in-list merge is correct. (Checked by content position, not the
+        // container's span start, which may or may not include the separating newline.)
+        val prevLineInList = caret >= 2 && listContainerAt(caret - 2) != null
+        if (prevLineInList) return false
+        val cEnd = e.getSpanEnd(container)
+        val flags = e.getSpanFlags(container)
+        val lineEnd = e.indexOf('\n', caret).let { if (it == -1) e.length else it }
+        // Drop this item's list-item marker span(s) so it stops rendering as a bullet/checkbox/number.
+        e.getSpans(caret, lineEnd, AztecListItemSpan::class.java).forEach { e.removeSpan(it) }
+        e.removeSpan(container)
+        if (cEnd > lineEnd) {
+            // Multi-item list: keep the items below as a list; restart the container after this item.
+            e.setSpan(container, (lineEnd + 1).coerceAtMost(e.length), cEnd, flags)
+        }
+        // Block-level change shifts line metrics; rebuild the layout and persist (a span-only edit
+        // does not fire the TextWatcher, so the debounced flush is driven via onLightweightRefresh).
+        rebuildLayout()
+        onLightweightRefresh?.invoke()
+        return true
+    }
+
+    /**
+     * Wraps the platform InputConnection so a soft-keyboard Backspace at a list-item head is
+     * redirected to [handleBackspaceAtListItemStart]. Keyboards deliver Backspace either as a
+     * KEYCODE_DEL key event or (more commonly) as `deleteSurroundingText(1, 0)`, so both are
+     * intercepted. Hardware Backspace is covered by [onKeyDown].
+     */
+    private inner class BackspaceInterceptingConnection(target: InputConnection) :
+        InputConnectionWrapper(target, false) {
+
+        override fun sendKeyEvent(event: KeyEvent): Boolean {
+            if (event.action == KeyEvent.ACTION_DOWN &&
+                event.keyCode == KeyEvent.KEYCODE_DEL &&
+                handleBackspaceAtListItemStart()
+            ) {
+                return true
+            }
+            return super.sendKeyEvent(event)
+        }
+
+        override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+            if (beforeLength == 1 && afterLength == 0 && handleBackspaceAtListItemStart()) {
+                return true
+            }
+            return super.deleteSurroundingText(beforeLength, afterLength)
+        }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_DEL && handleBackspaceAtListItemStart()) return true
+        return super.onKeyDown(keyCode, event)
     }
 
     /**
