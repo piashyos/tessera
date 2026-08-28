@@ -107,4 +107,19 @@ class FindOrphanImagesTest {
         assertTrue(result.toStamp.isEmpty())
         assertTrue(result.toClear.isEmpty())
     }
+
+    @Test
+    fun `a parameterized ref with w and rot query still keeps the image referenced`() {
+        // Display params ride the ref as a query; the bare-id substring must still match so the
+        // resize/rotate feature never orphans an in-use image.
+        val img = row("id-1", orphanedAt = 100L)
+        val result = findOrphans(
+            listOf(img),
+            notesContent = mapOf("note-1" to "![](${TESSERA_IMAGE_SCHEME}id-1?w=50&rot=90)"),
+            now = 500L,
+        )
+
+        assertEquals(listOf("id-1"), result.toClear.map { it.imageId })
+        assertTrue(result.toStamp.isEmpty())
+    }
 }
