@@ -39,14 +39,14 @@ import java.io.FileOutputStream
  *       (`getMaxWidth(w)` is the identity, verified from the v2.1.7 bytecode).
  *       => Apply `w%` by SCALING THE DECODED BITMAP (Task 3), no custom span needed.
  *
- *       DENSITY TRAP (measured here — [currentDecodePathShrinksByDensity_documented]):
- *       `BitmapDrawable(null, bitmap).intrinsicWidth == bitmap.width * 160 / bitmap.density`.
- *       A `BitmapFactory.decodeFile` bitmap comes back at the DEVICE density (480 on xxhdpi),
- *       so a 200px source renders at 200*160/480 ≈ 67px — 1/3 size. The CURRENT loader's
- *       `BitmapDrawable(null, bitmap)` therefore mis-sizes on hidpi.
- *       => Task 3 MUST set the (scaled) bitmap's density to `Bitmap.DENSITY_NONE` so
- *       `getScaledWidth` returns the raw pixel width and `intrinsicWidth == targetWidth` on
- *       every device. Proven by [densityNoneBitmapWidthDrivesSpanWidth] (~200px).
+ *       DENSITY TRAP: `BitmapDrawable(null, bitmap).intrinsicWidth == bitmap.width * 160 /
+ *       bitmap.density`. A `BitmapFactory.decodeFile` bitmap comes back at the DEVICE density
+ *       (480 on xxhdpi), so a naive `BitmapDrawable(null, bitmap)` renders a 200px source at
+ *       200*160/480 ≈ 67px — 1/3 size.
+ *       => Task 3 sets the (scaled) bitmap's density to `Bitmap.DENSITY_NONE` so `getScaledWidth`
+ *       returns the raw pixel width and `intrinsicWidth == targetWidth` on every device. Proven by
+ *       [densityNoneBitmapWidthDrivesSpanWidth] (~200px) and the end-to-end
+ *       [realLoaderRendersNativeSizeDespiteDeviceDensity] guard.
  *
  *   (b) QUERY SURVIVAL — `editor.fromHtml(...)` → `editor.toHtml()` preserves the id and the
  *       `?w=&rot=` query, re-serializing the raw `&` as `&amp;` in the HTML attribute (see
@@ -141,13 +141,14 @@ class AztecImageParamSpikeTest {
     }
 
     /**
-     * (a-caveat) DOCUMENTS the density trap Task 3 must avoid: the CURRENT loader wraps a
-     * `decodeFile` bitmap in `BitmapDrawable(null, bitmap)` WITHOUT resetting density, so on an
-     * xxhdpi (480) editor a 200px source renders at 200*160/480 ≈ 67px — 1/3 size. Task 3 fixes
-     * this by setting the scaled bitmap's density to DENSITY_NONE (proven above).
+     * (a-fix regression guard) The DENSITY TRAP: before the Task 3 fix, wrapping a `decodeFile`
+     * bitmap in `BitmapDrawable(null, bitmap)` WITHOUT resetting density made a 200px source render
+     * at 200*160/480 ≈ 67px on an xxhdpi editor (1/3 size). [TesseraImageLoader.decode] now sets the
+     * scaled bitmap's density to DENSITY_NONE, so the REAL loader path renders the 200px source at
+     * its native ~200px. This guards that the fix stays in place end-to-end.
      */
     @Test
-    fun currentDecodePathShrinksByDensity_documented() {
+    fun realLoaderRendersNativeSizeDespiteDeviceDensity() {
         writeWebp("sizetest", 200, 333)
         val loader = realLoader()
         rule.setContent {
@@ -171,8 +172,8 @@ class AztecImageParamSpikeTest {
             editor.paint, editable,
             editable.getSpanStart(span), editable.getSpanEnd(span), null,
         )
-        // xxhdpi qualifier → density 480 → 200*160/480 ≈ 67. Locks the observed pre-fix behavior.
-        assertTrue("expected density-shrunk width (~67), got $size", size in 60..75)
+        // Native 200px, NOT the pre-fix density-shrunk ~67px.
+        assertTrue("expected native width (~200), got $size", size in 180..220)
     }
 
     /** (b) Query survives byte-for-byte through Aztec's fromHtml→toHtml. Capture the literal form. */

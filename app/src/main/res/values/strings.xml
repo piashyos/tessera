@@ -255,4 +255,6 @@
     <string name="share_search_notes">Search notes</string>
     <string name="share_text_placeholder">Shared text</string>
     <string name="share_tags_label">Tags</string>
+    <string name="image_resize_handle_description">Resize image</string>
+    <string name="image_rotate_button_description">Rotate image 90 degrees</string>
 </resources>

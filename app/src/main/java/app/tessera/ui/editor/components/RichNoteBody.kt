@@ -30,8 +30,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
@@ -146,6 +148,8 @@ data class SelectedImage(
     val rect: Rect,
     val wPercent: Int,
     val rotDegrees: Int,
+    /** Px width the image renders at 100% (invariant across a resize drag; changes on rotate). */
+    val defaultWidthPx: Int,
 )
 
 /**
@@ -185,12 +189,14 @@ fun selectImageAt(editor: AztecText, x: Float, y: Float): SelectedImage? {
     if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null
     val src = (span.attributes.getValue("src") ?: "").replace("&amp;", "&")
     val ref = parseImageRef(src)
+    val wPercent = ref?.wPercent ?: 100
     return SelectedImage(
         spanStart = spanStart,
         source = src,
         rect = rect,
-        wPercent = ref?.wPercent ?: 100,
+        wPercent = wPercent,
         rotDegrees = ref?.rotDegrees ?: 0,
+        defaultWidthPx = (rect.width * 100f / wPercent).toInt().coerceAtLeast(1),
     )
 }
 
@@ -555,8 +561,95 @@ fun RichNoteBody(
         }
     }
 
+    // --- Image resize/rotate overlay plumbing (composable scope) --------------------------------
+    val loader = imageGetter as? TesseraImageLoader
+    // Last width% previewed during a drag — skip a re-decode when the integer percent didn't move.
+    val previewWidthRef = remember { intArrayOf(-1) }
+
+    fun editorWidthPx(editor: AztecText): Int =
+        editor.maxImagesWidth.takeIf { it > 0 } ?: editor.width.takeIf { it > 0 } ?: DefaultImageWidthPx
+
+    fun spanAt(editor: AztecText, spanStart: Int): AztecImageSpan? =
+        editor.editableText?.getSpans(spanStart, spanStart + 1, AztecImageSpan::class.java)?.firstOrNull()
+
+    // Mirror of the factory's flushHtmlNow at composable scope so overlay commits ride the SAME
+    // markdown write path (works for both the fast-path and block-stack layouts).
+    fun flushEditor() {
+        val editor = editorRef.value ?: return
+        val md = currentHtmlToMarkdown(editor.toHtml())
+        lastLoadedMarkdownRef[0] = md
+        currentOnMarkdownChange(md)
+    }
+
+    // Live resize preview: re-decode the drawable at the dragged width and swap it in (no flush).
+    fun applyResizePreview(signedDx: Float) {
+        val sel = selectedImage.value ?: return
+        val editor = editorRef.value ?: return
+        val newW = dragToWidthPercent(sel.wPercent, signedDx, sel.defaultWidthPx)
+        if (newW == previewWidthRef[0]) return
+        previewWidthRef[0] = newW
+        val newSrc = withWidthPercent(sel.source, newW)
+        caretScope.launch {
+            val drawable = loader?.resolve(newSrc, editorWidthPx(editor)) ?: return@launch
+            val span = spanAt(editor, sel.spanStart) ?: return@launch
+            span.setDrawable(drawable)
+            editor.invalidate()
+            val b = drawable.bounds
+            val cur = selectedImage.value ?: return@launch
+            selectedImage.value = cur.copy(
+                rect = Rect(cur.rect.left, cur.rect.top, cur.rect.left + b.width(), cur.rect.top + b.height()),
+            )
+        }
+    }
+
+    // Persist the resize: write the canonical src into the span, relayout, flush.
+    fun commitResize() {
+        val sel = selectedImage.value ?: return
+        val editor = editorRef.value ?: return
+        val newW = previewWidthRef[0].takeIf { it in 10..100 } ?: sel.wPercent
+        previewWidthRef[0] = -1
+        val newSrc = withWidthPercent(sel.source, newW)
+        val span = spanAt(editor, sel.spanStart) ?: return
+        span.attributes.setValue("src", newSrc)
+        (editor as? FlickerlessAztecText)?.rebuildLayout()
+        flushEditor()
+        val rect = imageSpanRect(editor, sel.spanStart) ?: sel.rect
+        selectedImage.value = sel.copy(
+            source = newSrc,
+            wPercent = newW,
+            rect = rect,
+            defaultWidthPx = (rect.width * 100f / newW).toInt().coerceAtLeast(1),
+        )
+    }
+
+    // Rotate 90° CW: write the canonical src, re-decode the rotated drawable, relayout, flush.
+    fun rotateSelected() {
+        val sel = selectedImage.value ?: return
+        val editor = editorRef.value ?: return
+        val newRot = (sel.rotDegrees + 90) % 360
+        val newSrc = withRotation(sel.source, newRot)
+        val span = spanAt(editor, sel.spanStart) ?: return
+        span.attributes.setValue("src", newSrc)
+        caretScope.launch {
+            loader?.resolve(newSrc, editorWidthPx(editor))?.let { span.setDrawable(it) }
+            (editor as? FlickerlessAztecText)?.rebuildLayout()
+            flushEditor()
+            val rect = imageSpanRect(editor, sel.spanStart) ?: sel.rect
+            selectedImage.value = sel.copy(
+                source = newSrc,
+                rotDegrees = newRot,
+                rect = rect,
+                defaultWidthPx = (rect.width * 100f / sel.wPercent).toInt().coerceAtLeast(1),
+            )
+        }
+    }
+
+    val resizeDesc = stringResource(R.string.image_resize_handle_description)
+    val rotateDesc = stringResource(R.string.image_rotate_button_description)
+
+    Box(modifier) {
     AndroidView(
-        modifier = modifier.bringIntoViewRequester(bringIntoViewRequester),
+        modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
         factory = { context ->
             var debounceRunnable: Runnable? = null
             var serifRunnable: Runnable? = null
@@ -945,4 +1038,15 @@ fun RichNoteBody(
             }
         },
     )
+        selectedImage.value?.let { sel ->
+            ImageSelectionOverlay(
+                rect = sel.rect,
+                onResizeDelta = { applyResizePreview(it) },
+                onResizeCommit = { commitResize() },
+                onRotate = { rotateSelected() },
+                resizeContentDescription = resizeDesc,
+                rotateContentDescription = rotateDesc,
+            )
+        }
+    }
 }
