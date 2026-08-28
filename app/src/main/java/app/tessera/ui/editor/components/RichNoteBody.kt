@@ -753,31 +753,49 @@ fun RichNoteBody(
             editor.setOnFocusChangeListener { _, hasFocus -> currentOnFocusChanged(hasFocus) }
 
             // Tap-to-select an image (editable notes only — a read-only Viewer never gets handles).
-            // A GestureDetector observing single-tap-up: it never consumes the event (the touch
-            // listener returns false) so caret placement / text selection keep working normally.
+            // A tap that lands on an image is CONSUMED so it never places a caret or raises the IME:
+            // editing an image doesn't need the keyboard, and letting it appear would resize/scroll
+            // the editor out from under the overlay frame. If the keyboard is already up, we hide it
+            // on select. A tap that misses an image is NOT consumed, so caret placement / text
+            // selection keep working normally.
             if (editable) {
+                var imageTapConsumed = false
+                val imm = editor.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                    as android.view.inputmethod.InputMethodManager
                 val tapDetector = GestureDetector(
                     editor.context,
                     object : GestureDetector.SimpleOnGestureListener() {
                         override fun onSingleTapUp(e: MotionEvent): Boolean {
-                            selectImageAt(editor, e.x, e.y)?.let { selectedImage.value = it }
-                                ?: run { selectedImage.value = null }
+                            val hit = selectImageAt(editor, e.x, e.y)
+                            selectedImage.value = hit
+                            if (hit != null) {
+                                imageTapConsumed = true
+                                imm.hideSoftInputFromWindow(editor.windowToken, 0)
+                            }
                             return false
                         }
                     },
                 )
                 editor.setOnTouchListener { _, event ->
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) imageTapConsumed = false
                     tapDetector.onTouchEvent(event)
-                    false
+                    // Consume the whole gesture only when it selected an image (suppresses the caret
+                    // + IME a normal tap on the AztecText would trigger). Misses fall through.
+                    imageTapConsumed
                 }
-                // Keep the overlay glued to the image as the fast-path editor scrolls internally.
-                // The block-stack path is scrolled by the outer Compose scroll; a recompose there
-                // re-reads selectedImage and the overlay's Modifier.offset re-lays-out, so a 1-frame
-                // lag on fast scroll is acceptable (per plan).
-                editor.setOnScrollChangeListener { _, _, _, _, _ ->
-                    val sel = selectedImage.value ?: return@setOnScrollChangeListener
-                    selectedImage.value = imageSpanRect(editor, sel.spanStart)?.let { sel.copy(rect = it) }
+                // Keep the overlay glued to the image across BOTH internal scroll AND layout/resize
+                // (e.g. the keyboard showing or hiding). A resize is not a scroll, so the scroll
+                // listener alone left the frame stale when the IME moved the editor. Writes state
+                // only when the rect actually changed, so it can't loop with recomposition.
+                val syncSelectionRect = {
+                    val sel = selectedImage.value
+                    if (sel != null) {
+                        val r = imageSpanRect(editor, sel.spanStart)
+                        if (r != null && r != sel.rect) selectedImage.value = sel.copy(rect = r)
+                    }
                 }
+                editor.setOnScrollChangeListener { _, _, _, _, _ -> syncSelectionRect() }
+                editor.viewTreeObserver.addOnGlobalLayoutListener { syncSelectionRect() }
             }
 
             // Convert the editor's current HTML to markdown and push it upward. Marks the
