@@ -335,6 +335,33 @@ class MarkdownHtmlConverterTest {
         assertEquals(md, converter.htmlToMarkdown(html))
     }
 
+    @Test fun `parameterized image line round-trips with raw ampersand`() {
+        val md = "before\n![](tessera-img://abc-1?w=50&rot=90)\nafter"
+        val html = converter.markdownToHtml(md)
+        assertTrue(html.contains("<img src=\"tessera-img://abc-1?w=50&amp;rot=90\" />"), "html was: $html")
+        assertEquals(md, converter.htmlToMarkdown(html))
+    }
+
+    @Test fun `bare image line does not gain default params`() {
+        val md = "![](tessera-img://abc-1)"
+        assertEquals(md, converter.htmlToMarkdown(converter.markdownToHtml(md)))
+    }
+
+    @Test fun `parameterized image adjacent to list and blank line round-trips`() {
+        val md = "![](tessera-img://p-1?w=30&rot=180)\n- item\n\n![](tessera-img://p-2?rot=270)"
+        val html = converter.markdownToHtml(md)
+        assertTrue(html.contains("<img src=\"tessera-img://p-1?w=30&amp;rot=180\" />"), "html was: $html")
+        assertTrue(html.contains("<img src=\"tessera-img://p-2?rot=270\" />"), "html was: $html")
+        assertEquals(md, converter.htmlToMarkdown(html))
+    }
+
+    @Test fun `aztec img tag with amp-encoded query decodes to raw ampersand markdown`() {
+        assertEquals(
+            "![](tessera-img://abc-1?w=50&rot=90)",
+            converter.htmlToMarkdown("<img src=\"tessera-img://abc-1?w=50&amp;rot=90\" />"),
+        )
+    }
+
     @Test fun `aztec img tag with extra attributes parses to image markdown`() {
         assertEquals(
             "![](tessera-img://xyz-9)",

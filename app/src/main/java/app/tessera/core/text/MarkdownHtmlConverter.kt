@@ -32,8 +32,12 @@ class MarkdownHtmlConverter {
         /** Matches an HTML line break in any of the forms Aztec / our converter emit. */
         private val BR_TAG = Regex("<br\\s*/?>")
 
-        /** Matches a standalone Drive-backed image reference line, e.g. `![](tessera-img://abc-123)`. */
-        private val IMAGE_LINE = Regex("""^!\[]\(tessera-img://([A-Za-z0-9-]+)\)$""")
+        /**
+         * Matches a standalone Drive-backed image reference line, e.g. `![](tessera-img://abc-123)`
+         * or a parameterized one `![](tessera-img://abc-123?w=50&rot=90)`. Group 1 is the FULL
+         * `tessera-img://…` source including any query.
+         */
+        private val IMAGE_LINE = Regex("""^!\[]\((tessera-img://[A-Za-z0-9-]+(?:\?[^)]*)?)\)$""")
 
         /** Extracts the `src` attribute value from an `<img ...>` tag, ignoring any other attributes. */
         private val IMG_SRC_ATTR = Regex("""src="([^"]*)"""")
@@ -156,8 +160,10 @@ class MarkdownHtmlConverter {
                 // <hr>, <h1>, …) so it self-separates in the emitted HTML and never trips the
                 // <br> phantom-blank-line trap documented above.
                 IMAGE_LINE.matches(line) -> {
-                    val id = IMAGE_LINE.find(line)!!.groupValues[1]
-                    addBlock("<img src=\"tessera-img://$id\" />")
+                    // Group 1 is the full source (stored markdown uses a raw `&`); emit a valid HTML
+                    // attribute by escaping `&`→`&amp;` (Aztec round-trips it in this escaped form).
+                    val src = IMAGE_LINE.find(line)!!.groupValues[1].replace("&", "&amp;")
+                    addBlock("<img src=\"$src\" />")
                     i++
                 }
                 // Plain line — bare inline HTML, no <p> wrapper. An EMPTY line is a blank line the
@@ -433,7 +439,9 @@ class MarkdownHtmlConverter {
         val tagEnd = html.indexOf('>')
         if (tagEnd == -1) return ""
         val tag = html.substring(0, tagEnd + 1)
-        val src = IMG_SRC_ATTR.find(tag)?.groupValues?.get(1).orEmpty()
+        // Decode `&amp;`→`&` so the STORED markdown keeps the canonical raw-`&` form (Aztec's
+        // toHtml hands the query back HTML-escaped).
+        val src = IMG_SRC_ATTR.find(tag)?.groupValues?.get(1).orEmpty().replace("&amp;", "&")
         lines.add("![]($src)")
         return html.substring(tagEnd + 1)
     }
