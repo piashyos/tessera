@@ -7,7 +7,7 @@
 ## Decisions
 
 - **Interaction:** tap image → selection outline + 4 corner handles + a rotate button (variant B — draggable handles, not a toolbar/sheet). Tap outside clears the selection.
-- **Size semantics:** width as a **percent of the editor content width** (`w`), 10–100, height derived from the (rotated) aspect ratio. Freshly inserted images are 100%. Percent (not pixels) so it renders identically across screen sizes and syncs cleanly.
+- **Size semantics:** `w` (10–100) is a **percent of the image's fitted display width** (`min(rotatedSrcWidth, maxWidth)`), NOT of the raw editor width — so `w=100` reproduces today's rendering and small images are never upscaled (see §2). Height derived from the (rotated) aspect ratio. Percent (not pixels) so it renders identically across screen sizes and syncs cleanly.
 - **Rotation:** `rot ∈ {0, 90, 180, 270}`; each rotate-button tap adds 90°. Applied at **render time** (rotate the decoded bitmap) — the stored Drive file is never re-encoded.
 - **Persistence:** encode both params in the markup ref. They ride the note content through the existing autosave/sync path — **no Room migration, no manifest change.**
 
@@ -52,7 +52,7 @@ tessera-img://<id>?w=<10..100>&rot=<0|90|180|270>
 
 ### 4. Drag-resize + rotate — write through the span, flush through `toHtml`
 - **Mechanism (committed):** a resize/rotate mutates the tapped `AztecImageSpan` **in place** — update its `AztecAttributes` `src` to the new canonical `tessera-img://id?w=..&rot=..` (defaults dropped) AND swap its drawable (re-decoded for a new `rot`, re-bounded for a new `w`) — then call the existing `flushHtmlNow()`. That runs `editor.toHtml()` → the span serializes with the new `src` → `htmlToMarkdown` → `onMarkdownChange(md)`. This is the SAME path `insertImage` (`RichNoteBody.kt:779-802`) already uses, so it works for BOTH editor layouts (the fast path writes `state.content`; a block editor writes its block slice back via `joinBlocksIntoMarkdown`). Because `flushHtmlNow` sets `lastLoadedMarkdownRef` before emitting, the ensuing recomposition does NOT trigger a `fromHtml` reload — the mutated span keeps its identity and the selection/scroll are undisturbed.
-- Corner drag: pure `dragToWidthPercent(startPercent, dragDx, editorWidthPx)` → new `w` clamped 10–100 (aspect locked; horizontal delta drives it). Live preview mutates ONLY the drawable bounds + `invalidate()` per frame (no flush); the new `w` is committed to the span + flushed once on release.
+- Corner drag: pure `dragToWidthPercent(startPercent, dragDx, defaultWidthPx)` → new `w` clamped 10–100 (aspect locked; horizontal delta drives it). Map the drag delta against the image's fitted `defaultWidth` (the same basis §2 renders against, i.e. the current drawable width at 100%), NOT the editor width — otherwise the handle tracks the finger poorly on sub-`maxWidth` images. Live preview mutates ONLY the drawable bounds + `invalidate()` per frame (no flush); the new `w` is committed to the span + flushed once on release.
 - Rotate button: `rot = (rot + 90) % 360` → mutate span src + drawable, flush once.
 
 ### 5. Persistence / sync
