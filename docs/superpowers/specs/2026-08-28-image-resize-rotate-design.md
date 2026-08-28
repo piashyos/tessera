@@ -23,7 +23,7 @@ tessera-img://<id>?w=<10..100>&rot=<0|90|180|270>
 - `<id>` is everything between `tessera-img://` and `?`. The manifest/DB key stays the bare id.
 - Markdown line: `![](tessera-img://<id>?w=50&rot=90)`.
 
-**Parse-site audit (verified against the codebase).** The ONLY forward parse of a `tessera-img://…` string taken from note *content* is `TesseraImageLoader.parseImageId` — it must take `substringBefore('?')` (and a new `parseImageRef` splits out `w`/`rot`). The other sites do **not** need changes:
+**Parse-site audit (verified against the codebase).** Two sites parse a `tessera-img://…` string out of note *content*, and both are handled by this design: (1) `MarkdownHtmlConverter.IMAGE_LINE` — extended above to capture+re-emit the query; (2) `TesseraImageLoader.parseImageId` — must take `substringBefore('?')`, with a new `parseImageRef` splitting out `w`/`rot`. The remaining sites do **not** need changes:
 - `DriveImageDownloader.download(imageId)` and `ImageUploadWorker` operate on **bare DB ids** (`row.imageId`), never on content strings.
 - `FindOrphanImages.findOrphans` matches `content.contains("tessera-img://" + bareId)`; a query-bearing ref still *contains* the bare marker, so it already matches — add a regression test to lock this in.
 - `MarkdownPreview.IMAGE_REF_LINE` (`tessera-img://[^)]*\)`) is already query-tolerant.
@@ -33,20 +33,21 @@ tessera-img://<id>?w=<10..100>&rot=<0|90|180|270>
 
 ### 1. `MarkdownHtmlConverter` (markup round-trip)
 - Extend `IMAGE_LINE` to allow an optional `?...` query after the id.
-- `markdownToHtml`: emit `<img src="tessera-img://<id>?w=..&rot=..">` verbatim (full source incl. query).
-- `htmlToMarkdown`: already parses only `src` → emit `![](tessera-img://<id>?w=..&rot=..)`. Emit params only when non-default (canonical clean form otherwise) so round-trip is idempotent.
-- Aztec preserves the `src` attribute verbatim across `fromHtml`/`toHtml` (already verified for the bare form) — the query survives.
+- `markdownToHtml`: `IMAGE_LINE` (anchored `^…$`, id class `[A-Za-z0-9-]+`) must also **capture the optional `?query`** and emit the FULL source into `<img src="tessera-img://<id>?w=..&rot=..">` (it currently rebuilds the tag from only the id group — extend it to append the query).
+- `htmlToMarkdown` / `consumeImage`: copies `src` **verbatim** (no default-stripping in the converter). Canonicalization is the write side's job (§4 always writes a canonical `src` with defaults dropped), so an untouched image round-trips as `![](tessera-img://<id>)`. A non-canonical `?w=100&rot=0` from some external client would pass through unchanged and render identically — harmless, not corrected here.
+- Aztec preserves the `src` attribute verbatim across `fromHtml`/`toHtml` (verified for the bare form; the query-bearing form is confirmed by the step-0 spike).
 
 ### 2. `TesseraImageLoader` (render)
 - New pure helper `parseImageRef(source): { id, wPercent, rotDegrees }` (`w` default 100, `rot` default 0; clamps/validates). Row/file lookups use `id`.
 - `decode`: after decoding the file, if `rot != 0` rotate the bitmap via `Matrix` (90/180/270). Aspect ratio for display comes from the **rotated** dimensions.
-- Display width = `round(wPercent/100 * maxWidth)` where `maxWidth` is the width Aztec passes to `loadImage`; height keeps the rotated aspect ratio. `setBounds` accordingly. The synchronous-local delivery (existing) still applies.
+- Display width = `round(wPercent/100 * defaultWidth)` where `defaultWidth = min(rotatedSrcWidth, maxWidth)` — i.e. `w` is a percent of the image's CURRENT fitted display width, NOT of the raw editor width. So `w=100` reproduces today's rendering exactly (small images are never upscaled; large images still fit to `maxWidth`), and `w=50` is half of that. Height keeps the rotated aspect ratio. `setBounds` accordingly. The synchronous-local delivery (existing) still applies.
 
 ### 3. Tap-to-select + overlay geometry (`RichNoteBody`)
 - **Editable only.** The overlay is gated on the existing `editable` flag (`RichNoteBody(editable = !state.isReadOnly)`). For a Viewer (`editable == false`) the tap listener/overlay are NOT installed — a viewer can't persist a change, so it must get no handles.
-- `editor.setOnImageTappedListener { attrs -> ... }` — resolve the tapped `AztecImageSpan` (its `src` + span start offset).
+- **Tap → exact span by position** (not by `src`). Aztec's `setOnImageTappedListener` hands back attributes, which can't disambiguate two copies of the same `imageId`. Instead detect the tap via the editor's touch position (`editor.getOffsetForPosition(x, y)`) → read the `AztecImageSpan` at that offset from the editable → that yields the exact span instance AND its `spanStart` (`editable.getSpanStart(span)`), disambiguating duplicates. (Implementation: a touch listener / gesture on the editor that hit-tests image spans; falls back to no selection if the tap isn't on an image.)
 - Pure helper `imageSpanScreenRect(editor, spanStart)`: span start → `Layout` line → x/top + the drawable bounds → a `Rect` in the AndroidView's coordinate space (padding/scroll corrected).
-- Lift `SelectedImage(spanStart, source, rect, wPercent, rotDegrees)` into per-instance state (each `RichNoteBody` owns its own selection). Recompute the rect on scroll, IME inset change, and re-render. Tap elsewhere clears it.
+- Lift `SelectedImage(spanStart, source, rect, wPercent, rotDegrees)` into per-instance state (each `RichNoteBody` owns its own selection). Recompute the rect when the view scrolls, on IME inset change, and on re-render. Tap elsewhere clears it.
+  - **Scroll has two sources** (recompute must cover both): the fast path scrolls the `AztecText` internally → observe `editor.setOnScrollChangeListener`; the block-stack path scrolls via the outer Compose `verticalScroll` → observe that scroll state. A duplicate-image note (same id inserted twice) is an explicit test case.
 - Draw the overlay in the Compose `Box` wrapping THIS instance's `AndroidView`: rounded outline, 4 corner handles, one rotate button above the image, positioned from `rect`. Works identically in the fast-path (single editor) and the block-stack path (one `RichNoteBody` per text block) because the overlay is scoped to the instance whose span was tapped.
 
 ### 4. Drag-resize + rotate — write through the span, flush through `toHtml`
