@@ -55,4 +55,21 @@ class WorkManagerImageWorkScheduler @Inject constructor(
             request,
         )
     }
+
+    override fun requestCleanup() {
+        val uid = authRepository.currentUser.value ?: return
+        val request =
+            OneTimeWorkRequestBuilder<ImageCleanupWorker>()
+                .setConstraints(
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+                )
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setInputData(workDataOf(ImageCleanupWorker.KEY_UID to uid.value))
+                .build()
+        workManager.enqueueUniqueWork(
+            ImageCleanupWorker.UNIQUE_NAME,
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            request,
+        )
+    }
 }

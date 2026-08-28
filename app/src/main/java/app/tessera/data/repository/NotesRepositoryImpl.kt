@@ -18,6 +18,8 @@ import app.tessera.domain.model.ShareRole
 import app.tessera.domain.model.UserId
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.repository.SyncScheduler
+import app.tessera.sync.ImageWorkScheduler
+import app.tessera.sync.NoOpImageWorkScheduler
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,6 +35,7 @@ class NotesRepositoryImpl @Inject constructor(
     private val clock: Clock,
     private val syncScheduler: SyncScheduler,
     private val sharedNotes: SharedNotesGateway,
+    private val imageWorkScheduler: ImageWorkScheduler = NoOpImageWorkScheduler,
 ) : NotesRepository {
     override fun observeNotes(): Flow<List<Note>> =
         combine(noteDao.observeActive(), tagDao.observeAllCrossRefs()) { notes, _ -> notes }
@@ -112,6 +115,9 @@ class NotesRepositoryImpl @Inject constructor(
         replaceTags(persisted)
         noteDao.upsert(noteMapper.toEntity(persisted))
         syncScheduler.requestSync()
+        // The save may have removed an image reference from the content, orphaning its row; kick the
+        // cleanup sweep so it stamps (and eventually reclaims) any now-unreferenced image.
+        imageWorkScheduler.requestCleanup()
         return persisted
     }
 

@@ -24,6 +24,10 @@ interface NoteImageDao {
     @Query("SELECT * FROM note_images WHERE ownerUid = :uid")
     suspend fun byOwner(uid: String): List<NoteImageEntity>
 
+    /** Every image row, regardless of owner or status — used by the orphan-cleanup sweep. */
+    @Query("SELECT * FROM note_images")
+    suspend fun all(): List<NoteImageEntity>
+
     @Query("UPDATE note_images SET ownerUid = :uid WHERE ownerUid IS NULL")
     suspend fun backfillOwner(uid: String)
 

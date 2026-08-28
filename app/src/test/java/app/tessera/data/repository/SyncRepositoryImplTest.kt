@@ -574,6 +574,79 @@ class SyncRepositoryImplTest {
             assertNull(noteDao.getById("s1")?.deletedAt)
             assertEquals(NoteEntity.SHARE_STATE_SHARED, noteDao.getById("s1")?.shareState)
         }
+
+    private fun imageRow(
+        imageId: String,
+        noteId: String,
+        status: ImageStatus,
+        driveFileId: String? = "drive-$imageId",
+        ownerUid: String? = "owner-x",
+    ) = NoteImageEntity(
+        imageId = imageId,
+        noteId = noteId,
+        ownerUid = ownerUid,
+        localPath = null,
+        driveFileId = driveFileId,
+        status = status,
+        width = 10,
+        height = 10,
+    )
+
+    @Test
+    fun `mergeRemoteShared marks a vanished live shared note's images ACCESS_LOST`() =
+        runTest {
+            // A shared note we're a live member of dropping out of the membership-filtered snapshot
+            // means our access was revoked — protect the owner's image rows instead of deleting them.
+            val noteDao = SyncFakeNoteDao()
+            val images = SyncFakeNoteImageDao()
+            val repo = create(noteDao = noteDao, noteImageDao = images)
+            noteDao.upsert(
+                entity("s1", syncedAt = 1L) // live: deletedAt == null
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "EDITOR"),
+            )
+            images.upsert(imageRow("img-1", "s1", ImageStatus.UPLOADED))
+
+            repo.mergeRemoteShared(uid, emptyList()) // s1 removed from the member set
+
+            assertNull(noteDao.getById("s1"))
+            assertEquals(ImageStatus.ACCESS_LOST, images.byId("img-1")?.status)
+        }
+
+    @Test
+    fun `mergeRemoteShared leaves images alone for a delete-for-all tombstone`() =
+        runTest {
+            // A genuine document delete arrives as an in-snapshot tombstone (we're still a member);
+            // it must NOT mark images ACCESS_LOST — the normal orphan flow reclaims them later.
+            val noteDao = SyncFakeNoteDao()
+            val images = SyncFakeNoteImageDao()
+            val repo = create(noteDao = noteDao, noteImageDao = images)
+            noteDao.upsert(
+                entity("s1", updatedAt = 1L, syncedAt = 1L)
+                    .copy(shareState = NoteEntity.SHARE_STATE_SHARED, myRole = "EDITOR"),
+            )
+            images.upsert(imageRow("img-1", "s1", ImageStatus.UPLOADED))
+
+            repo.mergeRemoteShared(uid, listOf(sharedRemote("s1", updatedAt = 50L, deletedAt = 50L)))
+
+            assertEquals(ImageStatus.UPLOADED, images.byId("img-1")?.status)
+        }
+
+    @Test
+    fun `mergeRemoteShared restores ACCESS_LOST images status-aware when access is regained`() =
+        runTest {
+            // s1 was evicted earlier; its image rows survived as ACCESS_LOST. Regaining access flips
+            // them back by status: a real Drive file -> UPLOADED, a never-uploaded local -> LOCAL_ONLY.
+            val noteDao = SyncFakeNoteDao()
+            val images = SyncFakeNoteImageDao()
+            val repo = create(noteDao = noteDao, noteImageDao = images)
+            images.upsert(imageRow("uploaded", "s1", ImageStatus.ACCESS_LOST, driveFileId = "drive-1"))
+            images.upsert(imageRow("localonly", "s1", ImageStatus.ACCESS_LOST, driveFileId = null))
+
+            repo.mergeRemoteShared(uid, listOf(sharedRemote("s1")))
+
+            assertEquals(ImageStatus.UPLOADED, images.byId("uploaded")?.status)
+            assertEquals(ImageStatus.LOCAL_ONLY, images.byId("localonly")?.status)
+        }
 }
 
 private class SyncTestClock(
@@ -645,6 +718,8 @@ private class SyncFakeNoteDao : NoteDao {
     override fun observeById(id: String): Flow<NoteEntity?> = MutableStateFlow(notes[id])
 
     override suspend fun getById(id: String): NoteEntity? = notes[id]
+
+    override suspend fun getAll(): List<NoteEntity> = notes.values.toList()
 
     override fun search(query: String): Flow<List<NoteEntity>> = activeFlow
 
@@ -944,6 +1019,8 @@ private class SyncFakeNoteImageDao : NoteImageDao {
 
     override suspend fun byOwner(uid: String): List<NoteImageEntity> =
         rows.values.filter { it.ownerUid == uid }
+
+    override suspend fun all(): List<NoteImageEntity> = rows.values.toList()
 
     override suspend fun backfillOwner(uid: String) {
         rows.entries.forEach { e ->

@@ -58,6 +58,7 @@ class RetryImageUploadUseCaseTest {
             private set
         override fun requestUpload() { uploadRequests++ }
         override fun requestPermissionSync() = Unit
+        override fun requestCleanup() = Unit
     }
 
     private class FakeDao : NoteImageDao {
@@ -68,6 +69,7 @@ class RetryImageUploadUseCaseTest {
         override suspend fun byOwnerAndStatus(uid: String, status: ImageStatus): List<NoteImageEntity> =
             rows.values.filter { it.ownerUid == uid && it.status == status }
         override suspend fun byOwner(uid: String): List<NoteImageEntity> = rows.values.filter { it.ownerUid == uid }
+        override suspend fun all(): List<NoteImageEntity> = rows.values.toList()
         override suspend fun backfillOwner(uid: String) = Unit
         override suspend fun transition(uid: String, from: ImageStatus, to: ImageStatus) = Unit
         override suspend fun delete(imageId: String) { rows.remove(imageId) }

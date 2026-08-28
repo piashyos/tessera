@@ -345,6 +345,8 @@ private class FakeNoteDao : NoteDao {
 
     override suspend fun getById(id: String): NoteEntity? = notes[id]
 
+    override suspend fun getAll(): List<NoteEntity> = notes.values.toList()
+
     override fun search(query: String): Flow<List<NoteEntity>> =
         activeFlow.map { list ->
             val terms = query.split(" ").map { it.removeSuffix("*").lowercase() }

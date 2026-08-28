@@ -382,6 +382,7 @@ class ImageUploadWorkerTest {
         var permissionSyncRequests = 0
         override fun requestUpload() { uploadRequests++ }
         override fun requestPermissionSync() { permissionSyncRequests++ }
+        override fun requestCleanup() = Unit
     }
 
     private class FakeNotifier : ImageUploadNotifier {

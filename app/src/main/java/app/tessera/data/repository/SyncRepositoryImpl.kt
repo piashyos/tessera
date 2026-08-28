@@ -9,6 +9,7 @@ import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.dao.SharedMemberDao
 import app.tessera.data.local.dao.TagDao
 import app.tessera.data.local.entity.FolderEntity
+import app.tessera.data.local.entity.ImageStatus
 import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.local.entity.NoteFolderCrossRef
 import app.tessera.data.local.entity.NoteTagCrossRef
@@ -272,6 +273,35 @@ class SyncRepositoryImpl @Inject constructor(
     }
 
     /**
+     * Marks every image row of a note as [ImageStatus.ACCESS_LOST] (idempotent). Called when our
+     * access to a shared note is revoked so the orphan sweep won't reclaim the owner's images and we
+     * can restore them if we regain access.
+     */
+    private suspend fun markImagesAccessLost(noteId: String) {
+        noteImageDao.byNote(noteId).forEach { row ->
+            if (row.status != ImageStatus.ACCESS_LOST) {
+                noteImageDao.upsert(row.copy(status = ImageStatus.ACCESS_LOST))
+            }
+        }
+    }
+
+    /**
+     * Reverses [markImagesAccessLost] for a note whose access was regained. STATUS-AWARE, never a
+     * blanket flip to UPLOADED: a row with a `driveFileId` is a real uploaded file → [ImageStatus.UPLOADED];
+     * one without is a never-uploaded local image → [ImageStatus.LOCAL_ONLY]. A blanket UPLOADED would
+     * hand a null fileId to the permission worker and the manifest patch.
+     */
+    private suspend fun restoreAccessLostImages(noteId: String) {
+        noteImageDao.byNote(noteId).forEach { row ->
+            if (row.status == ImageStatus.ACCESS_LOST) {
+                val restored =
+                    if (row.driveFileId != null) ImageStatus.UPLOADED else ImageStatus.LOCAL_ONLY
+                noteImageDao.upsert(row.copy(status = restored))
+            }
+        }
+    }
+
+    /**
      * Merges the set of shared notes the current user is a member of. The snapshot is authoritative
      * about membership, so:
      *  - shared notes that vanished from the snapshot mean the user was removed (or left) — they are
@@ -292,7 +322,19 @@ class SyncRepositoryImpl @Inject constructor(
             noteDao.getSharedNotes()
                 .filter { it.id !in remoteIds && it.myRole != ShareRole.OWNER.name }
                 .forEach { evicted ->
-                    Log.d(TAG, "Evicting shared note removed from member set: ${evicted.id}")
+                    // A LIVE shared note vanishing from the membership-filtered snapshot means our
+                    // access was revoked (removed from the member set) — Firestore silently drops it
+                    // from the query rather than surfacing a per-note PERMISSION_DENIED. Do NOT delete
+                    // its image rows: mark them ACCESS_LOST so the orphan sweep leaves them be and we
+                    // can restore them if re-added (see restoreAccessLostImages). A note that is
+                    // already a local tombstone is a genuine delete/purge, not an access loss — leave
+                    // its images to the normal orphan flow.
+                    if (evicted.deletedAt == null) {
+                        Log.d(TAG, "Shared note ${evicted.id} access lost; marking its images ACCESS_LOST")
+                        markImagesAccessLost(evicted.id)
+                    } else {
+                        Log.d(TAG, "Evicting deleted shared note ${evicted.id}; leaving images to orphan flow")
+                    }
                     noteDao.hardDelete(evicted.id) // CASCADE clears shared_members
                 }
 
@@ -312,6 +354,10 @@ class SyncRepositoryImpl @Inject constructor(
                 }
                 sharedMemberDao.replaceForNote(remoteNote.id, sharedMapper.toMemberEntities(remoteNote))
                 mergeImageManifest(remoteNote.id, remoteNote.images)
+                // A note we can see again (re-added / access regained) may hold ACCESS_LOST image
+                // rows from a prior eviction — restore them so they render and sync again. No-op for
+                // notes that were never lost.
+                restoreAccessLostImages(remoteNote.id)
             }
         }
         // Member sets may have changed for notes I own; reconcile my uploaded images' Drive

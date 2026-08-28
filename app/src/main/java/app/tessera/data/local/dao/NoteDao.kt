@@ -43,6 +43,13 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getById(id: String): NoteEntity?
 
+    /**
+     * Every locally-cached note, including app-trash tombstones (`deletedAt != null`). Used by the
+     * image-orphan sweep to decide which images are still referenced by some note's content.
+     */
+    @Query("SELECT * FROM notes")
+    suspend fun getAll(): List<NoteEntity>
+
     @Query(
         """
         SELECT notes.* FROM notes

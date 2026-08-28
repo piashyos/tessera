@@ -164,6 +164,20 @@ class SyncManager @Inject constructor(
             permissionSyncRequest,
         )
 
+        // Sweep orphaned images daily: stamp images no note references any more and, once past the
+        // 7-day hysteresis, trash them from Drive + drop their rows. The after-save trigger does the
+        // prompt work; this backstops orphans created while offline or by remote deletions.
+        val cleanupRequest =
+            PeriodicWorkRequestBuilder<ImageCleanupWorker>(1, TimeUnit.DAYS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setInputData(workDataOf(ImageCleanupWorker.KEY_UID to uid.value))
+                .build()
+        workManager.enqueueUniquePeriodicWork(
+            ImageCleanupWorker.PERIODIC_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            cleanupRequest,
+        )
+
         remoteJob =
             scope.launch {
                 syncRepository
@@ -182,6 +196,7 @@ class SyncManager @Inject constructor(
         workManager.cancelUniqueWork(DeleteTombstonesWorker.UNIQUE_NAME)
         workManager.cancelUniqueWork(DeleteTombstonesWorker.ONE_TIME_NAME)
         workManager.cancelUniqueWork(ImagePermissionWorker.PERIODIC_NAME)
+        workManager.cancelUniqueWork(ImageCleanupWorker.PERIODIC_NAME)
 
         // On a genuine sign-out, the account's notes were cloud-backed, so drop the local cache —
         // otherwise the signed-in user's notes linger on the device for the next (signed-out or

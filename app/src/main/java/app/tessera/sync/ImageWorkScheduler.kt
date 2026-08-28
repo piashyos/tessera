@@ -15,6 +15,13 @@ interface ImageWorkScheduler {
      * reconciled against their notes' current member sets as soon as possible.
      */
     fun requestPermissionSync()
+
+    /**
+     * Requests an orphan sweep: stamp images no note references any more and, once past the
+     * hysteresis window, trash them from Drive + drop their rows. Triggered after a note is saved
+     * (a removed image reference may have just orphaned a row) and on a periodic schedule.
+     */
+    fun requestCleanup()
 }
 
 /**
@@ -25,4 +32,6 @@ object NoOpImageWorkScheduler : ImageWorkScheduler {
     override fun requestUpload() = Unit
 
     override fun requestPermissionSync() = Unit
+
+    override fun requestCleanup() = Unit
 }
