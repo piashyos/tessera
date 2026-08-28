@@ -341,4 +341,12 @@ class MarkdownHtmlConverterTest {
             converter.htmlToMarkdown("<img id=\"1\" class=\"foo\" src=\"tessera-img://xyz-9\" />"),
         )
     }
+
+    @Test fun `bare object-replacement char is never stored`() {
+        // Simulates an image span that serialized WITHOUT its src (the destructive-corruption path):
+        // Aztec leaves the raw U+FFFC placeholder. It must not survive into stored markdown.
+        val md = converter.htmlToMarkdown("before￼after")
+        assertTrue(!md.contains('￼'), "stored markdown must not contain U+FFFC; got: $md")
+        assertEquals("beforeafter", md)
+    }
 }

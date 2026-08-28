@@ -37,6 +37,9 @@ class MarkdownHtmlConverter {
 
         /** Extracts the `src` attribute value from an `<img ...>` tag, ignoring any other attributes. */
         private val IMG_SRC_ATTR = Regex("""src="([^"]*)"""")
+
+        /** U+FFFC OBJECT REPLACEMENT CHARACTER — Aztec's in-editor media placeholder; never stored. */
+        private const val OBJECT_REPLACEMENT_CHAR = "￼"
     }
 
     // -----------------------------------------------------------------------------------------
@@ -281,7 +284,13 @@ class MarkdownHtmlConverter {
         val separated = normalized.replace(
             Regex("(</ul>|</ol>|</blockquote>|</pre>)\\n(?=[^<\\s])"),
         ) { "${it.groupValues[1]}\n\n" }
-        return parseBlocks(separated).joinToString("\n")
+        // Safety invariant: a bare U+FFFC (OBJECT REPLACEMENT CHARACTER) must NEVER reach stored
+        // markdown. It's purely Aztec's in-editor placeholder for a media span; if it survives to
+        // here it means an image span serialized WITHOUT its `<img src="tessera-img://…">` tag (the
+        // src was lost). Persisting it would replace a good `![](tessera-img://id)` ref with garbage
+        // and — via autosave/sync — overwrite it for every collaborator. Strip it so a failed
+        // serialization degrades to "image missing" instead of corrupting the note.
+        return parseBlocks(separated).joinToString("\n").replace(OBJECT_REPLACEMENT_CHAR, "")
     }
 
     /**
