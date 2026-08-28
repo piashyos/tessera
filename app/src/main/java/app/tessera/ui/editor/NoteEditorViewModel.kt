@@ -61,6 +61,7 @@ class NoteEditorViewModel @Inject constructor(
     private val unshareNoteUseCase: UnshareNoteUseCase,
     private val insertImageUseCase: InsertImageUseCase,
     private val imageLoaderFactory: NoteImageLoaderFactory,
+    private val driveAuthManager: app.tessera.data.drive.DriveAuthManager,
     private val authRepository: AuthRepository,
     private val folderRepository: FolderRepository,
     private val savedStateHandle: SavedStateHandle,
@@ -76,6 +77,14 @@ class NoteEditorViewModel @Inject constructor(
      * decode/download work is cancelled with the ViewModel. The screen hands it to the editor.
      */
     val imageGetter: Html.ImageGetter by lazy { imageLoaderFactory.create(viewModelScope) }
+
+    /**
+     * Consent prompts from the Drive auth flow. A recipient's first image download (or an owner's
+     * first upload) with no cached token makes [DriveAuthManager.accessToken] emit a `PendingIntent`
+     * here; the screen launches it via `StartIntentSenderForResult` to obtain the `drive.file` scope.
+     */
+    val consentRequests: kotlinx.coroutines.flow.SharedFlow<android.app.PendingIntent> =
+        driveAuthManager.consentRequests
 
     /**
      * One-shot stream of newly-inserted imageIds. [insertImage] emits here AFTER

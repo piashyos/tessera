@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import app.tessera.data.images.ImageDownloader
 import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.entity.NoteImageEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -16,16 +17,6 @@ import kotlinx.coroutines.withContext
 import org.wordpress.aztec.Html
 import java.io.File
 import javax.inject.Inject
-
-/**
- * The downloader seam Aztec's image getter delegates to when an image has no local file yet.
- * Chunk 4 / Task 13 supplies the real Drive-backed downloader; until then the DI-provided
- * default returns `null`, which surfaces the "unavailable" placeholder.
- */
-fun interface ImageDownloader {
-    /** Fetch [imageId] to a local file, or return `null` when it can't be retrieved. */
-    suspend fun download(imageId: String): File?
-}
 
 /** Builds a [TesseraImageLoader] bound to a coroutine scope (the owning ViewModel's). */
 interface NoteImageLoaderFactory {

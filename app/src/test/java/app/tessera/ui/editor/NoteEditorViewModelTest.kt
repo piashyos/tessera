@@ -666,6 +666,12 @@ private class FakeEditorRepository(
             unshareNoteUseCase = UnshareNoteUseCase(this),
             insertImageUseCase = InsertImageUseCase(imagesRepo),
             imageLoaderFactory = loaderFactory,
+            driveAuthManager = object : app.tessera.data.drive.DriveAuthManager {
+                override val consentRequests: kotlinx.coroutines.flow.SharedFlow<android.app.PendingIntent> =
+                    kotlinx.coroutines.flow.MutableSharedFlow()
+                override suspend fun accessToken(): String? = null
+                override fun invalidateToken() = Unit
+            },
             authRepository = auth,
             folderRepository = FakeFolderRepository(),
             savedStateHandle = savedState,

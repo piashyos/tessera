@@ -246,6 +246,7 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                 imageGetter = viewModel.imageGetter,
                 onInsertImageUri = viewModel::insertImage,
                 insertedImageIds = viewModel.imageInserts,
+                consentRequests = viewModel.consentRequests,
             )
         }
     }

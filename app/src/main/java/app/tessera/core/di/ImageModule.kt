@@ -1,7 +1,8 @@
 package app.tessera.core.di
 
+import app.tessera.data.images.DriveImageDownloader
+import app.tessera.data.images.ImageDownloader
 import app.tessera.ui.editor.components.DefaultNoteImageLoaderFactory
-import app.tessera.ui.editor.components.ImageDownloader
 import app.tessera.ui.editor.components.NoteImageLoaderFactory
 import dagger.Module
 import dagger.Provides
@@ -12,13 +13,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object ImageModule {
-    /**
-     * No-op downloader until Chunk 4 / Task 13 wires the real Drive-backed [ImageDownloader].
-     * Returning `null` makes the image getter fall through to the "unavailable" placeholder.
-     */
+    /** Real Drive-backed downloader (Chunk 4 / Task 13): fetches recipient images into the cache. */
     @Provides
     @Singleton
-    fun provideImageDownloader(): ImageDownloader = ImageDownloader { null }
+    fun provideImageDownloader(impl: DriveImageDownloader): ImageDownloader = impl
 
     @Provides
     @Singleton

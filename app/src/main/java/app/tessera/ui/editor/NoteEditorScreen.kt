@@ -122,6 +122,7 @@ fun NoteEditorScreen(
     imageGetter: Html.ImageGetter? = null,
     onInsertImageUri: (Uri) -> Unit = {},
     insertedImageIds: Flow<String> = emptyFlow(),
+    consentRequests: Flow<android.app.PendingIntent> = emptyFlow(),
 ) {
     val haptics = rememberHaptics()
     val converter = remember { MarkdownHtmlConverter() }
@@ -220,6 +221,23 @@ fun NoteEditorScreen(
     val currentActions by rememberUpdatedState(actions)
     LaunchedEffect(insertedImageIds) {
         insertedImageIds.collect { imageId -> currentActions?.insertImage(imageId) }
+    }
+
+    // Launch Drive consent prompts: a recipient's first image download (or the owner's first upload)
+    // with no cached token emits a PendingIntent here; StartIntentSenderForResult surfaces the
+    // account/scope chooser. The result is ignored — the next download/upload retry picks up the
+    // freshly-granted token.
+    val consentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { /* token is re-fetched lazily on the next attempt */ }
+    LaunchedEffect(consentRequests) {
+        consentRequests.collect { pendingIntent ->
+            runCatching {
+                consentLauncher.launch(
+                    androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build(),
+                )
+            }
+        }
     }
 
     Box(modifier = modifier.fillMaxSize().testTag(UiTestTags.EditorRoot)) {
