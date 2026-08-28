@@ -1,8 +1,10 @@
 package app.tessera.ui.editor.components
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -100,11 +102,12 @@ class TesseraImageLoader(
         maxWidth: Int,
         minWidth: Int,
     ) {
-        val imageId = parseImageId(source)
-        if (imageId == null) {
+        val ref = parseImageRef(source)
+        if (ref == null) {
             callbacks.onImageFailed()
             return
         }
+        val imageId = ref.id
         val width = maxWidth.takeIf { it > 0 } ?: DEFAULT_MAX_WIDTH
 
         // SYNCHRONOUS local path. Aztec calls loadImage() from fromHtml/setText BEFORE the view is
@@ -116,7 +119,7 @@ class TesseraImageLoader(
         // exactly like the insert-at-caret path that already renders correctly.
         val localFile = conventionLocalFile(imageId)
         if (localFile != null) {
-            val drawable = decode(localFile, width, null)
+            val drawable = decode(localFile, width, null, ref)
             if (drawable != null) {
                 callbacks.onImageLoaded(drawable)
                 return
@@ -130,7 +133,7 @@ class TesseraImageLoader(
         scope.launch {
             val row = runCatching { noteImageDao.byId(imageId) }.getOrNull()
             val fetched = runCatching { downloader.download(imageId) }.getOrNull()
-            val drawable = fetched?.let { f -> withContext(Dispatchers.IO) { decode(f, width, row) } }
+            val drawable = fetched?.let { f -> withContext(Dispatchers.IO) { decode(f, width, row, ref) } }
             if (drawable != null) {
                 callbacks.onImageLoaded(drawable)
             } else {
@@ -148,14 +151,16 @@ class TesseraImageLoader(
     }
 
     /**
-     * Resolve [imageId] to a decoded local drawable for the immediate insert-at-caret path, or
-     * `null` if no local file is available. Runs its disk work off the main thread.
+     * Resolve a `tessera-img://<id>?w=..&rot=..` [source] to a decoded local drawable for the
+     * immediate insert-at-caret and resize/rotate re-decode paths, or `null` if the ref is invalid
+     * or no local file is available. Applies the source's `w`/`rot`. Runs disk work off the main thread.
      */
-    suspend fun resolve(imageId: String, maxWidth: Int): Drawable? {
+    suspend fun resolve(source: String, maxWidth: Int): Drawable? {
+        val ref = parseImageRef(source) ?: return null
         val width = maxWidth.takeIf { it > 0 } ?: DEFAULT_MAX_WIDTH
-        val row = runCatching { noteImageDao.byId(imageId) }.getOrNull()
-        val local = localFileFor(imageId, row) ?: return null
-        return withContext(Dispatchers.IO) { decode(local, width, row) }
+        val row = runCatching { noteImageDao.byId(ref.id) }.getOrNull()
+        val local = localFileFor(ref.id, row) ?: return null
+        return withContext(Dispatchers.IO) { decode(local, width, row, ref) }
     }
 
     /** A tinted tile matching the insert path's placeholder, sized from [maxWidth]/[row]. */
@@ -174,7 +179,7 @@ class TesseraImageLoader(
         return stored.takeIf { it.exists() }
     }
 
-    private fun decode(file: File, maxWidth: Int, row: NoteImageEntity?): Drawable? {
+    private fun decode(file: File, maxWidth: Int, row: NoteImageEntity?, ref: ImageRef): Drawable? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
         val srcW = bounds.outWidth.takeIf { it > 0 } ?: row?.width ?: return null
@@ -182,9 +187,35 @@ class TesseraImageLoader(
         var sample = 1
         while (srcW / (sample * 2) >= maxWidth) sample *= 2
         val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        val bitmap = BitmapFactory.decodeFile(file.absolutePath, opts) ?: return null
+        var bitmap = BitmapFactory.decodeFile(file.absolutePath, opts) ?: return null
+
+        // Rotate first so w% applies to the rotated orientation.
+        if (ref.rotDegrees != 0) {
+            val matrix = Matrix().apply { postRotate(ref.rotDegrees.toFloat()) }
+            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        }
+        val rotatedW = bitmap.width
+        val rotatedH = bitmap.height
+
+        // Size by SCALING THE BITMAP — Aztec's adjustBounds recomputes span width from the drawable's
+        // intrinsic size after measurement (min(intrinsicWidth, paragraphWidth)), IGNORING setBounds
+        // (verified by AztecImageParamSpikeTest). w=100 maps to the width the image would render at
+        // untreated (min(native, maxWidth)); w<100 scales down from there.
+        val defaultWidth = minOf(rotatedW, maxWidth)
+        val targetWidth = Math.round(ref.wPercent / 100f * defaultWidth).coerceAtLeast(1)
+        val targetHeight = Math.round(targetWidth * rotatedH.toFloat() / rotatedW).coerceAtLeast(1)
+        if (targetWidth != rotatedW) {
+            bitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        }
+        // DENSITY_NONE makes BitmapDrawable(null, bitmap).intrinsicWidth == the raw pixel width, so
+        // the on-screen span width == targetWidth on EVERY device density (a decoded bitmap otherwise
+        // carries the device density and Aztec would render it at width*160/density — 1/3 on xxhdpi;
+        // see AztecImageParamSpikeTest.currentDecodePathShrinksByDensity_documented).
+        bitmap.density = Bitmap.DENSITY_NONE
         val drawable = BitmapDrawable(null, bitmap)
-        setDisplayBounds(drawable, srcW, srcH, maxWidth)
+        // setBounds is harmless (and correct for the brief pre-measurement window); the intrinsic
+        // size is what sticks post-measure.
+        drawable.setBounds(0, 0, targetWidth, targetHeight)
         return drawable
     }
 

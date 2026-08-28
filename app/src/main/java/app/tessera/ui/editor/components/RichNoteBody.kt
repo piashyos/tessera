@@ -790,7 +790,7 @@ fun RichNoteBody(
                         // Resolve the just-stored local file to a drawable off the main thread; fall
                         // back to a loading tile if it isn't decodable yet (the ImageGetter will
                         // re-resolve on the next reload).
-                        val drawable = loader?.resolve(imageId, width)
+                        val drawable = loader?.resolve("tessera-img://$imageId", width)
                             ?: loader?.loadingPlaceholder(width, null)
                             ?: android.graphics.drawable.ColorDrawable(android.graphics.Color.LTGRAY)
                                 .apply { setBounds(0, 0, width, width * 9 / 16) }
