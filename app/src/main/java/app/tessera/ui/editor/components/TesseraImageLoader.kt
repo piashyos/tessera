@@ -74,19 +74,29 @@ class TesseraImageLoader(
             return
         }
         val width = maxWidth.takeIf { it > 0 } ?: DEFAULT_MAX_WIDTH
+
+        // SYNCHRONOUS local path. Aztec calls loadImage() from fromHtml/setText BEFORE the view is
+        // measured, then measures the image span once. A drawable delivered LATER (async) only calls
+        // setDrawable + post{invalidate} — it does NOT re-measure the text — so the span keeps the
+        // stale placeholder size and the photo renders as a small tile. Delivering the local drawable
+        // synchronously here (the file lives at filesDir|cacheDir/images/<id>.webp by convention, so
+        // no suspend DB read is needed) makes the span carry the real drawable at first measure —
+        // exactly like the insert-at-caret path that already renders correctly.
+        val localFile = conventionLocalFile(imageId)
+        if (localFile != null) {
+            val drawable = decode(localFile, width, null)
+            if (drawable != null) {
+                callbacks.onImageLoaded(drawable)
+                return
+            }
+        }
+
+        // No local file (recipient before download) → loading tile, then fetch via the downloader.
+        // A downloaded image renders at the placeholder size until the note is reopened (which then
+        // hits the synchronous path above); acceptable for v1.
+        callbacks.onImageLoading(placeholder(width, null, PLACEHOLDER_LOADING))
         scope.launch {
             val row = runCatching { noteImageDao.byId(imageId) }.getOrNull()
-            // Local file already on disk → decode and deliver.
-            val local = localFileFor(imageId, row)
-            if (local != null) {
-                val drawable = withContext(Dispatchers.IO) { decode(local, width, row) }
-                if (drawable != null) {
-                    callbacks.onImageLoaded(drawable)
-                    return@launch
-                }
-            }
-            // Not local yet → show a loading tile and ask the downloader seam.
-            callbacks.onImageLoading(placeholder(width, row, PLACEHOLDER_LOADING))
             val fetched = runCatching { downloader.download(imageId) }.getOrNull()
             val drawable = fetched?.let { f -> withContext(Dispatchers.IO) { decode(f, width, row) } }
             if (drawable != null) {
@@ -95,6 +105,14 @@ class TesseraImageLoader(
                 callbacks.onImageLoaded(placeholder(width, row, PLACEHOLDER_UNAVAILABLE))
             }
         }
+    }
+
+    /** The local `<id>.webp` under filesDir (repository writes) or cacheDir (downloader writes), if present. */
+    private fun conventionLocalFile(imageId: String): File? {
+        val stored = File(File(filesDir, IMAGES_DIR), "$imageId.webp")
+        if (stored.exists()) return stored
+        val cached = File(File(cacheDir, IMAGES_DIR), "$imageId.webp")
+        return cached.takeIf { it.exists() }
     }
 
     /**
