@@ -28,18 +28,22 @@ This de-risks the two unknowns the whole persistence/render approach rests on. D
 **Files:**
 - Test: `app/src/test/java/app/tessera/ui/editor/components/AztecImageParamSpikeTest.kt` (throwaway-style Robolectric test that documents the findings; keep it — it doubles as a regression guard)
 
-- [ ] **Step 1: Write the spike test** — a Robolectric Compose test (mirror `RichNoteBodyFormatFlushTest`: `@RunWith(RobolectricTestRunner)`, `@GraphicsMode(NATIVE)`, `@Config(sdk=[34], qualifiers="w411dp-h891dp-port-xxhdpi")`, `createAndroidComposeRule<ComponentActivity>`). In it:
-  - (a) **Query survival:** build an `AztecText` via the same inflation `RichNoteBody` uses (or `Aztec.Factory.with` + a bare `AztecText`), `editor.fromHtml("<img src=\"tessera-img://abc-1?w=50&rot=90\">")`, then assert `editor.toHtml()` contains `tessera-img://abc-1?w=50&rot=90` verbatim.
-  - (b) **Smaller bounds honored:** create an `AztecImageSpan` (or via `editor.insertImage(drawable, attrs)`) whose drawable bounds are set to a width MUCH smaller than the editor width (e.g. 200px in an 800px-wide editor), then read the span's `getSize(...)` (or measure the editor) and assert the rendered width tracks ~200px, NOT the full editor width.
+> Reviewer note (verified against the Aztec v2.1.7 artifact): `AztecDynamicImageSpan.adjustBounds`, once the editor is measured, RECOMPUTES the drawable bounds from the drawable's **intrinsic** size (clamped to paragraph width) — it IGNORES `setBounds`. So (1) `w%` must be applied by **scaling the decoded bitmap** so its intrinsic width equals the target (Task 3), not via `setBounds`; and (2) the spike must read sizing from a **measured** editor using a real `BitmapDrawable`, and must check the query survives **Aztec's** `fromHtml`→`toHtml` byte-for-byte (a raw `&` in an HTML attribute may re-serialize as `&amp;`).
+
+- [ ] **Step 1: Write the spike test** — a Robolectric Compose test (mirror `RichNoteBodyFormatFlushTest`: `@RunWith(RobolectricTestRunner)`, `@GraphicsMode(NATIVE)`, `@Config(sdk=[34], qualifiers="w411dp-h891dp-port-xxhdpi")`, `createAndroidComposeRule<ComponentActivity>`). Render a real `RichNoteBody` (so the `AztecText` is inflated AND measured), grab `editor = activity.findViewById<AztecText>(R.id.aztec)`, then:
+  - **(a) Bitmap-scaling honored:** `editor.fromHtml` with a `tessera-img://…` image, then via the loader deliver a `BitmapDrawable` whose **bitmap is scaled to 200px wide** (intrinsic width = 200) into an ~800px-wide editor; `rule.waitForIdle()`; assert the span's on-screen width (`imageSpanRect` from Task 8, or `span.getSize(...)` on the laid-out editor) is ~200px, NOT ~800px. This confirms scaling the bitmap (not `setBounds`) drives the size.
+  - **(b) Query survival, byte-for-byte through Aztec:** `editor.fromHtml("<img src=\"tessera-img://abc-1?w=50&rot=90\" />")`, `rule.runOnUiThread { editor.toHtml() }`, assert the result contains the id AND capture EXACTLY how the query comes back — `?w=50&rot=90` vs `?w=50&amp;rot=90` vs params dropped. Record the literal string.
 - [ ] **Step 2: Run it** — `./gradlew :app:testDebugUnitTest --tests 'app.tessera.ui.editor.components.AztecImageParamSpikeTest'`
-- [ ] **Step 3: Record the verdict** in the test's KDoc header:
-  - **(a) passes** → params can live in the `src`; proceed. **(a) fails** → STOP: fall back to DB/manifest storage (rejected spec option B) — escalate to the human before continuing.
-  - **(b) passes** → `w%` renders by setting drawable bounds; no custom span needed. **(b) fails** → Chunk 3 must add a `TesseraImageSpan` subclass overriding `getSize`/`adjustBounds` to honor a stored `w%`; note it here and add that task to Chunk 3 before the overlay work.
+- [ ] **Step 3: Record the verdict** in the test's KDoc header and use it to finalize Chunks 2–3:
+  - **(a) ~200px** → apply `w%` by scaling the bitmap (Task 3 as written); no custom span. **(a) ~800px** → Chunk 3 must add a `TesseraImageSpan : AztecImageSpan` overriding `getSize`/`adjustBounds` to honor a `wPercent` field; add that task before the overlay and have the loader build it.
+  - **(b) `&` preserved** → converter emits/parses `&` directly. **(b) `&amp;`** → Task 4 must emit `&amp;` in `markdownToHtml` and decode `&amp;`→`&` in `consumeImage`; `parseImageRef` must also decode `&amp;`→`&` before splitting (Aztec hands the loader the `&amp;` form). **(b) params dropped** → STOP: fall back to DB/manifest storage (rejected spec option B) — escalate to the human.
 - [ ] **Step 4: Commit** — `git add app/src/test/java/app/tessera/ui/editor/components/AztecImageParamSpikeTest.kt && git commit -m "test(images): Aztec spike — query survival + smaller-bounds sizing"`
 
 ---
 
 ## Chunk 2: Markup + render (`w`/`rot`) — data/render layer
+
+> Task 3's sizing (scale the bitmap) and Task 4's ampersand handling are finalized by the Task 1 spike verdict — apply its (a)/(b) outcomes here.
 
 ### Task 2: `parseImageRef` — split id / w / rot
 
@@ -64,7 +68,9 @@ fun parseImageRef(source: String): ImageRef? {
     val rest = source.removePrefix(SCHEME)
     val id = rest.substringBefore('?')
     if (id.isBlank()) return null
-    val query = rest.substringAfter('?', "")
+    // Aztec's toHtml may hand back the query with `&amp;` (HTML-escaped); decode so splitting works
+    // whether the source came from stored markdown (raw `&`) or from editor.toHtml (`&amp;`).
+    val query = rest.substringAfter('?', "").replace("&amp;", "&")
     val params = query.split('&').mapNotNull {
         val k = it.substringBefore('=', ""); val v = it.substringAfter('=', "")
         if (k.isEmpty()) null else k to v
@@ -84,17 +90,17 @@ Update the existing `parseImageId(source): String?` to `= parseImageRef(source)?
 - Modify: `app/src/main/java/app/tessera/ui/editor/components/TesseraImageLoader.kt` (`loadImage` sync path, `decode`, `setDisplayBounds`)
 - Test: `app/src/test/java/app/tessera/ui/editor/components/TesseraImageLoaderTest.kt` (append)
 
-- [ ] **Step 1: Failing tests** (Robolectric, mirror the existing class): write a 120×200 webp to `filesDir/images/<id>.webp`; then
-  - `loadImage("tessera-img://<id>?rot=90", cb, 800)` → delivered drawable bounds are LANDSCAPE (width>height) — rotation swapped the orientation.
-  - `loadImage("tessera-img://<id>?w=50", cb, 800)` delivers a drawable whose width is half of the `w=100` (bare) case.
-  - `loadImage("tessera-img://<id>?w=100", cb, 800)` matches the bare-ref bounds (no upscale for a sub-800 image → stays native 120 wide, not 800).
+- [ ] **Step 1: Failing tests** (Robolectric, mirror the existing class): write a 120×200 webp to `filesDir/images/<id>.webp`; then assert on the delivered `BitmapDrawable`'s **intrinsic** size (`drawable.intrinsicWidth/intrinsicHeight`) — NOT `bounds` — because the on-screen size is driven by the intrinsic (scaled bitmap) size, per the spike:
+  - `loadImage("tessera-img://<id>?rot=90", cb, 800)` → delivered drawable `intrinsicWidth > intrinsicHeight` (LANDSCAPE — rotation swapped orientation).
+  - `loadImage("tessera-img://<id>?w=50", cb, 800)` → `intrinsicWidth` is half of the `w=100` (bare) case.
+  - `loadImage("tessera-img://<id>?w=100", cb, 800)` → `intrinsicWidth == 120` (native; a sub-800 image is NOT upscaled).
 - [ ] **Step 2: Run → FAIL.**
 - [ ] **Step 3: Implement.**
   - In `loadImage`, parse once: `val ref = parseImageRef(source) ?: run { callbacks.onImageFailed(); return }`. Use `ref.id` for `conventionLocalFile`/DAO; pass `ref` (or its `wPercent`/`rotDegrees`) into `decode`.
   - In `decode`: after decoding `bitmap`, if `ref.rotDegrees != 0` rotate via `Matrix().apply { postRotate(rot.toFloat()) }` + `Bitmap.createBitmap(...)`; compute `rotatedW/rotatedH` from the rotated bitmap.
-  - Replace `setDisplayBounds(drawable, srcW, srcH, maxWidth)` with a `w`-aware version: `defaultWidth = min(rotatedW, maxWidth)`; `targetWidth = round(wPercent/100f * defaultWidth).coerceAtLeast(1)`; `targetHeight = round(targetWidth * rotatedH.toFloat() / rotatedW)`; `drawable.setBounds(0,0,targetWidth,targetHeight)`.
+  - **Size by scaling the bitmap** (NOT `setBounds` — Aztec's `adjustBounds` recomputes from the drawable's intrinsic size after measurement, ignoring bounds): `defaultWidth = min(rotatedW, maxWidth)`; `targetWidth = round(wPercent/100f * defaultWidth).coerceAtLeast(1)`; `targetHeight = round(targetWidth * rotatedH.toFloat() / rotatedW).coerceAtLeast(1)`; if `targetWidth != rotatedW` → `bitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)`. Wrap as `BitmapDrawable(null, bitmap)` so `intrinsicWidth == targetWidth`. (Keep the existing `setBounds` call too — harmless and correct for the pre-measurement window; the intrinsic size is what sticks post-measure.)
   - Thread the `ref` through the async download branch too (same `w`/`rot` applied to a downloaded file).
-- [ ] **Step 4: Run → PASS**, and re-run `TesseraImageLoaderTest` fully (the existing sync-delivery test must stay green).
+- [ ] **Step 4: Run → PASS**, and re-run `TesseraImageLoaderTest` fully (the existing sync-delivery test must stay green). NOTE: this loader-level test proves the intrinsic size is correct; the ON-SCREEN size (Aztec honoring it) is what the Task 1 spike and Task 10 on-device pass confirm.
 - [ ] **Step 5: Commit** — `git add TesseraImageLoader.kt TesseraImageLoaderTest.kt && git commit -m "feat(images): render w% size and 90° rotation from the ref"`
 
 ### Task 4: Converter round-trip for parameterized refs
@@ -103,10 +109,10 @@ Update the existing `parseImageId(source): String?` to `= parseImageRef(source)?
 - Modify: `app/src/main/java/app/tessera/core/text/MarkdownHtmlConverter.kt` (`IMAGE_LINE` regex + the `markdownToHtml` image branch; `consumeImage` needs no change — it copies `src` verbatim)
 - Test: `app/src/test/java/app/tessera/core/text/MarkdownHtmlConverterTest.kt` (append)
 
-- [ ] **Step 1: Failing tests.** `![](tessera-img://abc-1?w=50&rot=90)` round-trips (md→html→md unchanged; html contains `src="tessera-img://abc-1?w=50&rot=90"`); bare `![](tessera-img://abc-1)` still round-trips (defaults NOT added); a parameterized ref adjacent to a bullet list and to a blank line round-trips.
+- [ ] **Step 1: Failing tests.** The STORED markdown always uses a raw `&` (`![](tessera-img://abc-1?w=50&rot=90)`). Assert: this line round-trips through the converter (md→html→md unchanged); bare `![](tessera-img://abc-1)` still round-trips (defaults NOT added); a parameterized ref adjacent to a bullet list and to a blank line round-trips. PLUS an **ampersand-normalization** test derived from the spike (b): if the spike showed Aztec emits `&amp;`, add a test that `htmlToMarkdown("<img src=\"tessera-img://abc-1?w=50&amp;rot=90\" />") == "![](tessera-img://abc-1?w=50&rot=90)"` (the stored form uses raw `&`).
 - [ ] **Step 2: Run → FAIL.**
 - [ ] **Step 3: Implement.** Extend `IMAGE_LINE` to capture the whole `tessera-img://…` payload incl. an optional query, e.g.:
-  `Regex("""^!\[]\((tessera-img://[A-Za-z0-9-]+(?:\?[^)]*)?)\)$""")` — group 1 is the FULL source. In `markdownToHtml`, emit `addBlock("<img src=\"${m.groupValues[1]}\" />")` using that full source (do NOT reconstruct from just the id). `htmlToMarkdown`/`consumeImage` already parse `src` only and emit `![](<src>)` — no change.
+  `Regex("""^!\[]\((tessera-img://[A-Za-z0-9-]+(?:\?[^)]*)?)\)$""")` — group 1 is the FULL source. In `markdownToHtml`, emit `addBlock("<img src=\"$srcForHtml\" />")` where `srcForHtml` is the captured source with `&`→`&amp;` (valid HTML attribute; per spike (b) — skip if the spike showed `&` survives raw). In `consumeImage`/`htmlToMarkdown`, when reading `src`, decode `&amp;`→`&` so the STORED markdown keeps the canonical raw-`&` form. (`IMG_SRC_ATTR` already extracts the `src` value; just `.replace("&amp;", "&")` on it.)
 - [ ] **Step 4: Run the WHOLE converter class** — `./gradlew :app:testDebugUnitTest --tests 'app.tessera.core.text.MarkdownHtmlConverterTest'` — ALL pass (round-trip regressions are this file's known failure mode).
 - [ ] **Step 5: Commit** — `git add MarkdownHtmlConverter.kt MarkdownHtmlConverterTest.kt && git commit -m "feat(text): round-trip tessera-img refs with w/rot query"`
 
@@ -145,7 +151,7 @@ Update the existing `parseImageId(source): String?` to `= parseImageRef(source)?
 
 - [ ] **Step 1: Read** `RichNoteBody.kt` fully (the `AndroidView` factory, `editorRef`, `flushHtmlNow`, the `insertImage` action, the `editable` param). Confirm Aztec's `AztecText.setOnImageTappedListener` / `getOffsetForPosition` signatures against the resolved artifact (or use a touch listener that calls `editor.getOffsetForPosition(x,y)`).
 - [ ] **Step 2: Add selection state.** Introduce `data class SelectedImage(val spanStart: Int, val source: String, val rect: androidx.compose.ui.geometry.Rect, val wPercent: Int, val rotDegrees: Int)` and a `remember { mutableStateOf<SelectedImage?>(null) }` in `RichNoteBody`. GATE everything below on `editable` — when `!editable`, never install the listener and keep selection null.
-- [ ] **Step 3: Detect tap on an image.** On the `AztecText`, install a tap detector (e.g. a `GestureDetector` in an `setOnTouchListener`, careful to `return false` so normal editing still works) that on single-tap-up computes `offset = editor.getOffsetForPosition(x,y)`, reads `editor.editableText.getSpans(offset, offset, AztecImageSpan::class.java).firstOrNull()`; if present → build `SelectedImage` (spanStart via `editable.getSpanStart(span)`, `source` from the span's `attributes.getValue("src")`, `rect` via the Task 8 helper, `wPercent`/`rotDegrees` via `parseImageRef`). A tap NOT on an image clears selection.
+- [ ] **Step 3: Detect tap on an image.** On the `AztecText`, install a tap detector (e.g. a `GestureDetector` in a `setOnTouchListener` that `return false`s so normal editing/caret still work) that on single-tap-up computes `offset = editor.getOffsetForPosition(x,y)`, reads `editor.editableText.getSpans(offset, offset, AztecImageSpan::class.java).firstOrNull()`. **Validate the tap actually landed on the image**, not merely near it: `getOffsetForPosition` snaps to the NEAREST offset even for a tap in whitespace beside/below the image, so compute the span's rect (Task 8 helper) and confirm the tap `(x,y)` is inside it before selecting — otherwise clear the selection. When valid → build `SelectedImage` (spanStart via `editable.getSpanStart(span)`, `source` from `span.attributes.getValue("src")` decoded `&amp;`→`&`, `rect`, `wPercent`/`rotDegrees` via `parseImageRef`).
 - [ ] **Step 4: Compile check** — `./gradlew :app:compileDebugKotlin` (no behavior test yet; verified on-device in Task 10).
 - [ ] **Step 5: Commit** — `git add RichNoteBody.kt && git commit -m "feat(editor): detect image taps to drive a selection (editable only)"`
 
