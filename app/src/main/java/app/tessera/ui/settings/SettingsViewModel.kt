@@ -55,17 +55,27 @@ class SettingsViewModel @Inject constructor(
         val palette: ThemePalette,
         val style: ThemeStyle,
         val amoled: Boolean,
+        val grainEnabled: Boolean,
+        val grainIntensity: Float,
     )
 
+    // The 5-arg color prefs + the 2 grain prefs = 7 flows; nest a 5-way combine inside a 3-way one
+    // to stay within combine's typed arity while keeping it fully type-safe.
     private val themePrefs =
         combine(
-            userPreferences.themeMode,
-            userPreferences.dynamicColor,
-            userPreferences.themePalette,
-            userPreferences.themeStyle,
-            userPreferences.amoled,
-        ) { mode, dynamic, palette, style, amoled ->
-            ThemePrefs(mode, dynamic, palette, style, amoled)
+            combine(
+                userPreferences.themeMode,
+                userPreferences.dynamicColor,
+                userPreferences.themePalette,
+                userPreferences.themeStyle,
+                userPreferences.amoled,
+            ) { mode, dynamic, palette, style, amoled ->
+                ThemePrefs(mode, dynamic, palette, style, amoled, grainEnabled = true, grainIntensity = 0.5f)
+            },
+            userPreferences.grainEnabled,
+            userPreferences.grainIntensity,
+        ) { base, grainEnabled, grainIntensity ->
+            base.copy(grainEnabled = grainEnabled, grainIntensity = grainIntensity)
         }
 
     // languageTag + trash size — paired for the same arity reason as themePrefs.
@@ -92,6 +102,8 @@ class SettingsViewModel @Inject constructor(
                 themePalette = theme.palette,
                 themeStyle = theme.style,
                 amoled = theme.amoled,
+                grainEnabled = theme.grainEnabled,
+                grainIntensity = theme.grainIntensity,
                 languageTag = langTrash.first,
                 trashCount = langTrash.second,
                 syncStatus = sync,
@@ -120,6 +132,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setAmoled(enabled: Boolean) {
         viewModelScope.launch { userPreferences.setAmoled(enabled) }
+    }
+
+    fun setGrainEnabled(enabled: Boolean) {
+        viewModelScope.launch { userPreferences.setGrainEnabled(enabled) }
+    }
+
+    fun setGrainIntensity(intensity: Float) {
+        viewModelScope.launch { userPreferences.setGrainIntensity(intensity) }
     }
 
     fun setLanguage(tag: String) {

@@ -163,6 +163,8 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
                 onSelectPalette = viewModel::setThemePalette,
                 onSelectStyle = viewModel::setThemeStyle,
                 onSetAmoled = viewModel::setAmoled,
+                onSetGrainEnabled = viewModel::setGrainEnabled,
+                onSetGrainIntensity = viewModel::setGrainIntensity,
                 onSelectLanguage = viewModel::setLanguage,
                 onRetrySync = viewModel::onRetrySync,
                 onExport = viewModel::onExport,

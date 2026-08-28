@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -242,7 +243,8 @@ fun NoteEditorScreen(
 
     Box(modifier = modifier.fillMaxSize().testTag(UiTestTags.EditorRoot)) {
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
+            // Transparent so the app-wide background + film grain shows through the editor.
+            containerColor = Color.Transparent,
             topBar = {
                 TesseraTopBar(
                     title = {},
@@ -411,18 +413,12 @@ fun NoteEditorScreen(
                             .imePadding()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     ) {
                         val currentActions = actions
-                        if (currentActions != null && focusedTableGrid == null) {
-                            MarkdownFormatMenu(
-                                expanded = formatMenuExpanded,
-                                activeFormats = activeFormats,
-                                actions = currentActions,
-                                onDismiss = { formatMenuExpanded = false },
-                                modifier = Modifier.align(androidx.compose.ui.Alignment.End),
-                            )
-                        }
+                        // Box anchors the ⋯ block-format panel, which overlays ABOVE the pill as a
+                        // Popup (see MarkdownFormatMenu) rather than growing the bar and compressing
+                        // the editor body above it.
+                        Box {
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
@@ -452,6 +448,16 @@ fun NoteEditorScreen(
                                         focusedTableIdx = target
                                     }
                                 }
+                                val deleteTable: () -> Unit = {
+                                    val idx = focusedTableIdx
+                                    if (idx != null && idx in blocks.indices) {
+                                        val updated = blocks.toMutableList()
+                                        updated.removeAt(idx)
+                                        val joined = joinBlocksIntoMarkdown(updated)
+                                        if (joined != state.content) onContentChange(joined)
+                                        focusedTableIdx = null
+                                    }
+                                }
                                 TableActionsBar(
                                     canRemoveRow = focusedTableGrid.rowCount > 0,
                                     canRemoveColumn = focusedTableGrid.columnCount > 1,
@@ -463,6 +469,7 @@ fun NoteEditorScreen(
                                     onRemoveColumn = { updateTable { it.removeColumn(it.columnCount - 1) } },
                                     onMoveUp = { moveTable(-1) },
                                     onMoveDown = { moveTable(1) },
+                                    onDeleteTable = deleteTable,
                                 )
                             } else {
                                 EditorFormatBar(
@@ -472,6 +479,15 @@ fun NoteEditorScreen(
                                     onToggleMenu = { formatMenuExpanded = !formatMenuExpanded },
                                 )
                             }
+                        }
+                        if (currentActions != null && focusedTableGrid == null) {
+                            MarkdownFormatMenu(
+                                expanded = formatMenuExpanded,
+                                activeFormats = activeFormats,
+                                actions = currentActions,
+                                onDismiss = { formatMenuExpanded = false },
+                            )
+                        }
                         }
                     }
                 }

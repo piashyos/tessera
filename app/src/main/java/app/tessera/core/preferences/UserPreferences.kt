@@ -41,6 +41,18 @@ interface UserPreferences {
     /** Synchronously-readable last [amoled] value, used to seed the UI on (re)creation. */
     val cachedAmoled: Boolean
 
+    /** Whether the app-wide film-grain overlay is painted over every background/surface. */
+    val grainEnabled: Flow<Boolean>
+
+    /** Synchronously-readable last [grainEnabled] value, used to seed the UI on (re)creation. */
+    val cachedGrainEnabled: Boolean
+
+    /** Film-grain strength in 0f..1f (mapped to overlay alpha); only applies while [grainEnabled]. */
+    val grainIntensity: Flow<Float>
+
+    /** Synchronously-readable last [grainIntensity] value, used to seed the UI on (re)creation. */
+    val cachedGrainIntensity: Float
+
     val languageTag: Flow<String>
     val notesViewMode: Flow<NotesViewMode>
 
@@ -52,6 +64,10 @@ interface UserPreferences {
     suspend fun setThemePalette(palette: ThemePalette)
     suspend fun setThemeStyle(style: ThemeStyle)
     suspend fun setAmoled(enabled: Boolean)
+    suspend fun setGrainEnabled(enabled: Boolean)
+
+    /** Persists [intensity], clamped to 0f..1f. */
+    suspend fun setGrainIntensity(intensity: Float)
     suspend fun setLanguageTag(tag: String)
     suspend fun setNotesViewMode(mode: NotesViewMode)
 

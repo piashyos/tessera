@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Remove
 
 /**
@@ -112,6 +113,7 @@ fun TableActionsBar(
     onRemoveColumn: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
+    onDeleteTable: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -142,6 +144,14 @@ fun TableActionsBar(
         TableGroupSeparator()
         TableActionButton(Icons.Rounded.ArrowUpward, R.string.table_move_up, enabled = canMoveUp, onClick = onMoveUp)
         TableActionButton(Icons.Rounded.ArrowDownward, R.string.table_move_down, enabled = canMoveDown, onClick = onMoveDown)
+
+        TableGroupSeparator()
+        TableActionButton(
+            icon = Icons.Rounded.Delete,
+            contentDescriptionRes = R.string.table_delete,
+            tint = MaterialTheme.colorScheme.error,
+            onClick = onDeleteTable,
+        )
     }
 }
 
@@ -162,6 +172,7 @@ private fun TableActionButton(
     icon: ImageVector,
     contentDescriptionRes: Int,
     enabled: Boolean = true,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -169,11 +180,7 @@ private fun TableActionButton(
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
         color = Color.Transparent,
-        contentColor = if (enabled) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-        },
+        contentColor = if (enabled) tint else tint.copy(alpha = 0.38f),
         modifier = Modifier.size(36.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {

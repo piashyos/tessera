@@ -424,6 +424,12 @@ private class FakeUserPreferences : app.tessera.core.preferences.UserPreferences
     override val cachedThemeStyle: app.tessera.core.preferences.ThemeStyle get() = style.value
     override val amoled: Flow<Boolean> get() = amoledFlow
     override val cachedAmoled: Boolean get() = amoledFlow.value
+    private val grainEnabledFlow = MutableStateFlow(true)
+    private val grainIntensityFlow = MutableStateFlow(0.5f)
+    override val grainEnabled: Flow<Boolean> get() = grainEnabledFlow
+    override val cachedGrainEnabled: Boolean get() = grainEnabledFlow.value
+    override val grainIntensity: Flow<Float> get() = grainIntensityFlow
+    override val cachedGrainIntensity: Float get() = grainIntensityFlow.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<NotesViewMode> get() = viewMode
     override val recentSearches: Flow<List<String>> get() = recent
@@ -445,6 +451,14 @@ private class FakeUserPreferences : app.tessera.core.preferences.UserPreferences
 
     override suspend fun setAmoled(enabled: Boolean) {
         amoledFlow.value = enabled
+    }
+
+    override suspend fun setGrainEnabled(enabled: Boolean) {
+        grainEnabledFlow.value = enabled
+    }
+
+    override suspend fun setGrainIntensity(intensity: Float) {
+        grainIntensityFlow.value = intensity.coerceIn(0f, 1f)
     }
 
     override suspend fun setLanguageTag(tag: String) {

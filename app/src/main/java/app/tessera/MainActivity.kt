@@ -18,6 +18,7 @@ import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
 import app.tessera.core.preferences.UserPreferences
 import app.tessera.core.util.CurrentActivityHolder
+import app.tessera.core.ui.theme.GrainOverlay
 import app.tessera.core.ui.theme.TesseraTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -77,6 +78,18 @@ class MainActivity : ComponentActivity() {
             ) {
                 userPreferences.amoled.collect { value = it }
             }
+            val grainEnabled by produceState(
+                initialValue = userPreferences.cachedGrainEnabled,
+                userPreferences,
+            ) {
+                userPreferences.grainEnabled.collect { value = it }
+            }
+            val grainIntensity by produceState(
+                initialValue = userPreferences.cachedGrainIntensity,
+                userPreferences,
+            ) {
+                userPreferences.grainIntensity.collect { value = it }
+            }
 
             val context = LocalContext.current
             LaunchedEffect(languageTag) {
@@ -120,7 +133,9 @@ class MainActivity : ComponentActivity() {
                 style = themeStyle,
                 amoled = amoled,
             ) {
-                TesseraApp()
+                GrainOverlay(enabled = grainEnabled, intensity = grainIntensity) {
+                    TesseraApp()
+                }
             }
         }
     }

@@ -345,15 +345,16 @@ private fun RecentRow(
 
 @Composable
 private fun TagPill(tag: String, onClick: () -> Unit) {
+    val tagColors = app.tessera.core.ui.tessera.rememberTagChipColors(tag)
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(20.dp),
+        color = tagColors.container,
+        contentColor = tagColors.content,
+        shape = androidx.compose.foundation.shape.CircleShape,
         onClick = onClick,
     ) {
         Text(
             text = "#$tag",
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = TesseraSpacing.md, vertical = TesseraSpacing.sm),
         )
     }

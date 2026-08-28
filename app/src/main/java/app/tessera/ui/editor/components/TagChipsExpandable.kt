@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.rememberHaptics
+import app.tessera.core.ui.tessera.rememberTagChipColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
@@ -69,36 +70,37 @@ fun TagChipsExpandable(
             modifier = Modifier
                 .wrapContentWidth(Alignment.Start)
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, alignment = Alignment.Start),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tags.forEach { tag ->
-                // Flat, theme-tinted chip (no glassy gradient). Follows the active palette via
-                // secondaryContainer so it reads cleanly in every theme, light or dark.
+                // Compact pill chip in the tag's own hue (rememberTagChipColors) — same color the
+                // tag shows on the list card and in the filter row. labelSmall text, tight padding,
+                // and a modest inline ✕.
+                val tagColors = rememberTagChipColors(tag)
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    color = tagColors.container,
+                    contentColor = tagColors.content,
                     modifier = Modifier.clip(CircleShape),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.padding(start = 10.dp, end = 3.dp, top = 3.dp, bottom = 3.dp),
                     ) {
-                        Text("#$tag", style = MaterialTheme.typography.labelMedium)
-                        // 28dp is the practical floor for an inline chip affordance — the old
-                        // 20dp box was less than half the Material minimum.
+                        Text("#$tag", style = MaterialTheme.typography.labelSmall)
                         Surface(
                             onClick = { haptics.tick(); onRemoveTag(tag) },
                             shape = CircleShape,
                             color = Color.Transparent,
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(20.dp),
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Rounded.Close,
                                     contentDescription = stringResource(R.string.editor_remove_tag, tag),
-                                    modifier = Modifier.size(14.dp),
+                                    modifier = Modifier.size(12.dp),
                                 )
                             }
                         }
@@ -110,14 +112,14 @@ fun TagChipsExpandable(
                 onClick = { haptics.tick(); onAddTagClick() },
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(26.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = stringResource(R.string.editor_add_tag),
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(15.dp),
                     )
                 }
             }

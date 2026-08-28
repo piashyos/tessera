@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -70,14 +71,18 @@ fun TesseraNoteCard(
     animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
     label = "noteCardColor",
   )
+  val shape = RoundedCornerShape(cornerRadius)
   Surface(
     color = containerColor,
-    shape = RoundedCornerShape(cornerRadius),
+    shape = shape,
     border = null,
     modifier = modifier
       .testTag(TesseraNoteCardTags.Root)
       .fillMaxWidth()
       .heightIn(min = 78.dp)
+      // Clip the touch/indication node to the card shape so the tap ripple stays inside the
+      // rounded corners instead of bleeding into the rectangular bounds.
+      .clip(shape)
       .combinedClickable(
         onClick = onClick,
         onLongClick = {
@@ -124,14 +129,15 @@ fun TesseraNoteCard(
             verticalAlignment = Alignment.CenterVertically,
           ) {
             tags.take(MaxInlineTags).forEach { tag ->
+              val tagColors = rememberTagChipColors(tag)
               Text(
                 text = "#$tag",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = tagColors.content,
                 modifier = Modifier
-                  .clip(RoundedCornerShape(999.dp))
-                  .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                  .padding(horizontal = TesseraSpacing.sm, vertical = 2.dp),
+                  .clip(CircleShape)
+                  .background(tagColors.container)
+                  .padding(horizontal = TesseraSpacing.sm, vertical = 3.dp),
                 maxLines = 1,
               )
             }

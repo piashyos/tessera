@@ -27,6 +27,8 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -39,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +74,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Balance
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Grain
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Palette
@@ -94,6 +98,8 @@ fun SettingsScreen(
     onSelectPalette: (ThemePalette) -> Unit = {},
     onSelectStyle: (app.tessera.core.preferences.ThemeStyle) -> Unit = {},
     onSetAmoled: (Boolean) -> Unit = {},
+    onSetGrainEnabled: (Boolean) -> Unit = {},
+    onSetGrainIntensity: (Float) -> Unit = {},
     onSelectLanguage: (String) -> Unit = {},
     onRetrySync: () -> Unit = {},
     onExport: (OutputStream) -> Unit = {},
@@ -145,7 +151,9 @@ fun SettingsScreen(
             .fillMaxSize()
             .testTag(UiTestTags.SettingsRoot)
             .nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = MaterialTheme.colorScheme.background,
+        // Transparent so the app-wide background + film grain shows through; the settings cards
+        // paint their own opaque surface on top and stay grain-free.
+        containerColor = Color.Transparent,
         topBar = {
             LargeTopAppBar(
                 title = {
@@ -167,8 +175,8 @@ fun SettingsScreen(
                 },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
                 ),
             )
         },
@@ -205,8 +213,12 @@ fun SettingsScreen(
                 AppearanceSection(
                     themeMode = state.themeMode,
                     languageTag = state.languageTag,
+                    grainEnabled = state.grainEnabled,
+                    grainIntensity = state.grainIntensity,
                     onOpenThemeSheet = { showThemeSheet = true },
                     onOpenLanguageSheet = { showLanguageSheet = true },
+                    onSetGrainEnabled = onSetGrainEnabled,
+                    onSetGrainIntensity = onSetGrainIntensity,
                 )
             }
 
@@ -358,8 +370,12 @@ private fun AccountSection(
 private fun AppearanceSection(
     themeMode: ThemeMode,
     languageTag: String,
+    grainEnabled: Boolean,
+    grainIntensity: Float,
     onOpenThemeSheet: () -> Unit,
     onOpenLanguageSheet: () -> Unit,
+    onSetGrainEnabled: (Boolean) -> Unit,
+    onSetGrainIntensity: (Float) -> Unit,
 ) {
     SettingsGroup(label = stringResource(R.string.settings_section_appearance)) {
         SettingsRow(
@@ -374,6 +390,52 @@ private fun AppearanceSection(
             title = stringResource(R.string.settings_section_language),
             onClick = onOpenLanguageSheet,
             trailing = { ValueChevron(languageLabel(languageTag)) },
+        )
+        SettingsDivider()
+        SettingsRow(
+            leadingIcon = Icons.Rounded.Grain,
+            title = stringResource(R.string.settings_grain_title),
+            subtitle = stringResource(R.string.settings_grain_subtitle),
+            onClick = { onSetGrainEnabled(!grainEnabled) },
+            trailing = {
+                Switch(checked = grainEnabled, onCheckedChange = onSetGrainEnabled)
+            },
+        )
+        if (grainEnabled) {
+            GrainIntensityRow(
+                intensity = grainIntensity,
+                onIntensityChange = onSetGrainIntensity,
+            )
+        }
+    }
+}
+
+/**
+ * Intensity slider for the film-grain overlay. Tracks the drag locally for a smooth thumb and only
+ * persists on release (via [Slider.onValueChangeFinished]) so it doesn't spam DataStore mid-drag.
+ * Re-seeds from [intensity] when the persisted value changes elsewhere.
+ */
+@Composable
+private fun GrainIntensityRow(
+    intensity: Float,
+    onIntensityChange: (Float) -> Unit,
+) {
+    var sliderValue by remember(intensity) { mutableStateOf(intensity) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TesseraSpacing.lg, vertical = TesseraSpacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_grain_intensity),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = sliderValue,
+            onValueChange = { sliderValue = it },
+            onValueChangeFinished = { onIntensityChange(sliderValue) },
+            valueRange = 0f..1f,
         )
     }
 }

@@ -124,6 +124,9 @@
     <string name="sync_retry">Повторить</string>
     <string name="settings_section_appearance">Внешний вид</string>
     <string name="settings_theme_sheet_title">Тема</string>
+    <string name="settings_grain_title">Зернистость</string>
+    <string name="settings_grain_subtitle">Лёгкая текстура шума на всех фонах</string>
+    <string name="settings_grain_intensity">Интенсивность</string>
     <string name="settings_palette_section">Палитра акцента</string>
     <string name="settings_palette_warm">Тёплая</string>
     <string name="settings_palette_neutral">Нейтральная</string>
@@ -250,6 +253,7 @@
     <string name="table_remove_column">Удалить столбец</string>
     <string name="table_move_up">Переместить таблицу вверх</string>
     <string name="table_move_down">Переместить таблицу вниз</string>
+    <string name="table_delete">Удалить таблицу</string>
     <!-- Share-sheet target -->
     <string name="share_sheet_title">Сохранить в Tessera</string>
     <string name="share_save">Сохранить заметку</string>

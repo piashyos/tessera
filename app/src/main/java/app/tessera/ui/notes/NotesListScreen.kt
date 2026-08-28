@@ -49,6 +49,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -294,7 +295,9 @@ fun NotesListScreen(
             modifier = modifier
                 .fillMaxSize()
                 .testTag(UiTestTags.NotesListRoot),
-            containerColor = MaterialTheme.colorScheme.background,
+            // Transparent so the app-wide background + film grain (painted by GrainOverlay) shows
+            // through; the note cards paint their own opaque surface on top and stay grain-free.
+            containerColor = Color.Transparent,
             topBar = {
                 Column {
                     TesseraTopBar(

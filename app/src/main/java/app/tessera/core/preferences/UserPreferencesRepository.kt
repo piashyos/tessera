@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.tessera.ui.notes.NotesViewMode
@@ -22,12 +23,18 @@ private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
 private val KEY_PALETTE = stringPreferencesKey("theme_palette")
 private val KEY_STYLE = stringPreferencesKey("theme_style")
 private val KEY_AMOLED = booleanPreferencesKey("theme_amoled")
+private val KEY_GRAIN_ENABLED = booleanPreferencesKey("grain_enabled")
+private val KEY_GRAIN_INTENSITY = floatPreferencesKey("grain_intensity")
 private val KEY_LANG = stringPreferencesKey("language_tag")
 private val KEY_VIEW_MODE = stringPreferencesKey("notes_view_mode")
 private val KEY_RECENT_SEARCHES = stringPreferencesKey("recent_searches")
 
 private const val RECENT_SEARCHES_LIMIT = 8
 private const val RECENT_SEARCHES_DELIMITER = "\n"
+
+/** Grain is on by default at a subtle mid strength, matching the Arc-style baseline. */
+private const val DEFAULT_GRAIN_ENABLED = true
+private const val DEFAULT_GRAIN_INTENSITY = 0.5f
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
@@ -77,6 +84,22 @@ class UserPreferencesRepository @Inject constructor(
         p[KEY_AMOLED] ?: false
     }.onEach { lastAmoled = it }
 
+    @Volatile
+    private var lastGrainEnabled: Boolean = DEFAULT_GRAIN_ENABLED
+    override val cachedGrainEnabled: Boolean get() = lastGrainEnabled
+
+    @Volatile
+    private var lastGrainIntensity: Float = DEFAULT_GRAIN_INTENSITY
+    override val cachedGrainIntensity: Float get() = lastGrainIntensity
+
+    override val grainEnabled: Flow<Boolean> = store.data.map { p ->
+        p[KEY_GRAIN_ENABLED] ?: DEFAULT_GRAIN_ENABLED
+    }.onEach { lastGrainEnabled = it }
+
+    override val grainIntensity: Flow<Float> = store.data.map { p ->
+        (p[KEY_GRAIN_INTENSITY] ?: DEFAULT_GRAIN_INTENSITY).coerceIn(0f, 1f)
+    }.onEach { lastGrainIntensity = it }
+
     /** Empty string = follow system default. */
     override val languageTag: Flow<String> = store.data.map { it[KEY_LANG] ?: "" }
 
@@ -109,6 +132,14 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun setAmoled(enabled: Boolean) {
         store.edit { it[KEY_AMOLED] = enabled }
+    }
+
+    override suspend fun setGrainEnabled(enabled: Boolean) {
+        store.edit { it[KEY_GRAIN_ENABLED] = enabled }
+    }
+
+    override suspend fun setGrainIntensity(intensity: Float) {
+        store.edit { it[KEY_GRAIN_INTENSITY] = intensity.coerceIn(0f, 1f) }
     }
 
     override suspend fun setLanguageTag(tag: String) {
