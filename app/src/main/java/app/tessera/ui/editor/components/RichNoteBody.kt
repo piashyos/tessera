@@ -677,6 +677,14 @@ fun RichNoteBody(
                     tapDetector.onTouchEvent(event)
                     false
                 }
+                // Keep the overlay glued to the image as the fast-path editor scrolls internally.
+                // The block-stack path is scrolled by the outer Compose scroll; a recompose there
+                // re-reads selectedImage and the overlay's Modifier.offset re-lays-out, so a 1-frame
+                // lag on fast scroll is acceptable (per plan).
+                editor.setOnScrollChangeListener { _, _, _, _, _ ->
+                    val sel = selectedImage.value ?: return@setOnScrollChangeListener
+                    selectedImage.value = imageSpanRect(editor, sel.spanStart)?.let { sel.copy(rect = it) }
+                }
             }
 
             // Convert the editor's current HTML to markdown and push it upward. Marks the
@@ -930,6 +938,9 @@ fun RichNoteBody(
                     replaceOrderedListSpans(editor, bulletArgb)
                     (editor.text as? Spannable)?.let { applySerifHeadingSpans(it, editor.context) }
                     lastLoadedMarkdownRef[0] = markdownKey
+                    // fromHtml rebuilt every span — a stale spanStart/rect would point at the wrong
+                    // image, so drop any selection and let the user re-tap.
+                    selectedImage.value = null
                 }
             }
         },
