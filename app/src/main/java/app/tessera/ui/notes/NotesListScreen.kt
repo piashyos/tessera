@@ -14,8 +14,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -379,7 +383,10 @@ fun NotesListScreen(
                 )
             },
         ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Only inset the TOP (below the app bar). The content fills to the screen bottom so the
+            // list scrolls behind the transparent nav bar (no empty band under it); the floating
+            // bottom bar and the list's bottom contentPadding handle the nav-bar clearance instead.
+            Box(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
                 NotesBody(
                     state = state,
                     onNoteClick = onNoteClick,
@@ -400,7 +407,7 @@ fun NotesListScreen(
                 )
                 if (!selectionMode) {
                     TesseraBottomActionBar(
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
                         searchQuery = state.query(),
                         onSearchClick = onExpandSearch,
                         onFabClick = onCreateNote,
@@ -426,7 +433,7 @@ fun NotesListScreen(
                     // Batch actions live in a reachable floating toolbar (M3E contextual pattern)
                     // instead of the top-right dead zone.
                     SelectionFloatingToolbar(
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
                         isTrashView = state.isTrashView,
                         onMove = { selectionMovePickerVisible = true },
                         onDelete = {
@@ -711,6 +718,9 @@ private fun NotesBody(
             val sections = groupNotesByDate(state.notes)
             // Pin is a private-only affordance; it never appears in archive/trash/shared views.
             val showPin = !state.isTrashView && !state.isArchiveView && !state.isSharedView
+            // Since the list now extends behind the transparent nav bar, reserve its height at the
+            // bottom (on top of the floating-bar clearance) so the last item can scroll clear.
+            val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
             // Single-open coordination: at most one card is revealed at a time. Opening one card
             // (or scrolling) collapses any other, because every card reads/writes this shared id.
@@ -728,7 +738,7 @@ private fun NotesBody(
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag(UiTestTags.NotesGrid),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp + navBottom),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -770,7 +780,7 @@ private fun NotesBody(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(UiTestTags.NotesGrid),
-                contentPadding = PaddingValues(bottom = 120.dp),
+                contentPadding = PaddingValues(bottom = 120.dp + navBottom),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 sections.forEach { section ->
