@@ -28,13 +28,28 @@ sealed interface ShareTarget {
 }
 
 data class ShareUiState(
+    /** The editable field: for a new note it's the shared text; for an existing note it's the
+     *  shared text followed by that note's current content (so the field shows the final result). */
     val text: String = "",
+    /** The original text from the share intent, kept so switching target can re-derive [text]. */
+    val sharedText: String = "",
     val target: ShareTarget = ShareTarget.NewNote,
     val tags: List<String> = emptyList(),
     val saving: Boolean = false,
     val saved: Boolean = false,
 ) {
     val canSave: Boolean get() = text.isNotBlank() && !saving && !saved
+}
+
+/** Combines the shared text (kept at the START) with an existing note's content. */
+private fun combineSharedWithExisting(sharedText: String, existingContent: String): String {
+    val shared = sharedText.trim()
+    val existing = existingContent.trim()
+    return when {
+        existing.isEmpty() -> shared
+        shared.isEmpty() -> existing
+        else -> "$shared\n\n$existing"
+    }
 }
 
 @HiltViewModel
@@ -68,7 +83,7 @@ class ShareReceiverViewModel @Inject constructor(
     /** Seeds the sheet with the text from the incoming share intent; later calls are no-ops. */
     fun setSharedText(text: String) {
         _uiState.update { state ->
-            if (state.text.isEmpty()) state.copy(text = text) else state
+            if (state.sharedText.isEmpty()) state.copy(sharedText = text, text = text) else state
         }
     }
 
@@ -78,10 +93,19 @@ class ShareReceiverViewModel @Inject constructor(
         pickerQuery.value = value
     }
 
-    fun selectNewNote() = _uiState.update { it.copy(target = ShareTarget.NewNote) }
+    /** Back to a new note: the field is just the shared text again. */
+    fun selectNewNote() = _uiState.update {
+        it.copy(target = ShareTarget.NewNote, text = it.sharedText)
+    }
 
-    fun selectExistingNote(note: Note) =
-        _uiState.update { it.copy(target = ShareTarget.ExistingNote(note.id, note.title)) }
+    /** Adopt an existing note: prefill the field with the shared text (at the start) followed by
+     *  the note's current content with all its markup, so the user sees/edits the final result. */
+    fun selectExistingNote(note: Note) = _uiState.update {
+        it.copy(
+            target = ShareTarget.ExistingNote(note.id, note.title),
+            text = combineSharedWithExisting(it.sharedText, note.content),
+        )
+    }
 
     fun addTag(raw: String) {
         val tag = raw.trim().removePrefix("#").trim()
@@ -114,13 +138,11 @@ class ShareReceiverViewModel @Inject constructor(
                         val draft = createNote()
                         updateNote(draft.copy(content = state.text.trim(), tags = newTags))
                     } else {
+                        // [state.text] already holds the shared text (at the start) plus the note's
+                        // content — as prefilled on selection and possibly edited — so it is the
+                        // full new content, not something to append again.
                         val mergedTags = (existing.tags + newTags).distinctBy { it.name.lowercase() }
-                        updateNote(
-                            existing.copy(
-                                content = existing.content.trimEnd() + "\n\n" + state.text.trim(),
-                                tags = mergedTags,
-                            ),
-                        )
+                        updateNote(existing.copy(content = state.text.trim(), tags = mergedTags))
                     }
                 }
             }

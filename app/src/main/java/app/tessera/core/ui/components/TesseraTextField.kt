@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -24,6 +25,7 @@ fun TesseraTextField(
     modifier: Modifier = Modifier,
     singleLine: Boolean = true,
     imeAction: ImeAction = ImeAction.Default,
+    keyboardType: KeyboardType = KeyboardType.Text,
     onImeAction: () -> Unit = {},
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
@@ -43,17 +45,21 @@ fun TesseraTextField(
             color = MaterialTheme.colorScheme.onSurface,
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        keyboardOptions = KeyboardOptions(imeAction = imeAction),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
         keyboardActions = action,
         decorationBox = { innerTextField ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Single-line fields center their content; multi-line fields top-align it so the text
+            // (and caret) start at the top of the box instead of floating in the vertical middle.
+            val rowAlign = if (singleLine) Alignment.CenterVertically else Alignment.Top
+            val boxAlign = if (singleLine) Alignment.CenterStart else Alignment.TopStart
+            Row(verticalAlignment = rowAlign) {
                 if (leadingIcon != null) {
                     leadingIcon()
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 Box(
                     modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.CenterStart,
+                    contentAlignment = boxAlign,
                 ) {
                     if (value.isEmpty()) {
                         Text(

@@ -18,6 +18,8 @@ object TesseraShape {
   val fab            = RoundedCornerShape(16.dp)
   val fabSmall       = RoundedCornerShape(12.dp)
   val pill           = RoundedCornerShape(999.dp)
+  /** Filled text inputs (single-line and multi-line boxes). Pill/search inputs use [pill]. */
+  val input          = RoundedCornerShape(16.dp)
   val bottomSheetTop = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
   val formatBarTop   = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
 }

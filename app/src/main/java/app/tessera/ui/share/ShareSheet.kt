@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.text.markdownBodyPreviewPlainText
+import app.tessera.core.ui.components.TesseraInputField
 import app.tessera.core.ui.components.TesseraTextField
 import app.tessera.domain.model.Note
 
@@ -142,6 +143,9 @@ private fun ComposePane(
             .padding(horizontal = 20.dp)
             .navigationBarsPadding()
             .imePadding()
+            // Scroll the whole pane so the keyboard shrinking the sheet scrolls the content instead
+            // of compressing the last child (the tags input) to a flattened sliver.
+            .verticalScroll(rememberScrollState())
             .padding(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -186,23 +190,16 @@ private fun ComposePane(
 
         TargetRow(target = state.target, onClick = onPickTarget)
 
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        // Grows with its content (min 120dp) — the pane's own scroll handles overflow, so no
+        // nested same-axis scroll and the text stays top-aligned.
+        TesseraInputField(
+            value = state.text,
+            onValueChange = onTextChange,
+            placeholder = stringResource(R.string.share_text_placeholder),
+            singleLine = false,
+            minHeight = 120.dp,
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            TesseraTextField(
-                value = state.text,
-                onValueChange = onTextChange,
-                placeholder = stringResource(R.string.share_text_placeholder),
-                singleLine = false,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 240.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-            )
-        }
+        )
 
         TagsEditor(tags = state.tags, onAddTag = onAddTag, onRemoveTag = onRemoveTag)
     }

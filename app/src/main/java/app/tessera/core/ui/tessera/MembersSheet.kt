@@ -13,12 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.tessera.R
+import app.tessera.core.ui.components.TesseraInputField
 import app.tessera.core.ui.theme.TesseraSpacing
 import app.tessera.core.ui.theme.colorForUser
 import app.tessera.domain.model.ShareMember
@@ -241,12 +240,12 @@ private fun InviteSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.sm),
         ) {
-            OutlinedTextField(
+            TesseraInputField(
                 value = email,
                 onValueChange = { email = it; onInputChanged() },
+                placeholder = stringResource(R.string.members_invite_hint),
                 singleLine = true,
-                placeholder = { Text(stringResource(R.string.members_invite_hint)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                keyboardType = KeyboardType.Email,
                 modifier = Modifier
                     .weight(1f)
                     .testTag(MembersSheetTags.InviteField),
