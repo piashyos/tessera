@@ -175,4 +175,40 @@ class TesseraInputConnectionTest {
         assertEquals("xy", h.text.toString())
         assertEquals(1, h.view.selectionStart)
     }
+
+    private val objects = mapOf("divider" to "---", "image" to "![](tessera-img://p-1)", "table" to "| A |\n| --- |\n| 1 |")
+
+    /**
+     * Gboard (as AOSP LatinIME) moves the caret to the end of the selected object and then sends `deleteSurroundingText(1, 0)`:
+     * the second Backspace must delete the object, not select it again (the endless loop found on the device).
+     */
+    @Test
+    fun theSecondBackspaceOfAnImeDeletesTheObjectAtEveryPositionAndKind() {
+        for ((name, obj) in objects) for ((where, md, expected) in listOf(
+            Triple("start", "$obj\nbody", "body"),
+            Triple("middle", "above\n$obj\nbody", "above\nbody"),
+            Triple("end", "above\n$obj", "above"),
+            Triple("only", obj, ""),
+        )) {
+            val h = HostFixture(md)
+            val ps = h.text.toString().indexOf('\uFFFC')
+            if (where == "end" || where == "only") h.select(ps, ps + 1) else { h.caret(h.at("body")); h.ic().deleteSurroundingText(1, 0) }
+            assertEquals("$name/$where: the first Backspace selects the object", ps to ps + 1, h.view.selectionStart to h.view.selectionEnd)
+            val ic = h.ic()
+            ic.setSelection(ps + 1, ps + 1) // the IME's own step before the delete
+            assertEquals(true, ic.deleteSurroundingText(1, 0))
+            assertEquals("$name/$where", expected, h.md())
+            assertEquals("$name/$where: no object left", -1, h.text.toString().indexOf('\uFFFC'))
+        }
+    }
+
+    /** The same state reached by the hardware key: the caret after the object deletes it too. */
+    @Test
+    fun theCaretAfterAnObjectDeletesItOnAnyPath() {
+        val h = HostFixture("above\n---\nbody")
+        val ps = h.at("\uFFFC")
+        h.caret(ps + 1)
+        h.ic().sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+        assertEquals("above\nbody", h.md())
+    }
 }

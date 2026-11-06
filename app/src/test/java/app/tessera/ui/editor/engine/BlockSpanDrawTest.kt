@@ -9,6 +9,7 @@ import android.text.TextPaint
 import app.tessera.core.text.notedoc.NoteMarkdown
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,12 +35,12 @@ class BlockSpanDrawTest {
         fun px(x: Int, y: Int) = bitmap.getPixel(x, y)
     }
 
-    private fun draw(md: String, st: EditorStyle = style): Drawn {
+    private fun draw(md: String, st: EditorStyle = style, spacingExtra: Float = 0f): Drawn {
         val text = DocBinder.build(NoteMarkdown.parse(md), st)
         DocBinder.setObjectWidth(text, width)
         val size = style.bodyTextSizePx
         val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply { textSize = size; color = EngineTestStyle.TEXT }
-        val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width).build()
+        val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width).setLineSpacing(spacingExtra, 1f).build()
         val bitmap = Bitmap.createBitmap(width, layout.height + 4, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -189,5 +190,66 @@ class BlockSpanDrawTest {
         assertEquals(EngineTestStyle.QUOTE_BAR, d.px(1, l.getLineTop(3) + 12))
         assertEquals(EngineTestStyle.QUOTE_FILL, d.px(width - 5, l.getLineBottom(3) - 12))
         assertEquals(Color.WHITE, d.px(width - 5, l.getLineBottom(3) - 5))
+    }
+
+    /** The editor sets `lineSpacingExtra` 4dp: it lands under the descent of every line, so a line's top/bottom are not symmetric around its text. */
+    private val LINE_EXTRA = 8f
+    private val wrapped = "word ".repeat(40).trim()
+
+    /** Rows with ink in the marker column of one layout line. */
+    private fun markerRows(d: Drawn, line: Int, margin: Int = 28): IntRange? {
+        val rows = (d.layout.getLineTop(line) until d.layout.getLineBottom(line)).filter { y -> (0 until margin).any { d.px(it, y) != Color.WHITE } }
+        return if (rows.isEmpty()) null else rows.first()..rows.last()
+    }
+
+    /** The marker of the first, a middle and the last item of a series, also wrapped ones, sits on the first text line: margins do not move it. */
+    @Test
+    fun theMarkerSitsOnTheFirstLineOfItsItemAtEveryPositionInTheSeries() {
+        val size = style.bodyTextSizePx
+        val fm = TextPaint().apply { textSize = size }.fontMetrics
+        for (marker in listOf("- [ ] ", "- [x] ", "- ", "+ ", "1. ")) for (tail in listOf("below", "above")) {
+            val md = if (tail == "below") "above\n${marker}one\n$marker$wrapped\n${marker}two\n$marker$wrapped\nbelow" else "${marker}one\n$marker$wrapped\n${marker}last"
+            val d = draw(md, spacingExtra = LINE_EXTRA)
+            val text = d.layout.text.toString()
+            val items = text.lines().withIndex().filter { it.value.startsWith("one") || it.value.startsWith("two") || it.value.startsWith("word") || it.value.startsWith("last") }
+            var from = 0
+            for ((n, item) in items.withIndex()) {
+                val start = text.indexOf(item.value, from).also { from = it + 1 }
+                val line = d.layout.getLineForOffset(start)
+                val rows = markerRows(d, line)
+                assertNotNull("no marker for item $n of '$marker' in $md", rows)
+                val baseline = d.layout.getLineBaseline(line)
+                val textCenter = baseline + (fm.ascent + fm.descent) / 2f
+                val inkCenter = (rows!!.first + rows.last) / 2f
+                when (marker) {
+                    "1. " -> assertEquals("number baseline, item $n", baseline.toFloat(), rows.last + 1f, 1.5f) // digits and the dot have no descender
+                    "- ", "+ " -> assertTrue("dash/dot inside the x-height band, item $n: $inkCenter vs baseline $baseline", inkCenter < baseline && inkCenter > baseline - size)
+                    else -> assertEquals("checkbox centre, item $n of '$marker' in ${md.take(12)}", textCenter, inkCenter, 1.5f)
+                }
+            }
+        }
+    }
+
+    /** Wrapped quote and mono: bar and fill / background run without a gap from the first line to the last. */
+    @Test
+    fun wrappedQuoteAndMonoAreSolidBlocks() {
+        for ((md, fillX, fill) in listOf(
+            Triple("above\n> $wrapped\nbelow", width - 3, EngineTestStyle.QUOTE_FILL),
+            Triple("above\n```\n$wrapped\n```\nbelow", width - 3, EngineTestStyle.MONO_BG),
+        )) {
+            val d = draw(md, spacingExtra = LINE_EXTRA)
+            val l = d.layout
+            val first = 1
+            val last = l.lineCount - 2
+            assertTrue("wraps", last - first >= 3)
+            val edge = if (md.contains(">")) 10 else 10 + 12 // the outside margin, and for mono the rounded corners
+            for (y in l.getLineTop(first) + edge + 1 until l.getLineBottom(last) - edge - 1) {
+                assertEquals("fill at y=$y in $md", fill, d.px(fillX, y))
+                if (md.contains(">")) assertEquals("bar at y=$y", EngineTestStyle.QUOTE_BAR, d.px(1, y))
+            }
+            // inner lines are as tall as lines of a Body paragraph in the same font
+            val body = draw(wrapped, spacingExtra = LINE_EXTRA).layout
+            for (line in first + 1 until last) assertEquals("inner line $line", body.getLineBottom(1) - body.getLineTop(1), l.getLineBottom(line) - l.getLineTop(line))
+        }
     }
 }

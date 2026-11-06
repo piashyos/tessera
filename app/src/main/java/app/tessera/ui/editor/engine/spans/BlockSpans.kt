@@ -38,6 +38,9 @@ sealed class BlockSpan : MetricAffectingSpan(), LineHeightSpan {
     /** The spacing the last layout pass measured with; `Normalizer.refreshNeighbours` compares it with the neighbours' state. */
     @Volatile internal var baked: Spacing? = null
 
+    /** `(top, ascent)` the first line of the paragraph ended with, to recognise them when StaticLayout carries them into the second line. */
+    private var afterFirstLine: Pair<Int, Int>? = null
+
     internal fun spacing(text: Spanned): Spacing = SpacingRules.of(text, text.getSpanStart(this), style)
 
     /** Margins and paddings (see [Spacing]) go into the height of the first and the last line of the paragraph. */
@@ -48,7 +51,13 @@ sealed class BlockSpan : MetricAffectingSpan(), LineHeightSpan {
         if (s < 0 || e <= s) return // a span collapsed by a deletion, not yet removed by the normalizer, is not a paragraph: it would count twice
         val sp = spacing(t)
         baked = sp
-        if (start <= s) { fm.ascent -= sp.extraTop; fm.top -= sp.extraTop }
+        if (start <= s) {
+            fm.ascent -= sp.extraTop; fm.top -= sp.extraTop
+            afterFirstLine = fm.top to fm.ascent
+        } else if (sp.extraTop != 0 && afterFirstLine == (fm.top to fm.ascent)) {
+            // StaticLayout hands the next line of the paragraph the metrics the first line ended with: take the top margin back
+            fm.ascent += sp.extraTop; fm.top += sp.extraTop
+        }
         if (end >= e) { fm.descent += sp.extraBottom; fm.bottom += sp.extraBottom }
     }
 
@@ -91,7 +100,7 @@ class HeadingSpan(override val kind: ParagraphKind, override val style: EditorSt
 
     private fun apply(p: TextPaint) {
         p.textSize = size
-        if (serif) p.typeface = style.serifTypeface ?: Typeface.SERIF else p.fontVariationSettings = "'wght' 600"
+        p.typeface = if (serif) style.serifTypeface ?: Typeface.SERIF else Weighted.of(p.typeface, 600)
     }
 
     override fun restyled(style: EditorStyle) = HeadingSpan(kind, style)
@@ -129,9 +138,8 @@ class ListItemSpan(override val kind: ParagraphKind.ListItem, override val style
         if (!first) return
         val size = style.checkboxSizePx
         val left = if (dir > 0) x + kind.level * style.listLevelStepPx else x - kind.level * style.listLevelStepPx - size
-        val sp = baked
-        val last = end >= ((text as? Spanned)?.getSpanEnd(this) ?: Int.MAX_VALUE)
-        val cy = ((top + (sp?.extraTop ?: 0)) + (bottom - (if (last) sp?.extraBottom ?: 0 else 0))) / 2f // the middle of the text line, not of the margins
+        val fm = p.fontMetrics
+        val cy = baseline + (fm.ascent + fm.descent) / 2f // the middle of the first text line: margins of the series do not move it
         when (kind.type) {
             ListType.Check -> {
                 checkbox.setBounds(left.toInt(), (cy - size / 2).toInt(), (left + size).toInt(), (cy + size / 2).toInt())
@@ -149,14 +157,14 @@ class ListItemSpan(override val kind: ParagraphKind.ListItem, override val style
 
     private fun drawGlyph(c: Canvas, p: Paint, s: String, anchor: Float, baseline: Int, centered: Boolean) {
         val savedColor = p.color
-        val savedVariation = p.fontVariationSettings
+        val savedTypeface = p.typeface
         val savedAlign = p.textAlign
         p.color = style.accentColor
-        p.fontVariationSettings = "'wght' 500"
+        p.typeface = Weighted.of(savedTypeface, 500)
         p.textAlign = if (centered) Paint.Align.CENTER else Paint.Align.RIGHT
         c.drawText(s, anchor, baseline.toFloat(), p)
         p.color = savedColor
-        p.fontVariationSettings = savedVariation
+        p.typeface = savedTypeface
         p.textAlign = savedAlign
     }
 
@@ -241,4 +249,15 @@ class MonoSpan(override val style: EditorStyle) : BlockSpan(), LeadingMarginSpan
     }
 
     override fun restyled(style: EditorStyle) = MonoSpan(style)
+}
+
+/**
+ * [base] at a variable-font weight. `Paint.fontVariationSettings` builds a new native typeface on every call, and a heading is
+ * measured and a marker drawn over and over (a reflow per keystroke): the typefaces are made once per `(base, weight)`.
+ */
+internal object Weighted {
+    private val cache = java.util.concurrent.ConcurrentHashMap<Pair<Typeface?, Int>, Typeface>()
+
+    fun of(base: Typeface?, weight: Int): Typeface? = cache[base to weight]
+        ?: Paint().apply { typeface = base; fontVariationSettings = "'wght' $weight" }.typeface?.also { cache[base to weight] = it }
 }

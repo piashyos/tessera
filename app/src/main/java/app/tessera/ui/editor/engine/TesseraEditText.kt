@@ -163,6 +163,9 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     init {
+        setEditableFactory(object : Editable.Factory() {
+            override fun newEditable(source: CharSequence): Editable = EngineEditable(source)
+        })
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
             InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
         background = null
@@ -202,8 +205,22 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     /** The Markdown of the document as it is now. */
     fun markdown(): String {
         val t = text ?: return ""
-        return NoteMarkdown.serialize(DocBinder.read(t))
+        return currentMarkdown(t)
     }
+
+    /** The Markdown of [e], serialized again only after the document changed (a history step and an emit would each walk a long note). */
+    private fun currentMarkdown(e: Editable): String {
+        val en = e as? EngineEditable ?: return NoteMarkdown.serialize(DocBinder.read(e))
+        val c = markdownCache
+        if (c != null && c.editable === en && c.version == en.version) return c.markdown
+        val md = NoteMarkdown.serialize(DocBinder.read(e))
+        markdownCache = MarkdownCache(en, en.version, md)
+        return md
+    }
+
+    private class MarkdownCache(val editable: EngineEditable, val version: Int, val markdown: String)
+
+    private var markdownCache: MarkdownCache? = null
 
     /** Emits a pending user edit now (leaving the screen, saving). */
     fun flushPendingEdit() {
@@ -373,7 +390,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     private fun snapshot(e: Editable, s: Int = selectionStart.coerceAtLeast(0), t: Int = selectionEnd.coerceAtLeast(0)) =
-        Snapshot(NoteMarkdown.serialize(DocBinder.read(e)), s, t)
+        Snapshot(currentMarkdown(e), s, t)
 
     private fun now() = SystemClock.uptimeMillis()
 

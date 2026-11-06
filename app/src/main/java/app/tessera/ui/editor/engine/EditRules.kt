@@ -192,9 +192,13 @@ class EditRules(style: EditorStyle) {
         return Sel(afterSentinel(e, ps - 1))
     }
 
-    /** The caret is just after an object (select it) or just before it (the line above is not touched, an empty one goes). */
+    /**
+     * The caret is just after an object (delete it: the caret never gets there by itself, an IME put it there when it moved the caret
+     * to the end of the selected object before its second Backspace, as AOSP LatinIME does) or just before it (the line above is not
+     * touched, an empty one goes).
+     */
     private fun backspaceAtObject(e: Editable, c: Int, ps: Int, pe: Int): Sel {
-        if (c > ps) return Sel(ps, pe)
+        if (c > ps) return Sel(deleteObjectParagraph(e, ps))
         if (ps == 0) return Sel(c)
         val prev = paragraphStart(e, ps - 1)
         if (isObjectParagraph(e, prev)) return Sel(prev, prev + 1)
