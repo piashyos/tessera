@@ -18,6 +18,12 @@ Resume in a new session by reading this file + the plan, then continuing with th
 | 7 | Firebase Auth + Settings | ✅ done | Built on `AuthRepository`/new `AccountRepository`: `AccountSwitchDecision` + `HandleAccountSwitchUseCase`, `SignIn/SignOutUseCase`, `AccountRepositoryImpl` (+ `NoteDao.reassignAllNotes`/`deleteByOwner`), `SettingsState`/`SettingsViewModel`, stateless `SettingsScreen` + `AccountSwitchDialog`, settings nav route + top-capsule entry, en/ru strings. **Live auth wired:** `google-services` plugin enabled (`app/google-services.json` → project `notes-d3abc`), `FirebaseModule` (Auth+Firestore), Credential-Manager `AuthRepositoryImpl` (`GetGoogleIdOption` → Firebase `signInWithCredential`), `CurrentActivityHolder` set from `MainActivity`. JVM tests (`HandleAccountSwitchUseCaseTest`, `SettingsViewModelTest`) pass; instrumented `SettingsScreenTest` compiles (needs emulator). `./gradlew :app:assembleDebug` + `:app:testDebugUnitTest` pass. Manual device sign-in pending verification. |
 | 8 | Firestore sync | ✅ done | TDD-step expansion written in plan. Added `RemoteNote` DTO + `NoteMapper.toRemote`/`toEntity(remote,…)`, `RemoteNotesDataSource` seam + `FirestoreNotesClient` (`users/{uid}/notes`, snapshot listener, tombstone batch-delete). Rewrote `SyncRepository`/`SyncRepositoryImpl`: `syncNow` (push pending non-blank → LWW merge pull), `observeRemote` (listener→merge, race-safe), `purgeTombstones` (30-day local+remote). Added `@HiltWorker` `SyncWorker`/`DeleteTombstonesWorker`, `SyncManager` (observes `currentUser`, enqueues/cancels work + listener), `WorkManagerModule`, `TesseraApplication` `Configuration.Provider` (lazy+guarded sync start), manifest removes default `WorkManagerInitializer`. No DB schema change (v1). Tests: JVM `NoteMapperTest` (remote helpers) + `SyncRepositoryImplTest` (push/pull/LWW/tombstone/race/tags/purge); instrumented `DeleteTombstonesWorkerTest`. `./gradlew :app:testDebugUnitTest` + `:app:assembleDebug` pass; `:app:connectedDebugAndroidTest` — 26 tests pass on emulator. Live multi-device Firestore verification deferred (needs real account + 2 devices). |
 
+### Native editor (Aztec replacement)
+
+| Этап | План | Статус | Заметки |
+|---|---|---|---|
+| 1 «Ядро» | [plans/2026-11-06-native-editor-phase1.md](plans/2026-11-06-native-editor-phase1.md) | ⏳ in progress | спека `specs/2026-11-06-native-editor-design.md`; ветка `feature/native-editor`; за debug-флагом |
+
 Legend: ✅ done · ⏳ in progress · ⬜ pending · ⚠️ blocked
 
 ## How to resume
