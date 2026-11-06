@@ -24,12 +24,18 @@ class BlockSpanDrawTest {
     private val style = EngineTestStyle.create()
     private val width = 400
 
+    /** The same style without the vertical spacing: the shape tests below measure the blocks by their lines. */
+    private val flat = style.copy(
+        titleSpaceTopPx = 0f, titleSpaceBottomPx = 0f, headingSpaceTopPx = 0f, headingSpaceBottomPx = 0f,
+        blockEdgePx = 0f, listItemPaddingPx = 0f, quotePaddingVerticalPx = 0f,
+    )
+
     private class Drawn(val layout: Layout, val bitmap: Bitmap) {
         fun px(x: Int, y: Int) = bitmap.getPixel(x, y)
     }
 
-    private fun draw(md: String): Drawn {
-        val text = DocBinder.build(NoteMarkdown.parse(md), style)
+    private fun draw(md: String, st: EditorStyle = style): Drawn {
+        val text = DocBinder.build(NoteMarkdown.parse(md), st)
         DocBinder.setObjectWidth(text, width)
         val size = style.bodyTextSizePx
         val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply { textSize = size; color = EngineTestStyle.TEXT }
@@ -43,7 +49,7 @@ class BlockSpanDrawTest {
 
     @Test
     fun monoSeriesIsOneBlockRoundedOnlyAtItsEnds() {
-        val d = draw("above\n```\none\ntwo\nthree\n```\nbelow")
+        val d = draw("above\n```\none\ntwo\nthree\n```\nbelow", flat)
         val l = d.layout
         val first = 1; val mid = 2; val last = 3
         // first line: top corners cut, bottom edge joins the next line
@@ -77,7 +83,7 @@ class BlockSpanDrawTest {
 
     @Test
     fun quoteBarAndFillAreContinuousAcrossQuoteParagraphs() {
-        val d = draw("above\n> one\n> two\nbelow")
+        val d = draw("above\n> one\n> two\nbelow", flat)
         val l = d.layout
         for (y in listOf(l.getLineTop(1) + 1, l.getLineBottom(1) - 1, l.getLineTop(2), l.getLineBottom(2) - 1)) {
             assertEquals("bar at y=$y", EngineTestStyle.QUOTE_BAR, d.px(1, y))
@@ -167,5 +173,21 @@ class BlockSpanDrawTest {
         assertTrue((mid - 2..mid + 2).any { d.px(40, it) == EngineTestStyle.DIVIDER })
         val imageTop = l.getLineTop(2)
         assertEquals("frame of the image placeholder", 0xFF999999.toInt(), d.px(30, imageTop + 1))
+    }
+
+    @Test
+    fun theMarginsAroundAMonoSeriesAndAQuoteAreNotPainted() {
+        val d = draw("above\n```\none\n```\nmid\n> q\nbelow")
+        val l = d.layout
+        // mono: 10 outside above (white), then the background; below the same
+        assertEquals(Color.WHITE, d.px(width - 40, l.getLineTop(1) + 5))
+        assertEquals(EngineTestStyle.MONO_BG, d.px(width - 40, l.getLineTop(1) + 12))
+        assertEquals(EngineTestStyle.MONO_BG, d.px(width - 40, l.getLineBottom(1) - 12))
+        assertEquals(Color.WHITE, d.px(width - 40, l.getLineBottom(1) - 5))
+        // quote: the same, bar and fill both start after the margin
+        assertEquals(Color.WHITE, d.px(1, l.getLineTop(3) + 5))
+        assertEquals(EngineTestStyle.QUOTE_BAR, d.px(1, l.getLineTop(3) + 12))
+        assertEquals(EngineTestStyle.QUOTE_FILL, d.px(width - 5, l.getLineBottom(3) - 12))
+        assertEquals(Color.WHITE, d.px(width - 5, l.getLineBottom(3) - 5))
     }
 }

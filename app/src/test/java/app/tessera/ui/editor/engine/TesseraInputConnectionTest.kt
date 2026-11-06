@@ -121,4 +121,58 @@ class TesseraInputConnectionTest {
         h.view.editable = false
         assertNull(h.view.onCreateInputConnection(android.view.inputmethod.EditorInfo()))
     }
+
+    @Test
+    fun deleteSurroundingTextWithAComposingRegionDeletesBeforeTheRegion() {
+        val h = HostFixture("abc")
+        h.caret(3)
+        val ic = h.ic()
+        ic.setComposingText("de", 1) // abc[de]
+        assertEquals("abcde", h.text.toString())
+        ic.deleteSurroundingText(1, 0)
+        assertEquals("the character before the composing region", "abde", h.text.toString())
+        assertEquals("the caret keeps its place after the composing text", 4, h.view.selectionStart)
+        assertEquals("the composing region follows", 2, android.view.inputmethod.BaseInputConnection.getComposingSpanStart(h.text))
+    }
+
+    @Test
+    fun deleteSurroundingTextWithAComposingRegionAtTheStartOfAnItemIsBackspaceThere() {
+        val h = HostFixture("- a\n- ")
+        h.caret(h.text.length)
+        val ic = h.ic()
+        ic.setComposingText("bc", 1)
+        h.select(h.text.length - 1, h.text.length - 1) // the caret in the middle of the word: before the region is the item start
+        ic.deleteSurroundingText(1, 0)
+        assertEquals("the item became Body, the text stayed", "- a\nbc", h.md())
+    }
+
+    @Test
+    fun backspaceDeletesWholeGraphemeClusters() {
+        for ((name, cluster) in listOf(
+            "skin tone" to "\uD83D\uDC4D\uD83C\uDFFD",
+            "flag" to "\uD83C\uDDF7\uD83C\uDDFA",
+            "ZWJ family" to "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67",
+            "keycap" to "1\uFE0F\u20E3",
+            "combining accent" to "e\u0301",
+            "single emoji" to "\uD83D\uDE00",
+        )) {
+            val viaKey = HostFixture("a$cluster")
+            viaKey.caret(viaKey.text.length)
+            viaKey.key(KeyEvent.KEYCODE_DEL)
+            assertEquals("$name via DEL", "a", viaKey.text.toString())
+            val viaIc = HostFixture("a$cluster")
+            viaIc.caret(viaIc.text.length)
+            viaIc.ic().deleteSurroundingText(1, 0)
+            assertEquals("$name via deleteSurroundingText", "a", viaIc.text.toString())
+        }
+    }
+
+    @Test
+    fun backspaceInTheMiddleOfTheTextStopsAtTheClusterBeforeTheCaret() {
+        val h = HostFixture("x\uD83C\uDDF7\uD83C\uDDFAy")
+        h.caret(h.text.length - 1) // between the flag and y
+        h.key(KeyEvent.KEYCODE_DEL)
+        assertEquals("xy", h.text.toString())
+        assertEquals(1, h.view.selectionStart)
+    }
 }

@@ -1,6 +1,7 @@
 package app.tessera.ui.editor.engine
 
 import android.view.KeyEvent
+import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputConnectionWrapper
 
@@ -35,7 +36,12 @@ internal class TesseraInputConnection(target: InputConnection, private val host:
     }
 
     override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
-        if (beforeLength == 1 && afterLength == 0 && host.hasCollapsedSelection() && host.performBackspace()) return true
+        if (beforeLength == 1 && afterLength == 0 && host.hasCollapsedSelection()) {
+            // as BaseInputConnection: the character before the composing region, if there is one, else before the caret
+            val composing = host.text?.let { BaseInputConnection.getComposingSpanStart(it) } ?: -1
+            val sel = host.selectionStart
+            if (host.performBackspace(if (composing in 0 until sel) composing else -1)) return true
+        }
         return super.deleteSurroundingText(beforeLength, afterLength)
     }
 

@@ -64,4 +64,33 @@ class TesseraEditTextLayoutTest {
         h.view.insertHorizontalRule()
         assertLooksFresh("divider", h)
     }
+
+    @Test
+    fun spacingFollowsEnterBackspaceAndKindChangesInTheLiveLayout() {
+        val h = HostFixture("# T\nbody\n## H\n- a\n- b\n> q\n---\nend")
+        h.view.setPadding(0, 0, 0, 0)
+        h.layout()
+        assertLooksFresh("start", h)
+        h.caret(h.at("T") + 1)
+        h.view.performEnter() // Title -> a Body line under it
+        assertLooksFresh("enter after the title", h)
+        h.caret(h.at("body"))
+        h.view.toggleKind(ParagraphKind.Heading) // Body -> Heading: the gaps around it change
+        assertLooksFresh("body -> heading", h)
+        h.caret(h.at("b") + 1)
+        h.view.toggleKind(ParagraphKind.Quote) // the list loses an item, the quote gains one
+        assertLooksFresh("item -> quote", h)
+        h.caret(h.at("q"))
+        h.view.performBackspace() // the first quote line -> Body
+        assertLooksFresh("backspace in a quote", h)
+        h.caret(h.at("end"))
+        h.view.performBackspace() // the Body under the object selects it
+        h.view.performBackspace() // and deletes it
+        assertLooksFresh("object deleted", h)
+        h.caret(h.at("a"))
+        h.view.toggleKind(ParagraphKind.Mono)
+        assertLooksFresh("item -> mono", h)
+        h.view.undo()
+        assertLooksFresh("undo", h)
+    }
 }

@@ -17,7 +17,8 @@ import app.tessera.core.text.notedoc.ParagraphKind
 import app.tessera.ui.editor.components.CheckboxPalette
 import app.tessera.ui.editor.components.TesseraCheckboxDrawable
 import app.tessera.ui.editor.engine.EditorStyle
-import app.tessera.ui.editor.engine.blockSpanAt
+import app.tessera.ui.editor.engine.Spacing
+import app.tessera.ui.editor.engine.SpacingRules
 
 /**
  * Flags of every [BlockSpan]: a paragraph span with a higher priority than the marks, so the heading's typeface and
@@ -30,9 +31,33 @@ const val BLOCK_SPAN_FLAGS = Spanned.SPAN_PARAGRAPH or (1 shl Spanned.SPAN_PRIOR
  * paragraph text together with its trailing `\n` (`SPAN_PARAGRAPH`). A paragraph without a [BlockSpan] is Body.
  * Every subclass is a [MetricAffectingSpan] so the one span can also set text size, typeface and color.
  */
-sealed class BlockSpan : MetricAffectingSpan() {
+sealed class BlockSpan : MetricAffectingSpan(), LineHeightSpan {
     abstract val kind: ParagraphKind
     abstract val style: EditorStyle
+
+    /** The spacing the last layout pass measured with; `Normalizer.refreshNeighbours` compares it with the neighbours' state. */
+    @Volatile internal var baked: Spacing? = null
+
+    internal fun spacing(text: Spanned): Spacing = SpacingRules.of(text, text.getSpanStart(this), style)
+
+    /** Margins and paddings (see [Spacing]) go into the height of the first and the last line of the paragraph. */
+    override fun chooseHeight(text: CharSequence, start: Int, end: Int, spanstartv: Int, lineHeight: Int, fm: Paint.FontMetricsInt) {
+        val t = text as? Spanned ?: return
+        val s = t.getSpanStart(this)
+        val e = t.getSpanEnd(this)
+        if (s < 0 || e <= s) return // a span collapsed by a deletion, not yet removed by the normalizer, is not a paragraph: it would count twice
+        val sp = spacing(t)
+        baked = sp
+        if (start <= s) { fm.ascent -= sp.extraTop; fm.top -= sp.extraTop }
+        if (end >= e) { fm.descent += sp.extraBottom; fm.bottom += sp.extraBottom }
+    }
+
+    /** The first line starts, the last line ends, [Spacing] outside the block (not painted by a background). */
+    internal fun outside(text: CharSequence, start: Int, end: Int): Pair<Int, Int> {
+        val t = text as? Spanned ?: return 0 to 0
+        val sp = baked ?: return 0 to 0
+        return (if (start <= t.getSpanStart(this)) sp.gapTop else 0) to (if (end >= t.getSpanEnd(this)) sp.gapBottom else 0)
+    }
 
     /** The same paragraph data painted with another theme (`DocBinder.reapplyTheme`). */
     abstract fun restyled(style: EditorStyle): BlockSpan
@@ -104,7 +129,9 @@ class ListItemSpan(override val kind: ParagraphKind.ListItem, override val style
         if (!first) return
         val size = style.checkboxSizePx
         val left = if (dir > 0) x + kind.level * style.listLevelStepPx else x - kind.level * style.listLevelStepPx - size
-        val cy = (top + bottom) / 2f
+        val sp = baked
+        val last = end >= ((text as? Spanned)?.getSpanEnd(this) ?: Int.MAX_VALUE)
+        val cy = ((top + (sp?.extraTop ?: 0)) + (bottom - (if (last) sp?.extraBottom ?: 0 else 0))) / 2f // the middle of the text line, not of the margins
         when (kind.type) {
             ListType.Check -> {
                 checkbox.setBounds(left.toInt(), (cy - size / 2).toInt(), (left + size).toInt(), (cy + size / 2).toInt())
@@ -160,17 +187,20 @@ class QuoteSpan(override val style: EditorStyle) : BlockSpan(), LeadingMarginSpa
         c: Canvas, p: Paint, left: Int, right: Int, top: Int, baseline: Int, bottom: Int,
         text: CharSequence, start: Int, end: Int, lnum: Int,
     ) {
+        val (above, below) = outside(text, start, end)
+        val t = (top + above).toFloat()
+        val b = (bottom - below).toFloat()
         paint.color = style.quoteFillColor
-        c.drawRect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat(), paint)
+        c.drawRect(left.toFloat(), t, right.toFloat(), b, paint)
         paint.color = style.quoteBarColor
-        c.drawRect(left.toFloat(), top.toFloat(), left + style.quoteBarWidthPx, bottom.toFloat(), paint)
+        c.drawRect(left.toFloat(), t, left + style.quoteBarWidthPx, b, paint)
     }
 
     override fun restyled(style: EditorStyle) = QuoteSpan(style)
 }
 
 /** Mono: monospace on a rounded block; the corners are rounded only at the first and last line of a series. */
-class MonoSpan(override val style: EditorStyle) : BlockSpan(), LeadingMarginSpan, LineBackgroundSpan, LineHeightSpan {
+class MonoSpan(override val style: EditorStyle) : BlockSpan(), LeadingMarginSpan, LineBackgroundSpan {
     override val kind: ParagraphKind get() = ParagraphKind.Mono
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.style = Paint.Style.FILL }
     private val rect = RectF()
@@ -191,58 +221,24 @@ class MonoSpan(override val style: EditorStyle) : BlockSpan(), LeadingMarginSpan
         text: CharSequence, start: Int, end: Int, first: Boolean, l: Layout,
     ) = Unit
 
-    override fun chooseHeight(text: CharSequence, start: Int, end: Int, spanstartv: Int, lineHeight: Int, fm: Paint.FontMetricsInt) {
-        val (first, last) = edges(text, start, end)
-        (text as? Spanned)?.let { bakedSeriesEdges = seriesEdges(it) }
-        val pad = style.monoPaddingVerticalPx.toInt()
-        if (first) { fm.ascent -= pad; fm.top -= pad }
-        if (last) { fm.descent += pad; fm.bottom += pad }
-    }
-
     override fun drawBackground(
         c: Canvas, p: Paint, left: Int, right: Int, top: Int, baseline: Int, bottom: Int,
         text: CharSequence, start: Int, end: Int, lnum: Int,
     ) {
-        val (first, last) = edges(text, start, end)
+        val sp = (text as? Spanned)?.let { spacing(it) }
+        val (above, below) = outside(text, start, end)
         val r = style.monoCornerPx
+        // the corners are rounded only at the first and the last line of a series
+        val first = start <= ((text as? Spanned)?.getSpanStart(this) ?: 0) && sp?.firstOfSeries != false
+        val last = end >= ((text as? Spanned)?.getSpanEnd(this) ?: Int.MAX_VALUE) && sp?.lastOfSeries != false
         val t = if (first) r else 0f
         val b = if (last) r else 0f
         paint.color = style.monoBackgroundColor
-        rect.set(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat())
+        rect.set(left.toFloat(), (top + above).toFloat(), right.toFloat(), (bottom - below).toFloat())
         path.reset()
         path.addRoundRect(rect, floatArrayOf(t, t, t, t, b, b, b, b), Path.Direction.CW)
         c.drawPath(path, paint)
     }
 
-    /**
-     * The series edges (is the paragraph the first / the last of its series) that the last layout pass baked into the line
-     * heights; the corners are drawn from the same facts. `Normalizer.refreshNeighbours` re-sets a span whose edges moved.
-     */
-    @Volatile internal var bakedSeriesEdges: Pair<Boolean, Boolean>? = null
-
-    internal fun seriesEdges(text: Spanned): Pair<Boolean, Boolean> =
-        (previousBlock(text, text.getSpanStart(this))?.first !is MonoSpan) to (nextBlock(text, text.getSpanEnd(this)) !is MonoSpan)
-
-    /** Is the line [start]..[end] the first / the last line of its series of mono paragraphs. */
-    private fun edges(text: CharSequence, start: Int, end: Int): Pair<Boolean, Boolean> {
-        val spanned = text as? Spanned ?: return true to true
-        val s = spanned.getSpanStart(this)
-        val e = spanned.getSpanEnd(this)
-        val first = start <= s && previousBlock(spanned, s)?.first !is MonoSpan
-        val last = end >= e && nextBlock(spanned, e) !is MonoSpan
-        return first to last
-    }
-
     override fun restyled(style: EditorStyle) = MonoSpan(style)
 }
-
-/** The block span of the paragraph before the one that starts at [start] and where that paragraph starts. */
-internal fun previousBlock(text: Spanned, start: Int): Pair<BlockSpan?, Int>? {
-    if (start <= 0) return null
-    var s = start - 1
-    while (s > 0 && text[s - 1] != '\n') s--
-    return text.getSpans(s, start, BlockSpan::class.java).firstOrNull { text.getSpanStart(it) == s } to s
-}
-
-/** The block span of the paragraph that starts at [end]. */
-internal fun nextBlock(text: Spanned, end: Int): BlockSpan? = blockSpanAt(text, end)

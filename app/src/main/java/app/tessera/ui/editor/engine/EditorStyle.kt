@@ -45,6 +45,18 @@ data class EditorStyle(
     val monoPaddingHorizontalPx: Float,
     /** Space above the first and below the last line of a series. */
     val monoPaddingVerticalPx: Float,
+    // vertical spacing of the blocks (px; the mockup CSS, spec D-spacing): the margins collapse between blocks, so only the larger counts
+    val titleSpaceTopPx: Float = 0f,
+    val titleSpaceBottomPx: Float = 0f,
+    /** Heading and Subheading. */
+    val headingSpaceTopPx: Float = 0f,
+    val headingSpaceBottomPx: Float = 0f,
+    /** Outside the edges of a list, quote or mono series, and above / below an object. */
+    val blockEdgePx: Float = 0f,
+    /** Above and below every list item (`li { padding: 3px 0 }`). */
+    val listItemPaddingPx: Float = 0f,
+    /** Inside the quote bar, above the first and below the last line of a series. */
+    val quotePaddingVerticalPx: Float = 0f,
     // inline code
     val codeBackgroundColor: Int,
     // objects

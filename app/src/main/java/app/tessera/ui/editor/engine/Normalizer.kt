@@ -13,7 +13,6 @@ import app.tessera.core.text.notedoc.ListType
 import app.tessera.core.text.notedoc.ParagraphKind
 import app.tessera.ui.editor.engine.spans.BLOCK_SPAN_FLAGS
 import app.tessera.ui.editor.engine.spans.BlockSpan
-import app.tessera.ui.editor.engine.spans.MonoSpan
 import app.tessera.ui.editor.engine.spans.OBJECT_CHAR
 import app.tessera.ui.editor.engine.spans.ObjectSpan
 import app.tessera.ui.editor.engine.spans.SENTINEL_CHAR
@@ -202,10 +201,14 @@ class Normalizer(var style: EditorStyle, private val steps: List<NormalizeStep> 
         fun refreshNeighbours(text: Spannable, start: Int, end: Int) {
             val from = if (start > 0) paragraphStart(text, start - 1) else 0
             val to = if (end < text.length) minOf(paragraphEnd(text, end) + 1, text.length) else text.length
-            for (mono in text.getSpans(from, to, MonoSpan::class.java)) {
-                if (mono.bakedSeriesEdges != mono.seriesEdges(text)) {
-                    text.setSpan(mono, text.getSpanStart(mono), text.getSpanEnd(mono), text.getSpanFlags(mono))
-                }
+            for (span in text.getSpans(from, to, Any::class.java)) {
+                // what a paragraph measures from its neighbours (gaps, series edges): set again when a neighbour changed it, so the layout re-measures
+                val now = when (span) {
+                    is BlockSpan -> if (span.baked != null && span.baked != span.spacing(text)) span else null
+                    is ObjectSpan -> if (span.baked != null && span.baked != span.spacing(text)) span else null
+                    else -> null
+                } ?: continue
+                text.setSpan(now, text.getSpanStart(now), text.getSpanEnd(now), text.getSpanFlags(now))
             }
             Numbering.renumber(text, from, to)
         }

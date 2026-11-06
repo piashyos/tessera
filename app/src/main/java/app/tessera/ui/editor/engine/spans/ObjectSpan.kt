@@ -3,9 +3,13 @@ package app.tessera.ui.editor.engine.spans
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.text.Spanned
+import android.text.style.LineHeightSpan
 import android.text.style.ReplacementSpan
 import app.tessera.core.text.notedoc.NoteBlock
 import app.tessera.ui.editor.engine.EditorStyle
+import app.tessera.ui.editor.engine.Spacing
+import app.tessera.ui.editor.engine.SpacingRules
 
 /** The only character of an object paragraph. */
 const val OBJECT_CHAR = '￼'
@@ -21,7 +25,7 @@ class SentinelSpan
  * Holds the source block, so serializing writes it back untouched. Stage 1: divider = a line, image and table =
  * a captioned frame (D9, no icon).
  */
-class ObjectSpan(val block: NoteBlock, val style: EditorStyle) : ReplacementSpan() {
+class ObjectSpan(val block: NoteBlock, val style: EditorStyle) : ReplacementSpan(), LineHeightSpan {
     /** Width the host gives the object (the text area); until set, the placeholder is as wide as its caption. */
     @Volatile var widthPx: Int = 0
 
@@ -30,6 +34,20 @@ class ObjectSpan(val block: NoteBlock, val style: EditorStyle) : ReplacementSpan
         is NoteBlock.Table -> style.tableLabel
         else -> null
     }
+    /** Margins above and below the object (see [Spacing]), as measured by the last layout pass. */
+    @Volatile internal var baked: Spacing? = null
+
+    internal fun spacing(text: Spanned): Spacing = SpacingRules.of(text, text.getSpanStart(this), style)
+
+    override fun chooseHeight(text: CharSequence, start: Int, end: Int, spanstartv: Int, lineHeight: Int, fm: Paint.FontMetricsInt) {
+        val t = text as? Spanned ?: return
+        if (t.getSpanStart(this) < 0) return
+        val sp = spacing(t)
+        baked = sp
+        fm.ascent -= sp.gapTop; fm.top -= sp.gapTop
+        fm.descent += sp.gapBottom; fm.bottom += sp.gapBottom
+    }
+
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
 
@@ -45,7 +63,9 @@ class ObjectSpan(val block: NoteBlock, val style: EditorStyle) : ReplacementSpan
     private fun width(p: Paint): Float =
         if (widthPx > 0) widthPx.toFloat() else p.measureText(label ?: "") + 2 * style.placeholderPaddingPx
 
-    override fun draw(c: Canvas, text: CharSequence?, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, p: Paint) {
+    override fun draw(c: Canvas, text: CharSequence?, start: Int, end: Int, x: Float, lineTop: Int, y: Int, lineBottom: Int, p: Paint) {
+        val top = lineTop + (baked?.gapTop ?: 0) // the margins are not part of the object
+        val bottom = lineBottom - (baked?.gapBottom ?: 0)
         val right = x + width(p)
         val cy = (top + bottom) / 2f
         paint.style = Paint.Style.STROKE

@@ -122,12 +122,14 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     private var changeEnd = 0
 
     private var lastLoadedMarkdown: String? = null
+    private var lastIncoming: String? = null
     private var hasPendingUserEdit = false
     private var lastFormatState: FormatState? = null
 
     private var tapTarget: Int? = null
     private var downX = 0f
     private var downY = 0f
+    private var longPressMs = 0L
 
     private val watcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {
@@ -176,11 +178,15 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     /**
      * The Markdown the note holds, from the first load and from every later update from outside. Equal to what was last loaded or
-     * emitted: ignored (the echo of our own emit). A user edit not emitted yet: skipped, the pending emit reconciles. Otherwise the text
+     * emitted, or equal to the previous incoming value: ignored (the echo of our own emit, a repeat). A user edit not emitted yet: skipped, the pending emit reconciles. Otherwise the text
      * is rebuilt, the selection kept by offset, the history cleared. Never emits. The live document is not compared with [markdown]:
      * a legacy note in a non-canonical form would never match.
      */
     fun setMarkdown(markdown: String) {
+        // the host calls this on every recomposition with whatever value the note holds: only a value that is new is an update. The old value
+        // coming again (the note has not caught up with our emit yet) must not roll the text back.
+        if (markdown == lastIncoming) return
+        lastIncoming = markdown
         if (markdown == lastLoadedMarkdown || hasPendingUserEdit) return
         val s = selectionStart.coerceAtLeast(0)
         val t = selectionEnd.coerceAtLeast(0)
@@ -292,19 +298,33 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         return true
     }
 
-    internal fun performBackspace(): Boolean {
+    /**
+     * Backspace at [at] (default: the caret). An IME with a composing region deletes before the start of the region, not before the
+     * caret ([TesseraInputConnection]): [at] is then the start of the region and the caret keeps its place relative to the text after it.
+     */
+    internal fun performBackspace(at: Int = -1): Boolean {
         if (!editable) return false
         val e = text ?: return false
         val s = selectionStart.coerceAtLeast(0)
         val t = selectionEnd.coerceAtLeast(0)
-        val ps = paragraphStart(e, s)
-        if (s == t && s > contentStart(e, ps) && !isObjectParagraph(e, ps)) {
+        val pos = if (at >= 0) at.coerceAtMost(e.length) else s
+        val ps = paragraphStart(e, pos)
+        if ((at >= 0 || s == t) && pos > contentStart(e, ps) && !isObjectParagraph(e, ps)) {
             // a character of the paragraph: it belongs to the typing run, as it would through the IME
             history.typing(now()) { snapshot(e, s, t) }
-            guard { rules.backspace(e, s, t).let { setSelection(it.start.coerceAtMost(e.length), it.end.coerceAtMost(e.length)) } }
+            guard {
+                val len = e.length
+                val r = rules.backspace(e, pos, pos)
+                if (at >= 0 && at != s) { // the caret was after the composing text: it moves back by what went
+                    val d = len - e.length
+                    setSelection((s - d).coerceIn(0, e.length), (t - d).coerceIn(0, e.length))
+                } else {
+                    setSelection(r.start.coerceAtMost(e.length), r.end.coerceAtMost(e.length))
+                }
+            }
             commitUserEdit()
         } else {
-            command { ed, a, b -> rules.backspace(ed, a, b) }
+            command(at = if (at >= 0) at else null) { ed, a, b -> rules.backspace(ed, a, b) }
         }
         return true
     }
@@ -329,11 +349,11 @@ class TesseraEditText(context: Context, style: EditorStyle) :
      * Runs [op] over the selection under the guard as one history step. [op] returns the new selection, or `null` for a command that
      * did nothing. Whatever changed the document (text, a kind, a mark, a check mark) is a user edit. True when something changed.
      */
-    private fun command(op: (Editable, Int, Int) -> Sel?): Boolean {
+    private fun command(at: Int? = null, op: (Editable, Int, Int) -> Sel?): Boolean {
         val e = text ?: return false
         if (!editable) return false
-        val s = selectionStart.coerceAtLeast(0)
-        val t = selectionEnd.coerceAtLeast(0)
+        val s = at ?: selectionStart.coerceAtLeast(0)
+        val t = at ?: selectionEnd.coerceAtLeast(0)
         val before = snapshot(e, s, t)
         var sel: Sel? = null
         guard {
@@ -410,7 +430,8 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             android.R.id.redo -> if (editable) redo()
             android.R.id.copy -> copySelection()
             android.R.id.cut -> if (editable) cutSelection()
-            android.R.id.paste, android.R.id.pasteAsPlainText -> if (editable) paste()
+            android.R.id.paste -> if (editable) paste(plainOnly = false)
+            android.R.id.pasteAsPlainText -> if (editable) paste(plainOnly = true) // Ctrl+Shift+V: never the fragment
             else -> return super.onTextContextMenuItem(id)
         }
         return true
@@ -432,8 +453,8 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         if (ClipboardBridge.copy(context, text ?: return, minOf(s, t), maxOf(s, t))) command { e, a, b -> rules.backspace(e, a, b) }
     }
 
-    private fun paste() {
-        val fragment = ClipboardBridge.fragment(context)
+    private fun paste(plainOnly: Boolean) {
+        val fragment = if (plainOnly) null else ClipboardBridge.fragment(context)
         if (fragment != null) {
             command { e, s, t -> rules.insertDoc(e, s, t, fragment) }
             return
@@ -443,7 +464,10 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         pasting = true
         inCommand = true
         try { super.onTextContextMenuItem(android.R.id.pasteAsPlainText) } finally { pasting = false; inCommand = false }
-        if (snapshot(e).markdown != before.markdown) history.step(before)
+        if (snapshot(e).markdown != before.markdown) {
+            history.step(before)
+            notifyFormatState() // the watcher notified before the step: canUndo / canRedo were stale
+        }
     }
 
     // ------------------------------------------------------------------ check boxes (§6.10)
@@ -461,12 +485,13 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         for (line in firstLine..lastLine) {
             val ps = l.getLineStart(line)
             if (ps > 0 && t[ps - 1] != '\n') continue // the marker is on the first line of the item
-            val span = t.getSpans(ps, minOf(ps + 1, t.length), ListItemSpan::class.java).firstOrNull { t.getSpanStart(it) == ps } ?: continue
+            val span = blockSpanAt(t, ps) as? ListItemSpan ?: continue
             if (span.kind.type != ListType.Check) continue
-            val cy = (l.getLineTop(line) + l.getLineBottom(line)) / 2 + offY
+            val fm = paint.fontMetrics
+            val cy = (l.getLineBaseline(line) + ((fm.ascent + fm.descent) / 2).toInt()) + offY // the middle of the text line, not of its margins
             val h = maxOf(l.getLineBottom(line) - l.getLineTop(line), minPx)
             val left = totalPaddingLeft - scrollX
-            val rect = Rect(left, cy - h / 2, left + maxOf(span.getLeadingMargin(true), minPx), cy + (h + 1) / 2)
+            val rect = Rect(left, cy - h / 2, left + span.getLeadingMargin(true), cy + (h + 1) / 2) // the width of the marker area; the text after it is a caret place
             if (!Rect.intersects(rect, visible)) continue
             out += CheckboxZone(ps, rect, span.kind.checked, t.subSequence(contentStart(t, ps), paragraphEnd(t, ps)).toString())
         }
@@ -482,6 +507,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     tapTarget = checkboxZoneAt(event.x, event.y)?.ps
+                    longPressMs = ViewConfiguration.getLongPressTimeout().toLong()
                     downX = event.x
                     downY = event.y
                 }
@@ -490,7 +516,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
                 MotionEvent.ACTION_UP -> {
                     val ps = tapTarget
                     tapTarget = null
-                    if (ps != null) { // a tap on a check box: the text under the finger gets no caret, no keyboard
+                    if (ps != null && event.eventTime - event.downTime < longPressMs) { // a long press is a selection of the word, not a tap // a tap on a check box: the text under the finger gets no caret, no keyboard
                         val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
                         super.onTouchEvent(cancel)
                         cancel.recycle()

@@ -187,4 +187,51 @@ class TesseraEditTextEmitTest {
         h.pass(1000)
         assertTrue(h.emitted.isEmpty())
     }
+
+    @Test
+    fun anOldIncomingValueRepeatedAfterOurEmitDoesNotRollTheTextBack() {
+        val h = HostFixture("a")
+        h.text.insert(1, "b")
+        h.pass(300)
+        assertEquals(listOf("ab"), h.emitted)
+        h.view.setMarkdown("a") // a recomposition before the note caught up: the old value again
+        assertEquals("ab", h.md())
+        h.view.setMarkdown("ab") // the echo of our emit
+        assertEquals("ab", h.md())
+        h.view.setMarkdown("c") // really new, nothing pending
+        assertEquals("c", h.md())
+        h.pass(1000)
+        assertEquals(1, h.emitted.size)
+    }
+
+    @Test
+    fun anEditAfterDisposeEmitsNothing() {
+        val h = HostFixture("a")
+        h.view.dispose()
+        h.text.insert(1, "b")
+        h.pass(1000)
+        assertTrue(h.emitted.isEmpty())
+    }
+
+    @Test
+    fun theFormatStateKnowsAboutAPlainPasteAtOnce() {
+        val h = HostFixture("")
+        h.view.setClip("pasted")
+        h.view.onTextContextMenuItem(android.R.id.paste)
+        assertEquals("pasted", h.md())
+        assertTrue(h.states.last().canUndo)
+        assertFalse(h.states.last().canRedo)
+    }
+
+    @Test
+    fun aPasteAfterAnUndoClearsTheRedoInTheState() {
+        val h = HostFixture("")
+        h.text.insert(0, "a")
+        h.view.undo()
+        assertTrue(h.states.last().canRedo)
+        h.view.setClip("p")
+        h.view.onTextContextMenuItem(android.R.id.paste)
+        assertTrue(h.states.last().canUndo)
+        assertFalse(h.states.last().canRedo)
+    }
 }

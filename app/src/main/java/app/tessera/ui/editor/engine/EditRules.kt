@@ -17,6 +17,15 @@ import app.tessera.ui.editor.engine.spans.SENTINEL_CHAR
 import app.tessera.ui.editor.engine.spans.SentinelSpan
 import app.tessera.ui.editor.engine.spans.markSpanOf
 
+/** Start of the grapheme cluster that ends at [c] (a flag, a skin tone, a ZWJ sequence and a keycap go whole), not before [cs]. */
+internal fun graphemeStart(e: CharSequence, cs: Int, c: Int): Int {
+    val it = android.icu.text.BreakIterator.getCharacterInstance()
+    val line = e.subSequence(cs, paragraphEnd(e, cs)).toString()
+    it.setText(line)
+    val p = it.preceding(c - cs)
+    return if (p == android.icu.text.BreakIterator.DONE) c - 1 else maxOf(cs + p, cs)
+}
+
 /** Selection after a command: a caret when [end] == [start]. */
 data class Sel(val start: Int, val end: Int = start)
 
@@ -156,7 +165,7 @@ class EditRules(style: EditorStyle) {
         val cs = contentStart(e, ps)
         if (isObjectParagraph(e, ps)) return backspaceAtObject(e, c, ps, pe)
         if (c > cs) { // a character of the paragraph
-            val from = if (c - cs >= 2 && Character.isLowSurrogate(e[c - 1]) && Character.isHighSurrogate(e[c - 2])) c - 2 else c - 1
+            val from = graphemeStart(e, cs, c)
             val kind = kindOf(e, ps)
             e.delete(from, c)
             // the span of a paragraph whose only character went is gone with it

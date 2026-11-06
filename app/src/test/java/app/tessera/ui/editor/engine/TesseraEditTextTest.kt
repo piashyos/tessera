@@ -197,7 +197,7 @@ class TesseraEditTextTest {
         val h = HostFixture("- [ ] a\n- [ ] b")
         val z = h.view.checkboxZones()
         assertEquals(2, z.size)
-        assertTrue("the zone is at least 48dp", z.all { it.rect.width() >= 48 && it.rect.height() >= 48 })
+        assertTrue("the zone is the marker area wide and at least 48dp high", z.all { it.rect.width() == 30 && it.rect.height() >= 48 })
         tap(h, z[1].rect.exactCenterX(), z[1].rect.exactCenterY())
         assertEquals("- [ ] a\n- [x] b", h.md())
         h.pass(300)
@@ -300,5 +300,38 @@ class TesseraEditTextTest {
         h.view.measure(android.view.View.MeasureSpec.makeMeasureSpec(300, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(800, android.view.View.MeasureSpec.EXACTLY))
         h.view.layout(0, 0, 300, 800)
         assertEquals(listOf(260, 260), widths())
+    }
+
+    @Test
+    fun aLongPressOnACheckBoxDoesNotToggle() {
+        val h = HostFixture("- [ ] a")
+        val z = h.view.checkboxZones().single()
+        val t = SystemClock.uptimeMillis()
+        val x = z.rect.exactCenterX()
+        val y = z.rect.exactCenterY()
+        h.view.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, x, y, 0))
+        h.view.dispatchTouchEvent(MotionEvent.obtain(t, t + 1500, MotionEvent.ACTION_UP, x, y, 0))
+        assertEquals("- [ ] a", h.md())
+    }
+
+    @Test
+    fun aTapOnTheFirstLettersOfTheItemPlacesTheCaretAndDoesNotToggle() {
+        val h = HostFixture("- [ ] abc")
+        val z = h.view.checkboxZones().single()
+        tap(h, z.rect.right + 2f, z.rect.exactCenterY())
+        assertEquals("- [ ] abc", h.md())
+    }
+
+    @Test
+    fun plainPasteShortcutNeverPastesTheFragment() {
+        val h = HostFixture("**ab**cd")
+        h.select(0, 2)
+        h.view.onTextContextMenuItem(android.R.id.copy)
+        h.caret(h.text.length)
+        h.view.onTextContextMenuItem(android.R.id.pasteAsPlainText)
+        assertEquals("**ab**cdab", h.md())
+        h.caret(h.text.length)
+        h.view.onTextContextMenuItem(android.R.id.paste)
+        assertEquals("the ordinary paste gets the fragment", "**ab**cdab**ab**", h.md())
     }
 }
