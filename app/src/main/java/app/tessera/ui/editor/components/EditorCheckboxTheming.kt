@@ -26,7 +26,7 @@ class CheckboxPalette {
  * Reads [palette] at draw time so palette changes show up on the next invalidate. Bounds/state are
  * set by Aztec's task-list span exactly as for its stock drawable.
  */
-private class TesseraCheckboxDrawable(
+internal class TesseraCheckboxDrawable(
     private val checked: Boolean,
     private val palette: CheckboxPalette,
     private val cornerPx: Float,
