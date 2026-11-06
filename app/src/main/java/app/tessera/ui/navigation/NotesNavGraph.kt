@@ -235,6 +235,7 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                 state = state,
                 isDraftEntry = fromDraft,
                 onContentChange = viewModel::onContentChange,
+                onFlush = viewModel::flush,
                 onAddTag = viewModel::onAddTag,
                 onRemoveTag = viewModel::onRemoveTag,
                 onTogglePin = viewModel::onTogglePin,

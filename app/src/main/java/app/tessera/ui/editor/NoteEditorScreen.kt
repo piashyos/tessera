@@ -75,6 +75,7 @@ import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.components.EditorFormatBar
 import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.NoteBody
+import app.tessera.ui.editor.components.OnStop
 import app.tessera.ui.editor.engine.FormatState
 import app.tessera.ui.editor.components.EditorMeta
 import app.tessera.ui.editor.components.RichBodyActions
@@ -105,6 +106,8 @@ fun NoteEditorScreen(
     state: NoteEditorState,
     isDraftEntry: Boolean = false,
     onContentChange: (String) -> Unit,
+    /** Save what is pending now; called when the screen stops (after the native editor handed out its last edit). */
+    onFlush: () -> Unit = {},
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
     onTogglePin: () -> Unit,
@@ -143,6 +146,8 @@ fun NoteEditorScreen(
     // and carries no flag (previews, tests) is the Aztec path.
     val engine: Boolean? = state.useNativeEditor ?: if (state.isLoading) null else false
     val native = engine == true
+    // Aztec keeps its own debounce (RichNoteBody has no flush): at least the VM's autosave window is closed here.
+    if (engine == false) OnStop(onFlush)
     val initialHtml = remember(state.content, engine) {
         if (engine != false) "" else converter.markdownToHtml(state.content)
     }
@@ -553,6 +558,7 @@ fun NoteEditorScreen(
                         onActionsReady = { actions = wrapActions(it) },
                         onFormatStateChanged = { formatState = it },
                         editable = !state.isReadOnly,
+                        onStopFlushed = onFlush,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()

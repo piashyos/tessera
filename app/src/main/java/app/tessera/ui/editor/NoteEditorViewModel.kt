@@ -233,12 +233,17 @@ class NoteEditorViewModel @Inject constructor(
     fun flush() {
         autosaveJob?.cancel()
         autosaveJob = null
+        autosavePending = false
         viewModelScope.launch { persist() }
     }
 
     fun delete() {
         autosaveJob?.cancel()
         autosaveJob = null
+        autosavePending = false
+        // A late autosave or flush (the editor's dispose hands over its last key after this) must not write the note back
+        // out of the trash: `persist` does nothing without a baseline.
+        baselineNote = null
         viewModelScope.launch { deleteNoteUseCase(noteId) }
     }
 
@@ -317,6 +322,8 @@ class NoteEditorViewModel @Inject constructor(
     fun leave() {
         autosaveJob?.cancel()
         autosaveJob = null
+        autosavePending = false
+        baselineNote = null
         viewModelScope.launch {
             leaveSharedNoteUseCase(noteId).onFailure { e ->
                 _state.update { it.copy(shareError = e.message ?: "Couldn't leave this note") }

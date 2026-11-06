@@ -9,10 +9,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import app.tessera.core.ui.theme.TesseraTheme
+import app.tessera.domain.model.NoteId
 import app.tessera.test.fakes.FakeUserPreferences
 import app.tessera.ui.editor.engine.TesseraEditText
 import org.junit.Assert.assertEquals
@@ -58,6 +60,7 @@ class NoteEditorNativeRacesTest {
                     NoteEditorScreen(
                         state = state,
                         onContentChange = vm::onContentChange,
+                        onFlush = vm::flush,
                         onAddTag = {},
                         onRemoveTag = {},
                         onTogglePin = {},
@@ -206,5 +209,68 @@ class NoteEditorNativeRacesTest {
         pass(1_000)
         assertFalse("saved", stored() == null)
         assertEquals("abc!", stored())
+    }
+
+    // ------------------------------------------------------------------ the app goes to the background (ON_STOP)
+
+    private fun stop() {
+        rule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        rule.waitForIdle()
+    }
+
+    @Test fun stop_inside_both_debounces_saves_exactly_what_is_on_screen() {
+        open("abc")
+        type(3, "!")
+        pass(50) // far inside the engine's 300 ms and the VM's 500 ms
+        assertTrue("nothing is out yet", repo.updateCalls.isEmpty())
+        stop()
+        pass(10) // no debounce has run out
+        assertEquals(editor().markdown(), stored())
+        assertEquals("abc!", stored())
+        assertEquals(1, repo.updateCalls.size)
+    }
+
+    @Test fun stop_inside_the_vm_window_saves_what_the_engine_already_handed_out() {
+        open("abc")
+        type(3, "!")
+        pass(350) // emitted, the VM autosave is waiting
+        stop()
+        pass(10)
+        assertEquals("abc!", stored())
+        pass(3_000)
+        assertEquals("the autosave that was cancelled does not write again", 1, repo.updateCalls.size)
+    }
+
+    @Test fun stop_without_an_edit_writes_nothing() {
+        open("* legacy")
+        pass(100)
+        stop()
+        pass(3_000)
+        assertTrue(repo.updateCalls.isEmpty())
+        assertEquals(1L, vm.state.value.updatedAt)
+        assertEquals("* legacy", vm.state.value.content)
+    }
+
+    @Test fun a_note_deleted_right_after_a_key_is_not_brought_back_by_the_late_save_or_the_flush() {
+        open("abc")
+        type(3, "!")
+        pass(50)
+        vm.delete() // the trash button
+        shown = false // the screen leaves: the editor hands over its last key
+        rule.waitForIdle()
+        store.clear() // the entry is gone: onCleared must not save either
+        pass(3_000)
+        assertEquals(listOf(NoteId("n")), repo.deleteCalls)
+        assertTrue("no write after the delete", repo.updateCalls.isEmpty())
+    }
+
+    @Test fun stop_after_a_delete_does_not_save_the_note_again() {
+        open("abc")
+        type(3, "!")
+        pass(50)
+        vm.delete()
+        stop()
+        pass(3_000)
+        assertTrue(repo.updateCalls.isEmpty())
     }
 }

@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.tessera.R
 import app.tessera.core.text.notedoc.ListType
 import app.tessera.core.text.notedoc.Mark
@@ -60,6 +63,8 @@ fun NoteBody(
     editable: Boolean,
     modifier: Modifier = Modifier,
     onFocusChanged: (Boolean) -> Unit = {},
+    /** Called on ON_STOP right after a pending edit was handed out, so the host can save at once (the app may be killed in the background). */
+    onStopFlushed: () -> Unit = {},
 ) {
     if (LocalInspectionMode.current) return // the View cannot be instantiated in a Compose preview
 
@@ -89,6 +94,12 @@ fun NoteBody(
         if (!editor.isFocused) return@LaunchedEffect
         val rect = caretRectOf(editor) ?: return@LaunchedEffect
         runCatching { bringIntoViewRequester.bringIntoView(rect) }
+    }
+
+    val currentOnStopFlushed by rememberUpdatedState(onStopFlushed)
+    OnStop {
+        editorRef.value?.flushPendingEdit() // the debounced emit would not survive a kill
+        currentOnStopFlushed()
     }
 
     DisposableEffect(Unit) {
@@ -263,5 +274,17 @@ internal fun rememberEditorStyle(): EditorStyle {
             listItemPaddingPx = 3.dp.toPx(), // .editor-checklist li padding 3px 0
             quotePaddingVerticalPx = TesseraSpacing.xs.toPx(), // .editor-quote padding 4
         )
+    }
+}
+
+/** Runs [block] when the host lifecycle stops (Home, task switch, a screen on top): the last moment a process is sure to be alive. */
+@Composable
+internal fun OnStop(block: () -> Unit) {
+    val current by rememberUpdatedState(block)
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) current() }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
     }
 }
