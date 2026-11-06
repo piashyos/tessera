@@ -78,10 +78,14 @@ class SettingsViewModel @Inject constructor(
             base.copy(grainEnabled = grainEnabled, grainIntensity = grainIntensity)
         }
 
-    // languageTag + trash size — paired for the same arity reason as themePrefs.
+    // languageTag + trash size + native-editor flag — grouped for the same arity reason as themePrefs.
     private val langAndTrash =
-        combine(userPreferences.languageTag, notesRepository.observeDeletedNotes()) { lang, deleted ->
-            lang to deleted.size
+        combine(
+            userPreferences.languageTag,
+            notesRepository.observeDeletedNotes(),
+            userPreferences.useNativeEditor,
+        ) { lang, deleted, nativeEditor ->
+            Triple(lang, deleted.size, nativeEditor)
         }
 
     val state: StateFlow<SettingsState> =
@@ -106,6 +110,7 @@ class SettingsViewModel @Inject constructor(
                 grainIntensity = theme.grainIntensity,
                 languageTag = langTrash.first,
                 trashCount = langTrash.second,
+                useNativeEditor = langTrash.third,
                 syncStatus = sync,
             )
         }.stateIn(
@@ -144,6 +149,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setLanguage(tag: String) {
         viewModelScope.launch { userPreferences.setLanguageTag(tag) }
+    }
+
+    fun setUseNativeEditor(enabled: Boolean) {
+        viewModelScope.launch { userPreferences.setUseNativeEditor(enabled) }
     }
 
     fun onSignIn() {

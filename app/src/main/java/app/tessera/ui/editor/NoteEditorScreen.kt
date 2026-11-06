@@ -74,6 +74,8 @@ import app.tessera.core.ui.theme.TesseraMotion
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.components.EditorFormatBar
 import app.tessera.ui.editor.components.MarkdownFormatMenu
+import app.tessera.ui.editor.components.NoteBody
+import app.tessera.ui.editor.engine.FormatState
 import app.tessera.ui.editor.components.EditorMeta
 import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.components.RichNoteBody
@@ -135,8 +137,13 @@ fun NoteEditorScreen(
     // bottom pill shows the contextual TableActionsBar instead of the text format bar.
     var focusedTableIdx by remember { mutableStateOf<Int?>(null) }
     val currentFocusedBlock by rememberUpdatedState(lastFocusedBlock)
-    val initialHtml = remember(state.content) { converter.markdownToHtml(state.content) }
-    val blocks = remember(state.content) { splitMarkdownIntoBlocks(state.content) }
+    // The native engine takes the whole Markdown itself: no HTML round-trip, no block split (a table is its placeholder).
+    val initialHtml = remember(state.content, state.useNativeEditor) {
+        if (state.useNativeEditor) "" else converter.markdownToHtml(state.content)
+    }
+    val blocks = remember(state.content, state.useNativeEditor) {
+        if (state.useNativeEditor) emptyList() else splitMarkdownIntoBlocks(state.content)
+    }
     val hasTable = blocks.any { it is Block.Table }
 
     // Keep insertTable's closure pointing at the latest content/callback so that
@@ -215,6 +222,8 @@ fun NoteEditorScreen(
     // changes. Drives the toolbar highlight so buttons no longer stay lit after the caret
     // leaves the formatted span.
     var activeFormats by remember { mutableStateOf<Set<AztecTextFormat>>(emptySet()) }
+    // The same for the native engine (`useNativeEditor`): what the bar and the ⋯ menu show.
+    var formatState by remember { mutableStateOf(FormatState.Empty) }
     val imeVisible = WindowInsets.isImeVisible
 
     // After the VM stores an image and emits its id, splice the span at the editor caret. Reading
@@ -477,6 +486,8 @@ fun NoteEditorScreen(
                                     activeFormats = activeFormats,
                                     menuExpanded = formatMenuExpanded,
                                     onToggleMenu = { formatMenuExpanded = !formatMenuExpanded },
+                                    nativeEngine = state.useNativeEditor,
+                                    formatState = formatState,
                                 )
                             }
                         }
@@ -486,6 +497,8 @@ fun NoteEditorScreen(
                                 activeFormats = activeFormats,
                                 actions = currentActions,
                                 onDismiss = { formatMenuExpanded = false },
+                                nativeEngine = state.useNativeEditor,
+                                formatState = formatState,
                             )
                         }
                         }
@@ -524,7 +537,24 @@ fun NoteEditorScreen(
                 // Read-only notes keep the outer Compose scroll: a non-editable AztecText doesn't
                 // scroll its own content, and viewers can't select text so the selection-overlap
                 // issue the internal-scroll path fixes doesn't apply to them.
-                if (hasTable || state.isReadOnly) {
+                if (state.useNativeEditor) {
+                    // NATIVE ENGINE — one editor for reading and editing: fills the area and scrolls itself (like the fast
+                    // path below), tables and images are placeholders in it.
+                    NoteBody(
+                        markdown = state.content,
+                        onMarkdownChange = { markdown -> if (markdown != currentContent) currentOnContentChange(markdown) },
+                        onActionsReady = { actions = wrapActions(it) },
+                        onFormatStateChanged = { formatState = it },
+                        editable = !state.isReadOnly,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .then(
+                                if (!imeVisible) Modifier.windowInsetsPadding(WindowInsets.navigationBars) else Modifier,
+                            )
+                            .padding(horizontal = 20.dp),
+                    )
+                } else if (hasTable || state.isReadOnly) {
                     // BLOCK-STACK / READ-ONLY PATH — text blocks interleaved with tables are multiple
                     // Views, so they share one outer Compose scroll (each editor stays wrap-content).
                     BoxWithConstraints(

@@ -33,6 +33,8 @@ data class NoteEditorState(
     val inviteState: InviteUiState = InviteUiState.Idle,
     /** One-shot message for a share action that failed; null when there's nothing to surface. */
     val shareError: String? = null,
+    /** Debug flag: edit with the native engine (`NoteBody`) instead of Aztec. */
+    val useNativeEditor: Boolean = false,
 ) {
     /** Viewers see the note but cannot type — the editor body is rendered read-only. */
     val isReadOnly: Boolean get() = isShared && myRole == ShareRole.VIEWER

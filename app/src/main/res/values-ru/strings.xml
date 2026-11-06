@@ -268,4 +268,17 @@
     <string name="share_tags_label">Теги</string>
     <string name="image_resize_handle_description">Изменить размер изображения</string>
     <string name="image_rotate_button_description">Повернуть изображение на 90 градусов</string>
+
+    <!-- Native editor (beta) -->
+    <string name="editor_style_title">Название</string>
+    <string name="editor_style_heading">Заголовок</string>
+    <string name="editor_style_subheading">Подзаголовок</string>
+    <string name="editor_style_body">Основной текст</string>
+    <string name="editor_style_mono">Моноширинный</string>
+    <string name="editor_list_dash">Список с тире</string>
+    <string name="editor_indent">Отступ вправо</string>
+    <string name="editor_outdent">Отступ влево</string>
+    <string name="editor_object_image">Изображение</string>
+    <string name="editor_object_table">Таблица</string>
+    <string name="settings_native_editor">Новый редактор (beta)</string>
 </resources>

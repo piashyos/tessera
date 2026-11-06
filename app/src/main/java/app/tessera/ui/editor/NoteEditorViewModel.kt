@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.tessera.core.preferences.UserPreferences
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.InviteResult
@@ -64,6 +65,7 @@ class NoteEditorViewModel @Inject constructor(
     private val driveAuthManager: app.tessera.data.drive.DriveAuthManager,
     private val authRepository: AuthRepository,
     private val folderRepository: FolderRepository,
+    private val userPreferences: UserPreferences,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -157,6 +159,13 @@ class NoteEditorViewModel @Inject constructor(
                 buildBreadcrumb(folderId, folders)
             }.collect { breadcrumb ->
                 _state.update { it.copy(folderBreadcrumb = breadcrumb) }
+            }
+        }
+
+        // Debug flag: which editor engine the screen uses.
+        viewModelScope.launch {
+            userPreferences.useNativeEditor.collect { enabled ->
+                _state.update { it.copy(useNativeEditor = enabled) }
             }
         }
 

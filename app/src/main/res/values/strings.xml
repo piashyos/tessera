@@ -261,4 +261,17 @@
     <string name="share_tags_label">Tags</string>
     <string name="image_resize_handle_description">Resize image</string>
     <string name="image_rotate_button_description">Rotate image 90 degrees</string>
+
+    <!-- Native editor (beta) -->
+    <string name="editor_style_title">Title</string>
+    <string name="editor_style_heading">Heading</string>
+    <string name="editor_style_subheading">Subheading</string>
+    <string name="editor_style_body">Body</string>
+    <string name="editor_style_mono">Monospaced</string>
+    <string name="editor_list_dash">Dashed list</string>
+    <string name="editor_indent">Indent</string>
+    <string name="editor_outdent">Outdent</string>
+    <string name="editor_object_image">Image</string>
+    <string name="editor_object_table">Table</string>
+    <string name="settings_native_editor">New editor (beta)</string>
 </resources>

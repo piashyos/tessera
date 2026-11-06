@@ -38,6 +38,9 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import app.tessera.R
+import app.tessera.core.text.notedoc.ParagraphKind
+import app.tessera.ui.editor.engine.FormatState
+import app.tessera.ui.editor.engine.ParagraphFormat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.FormatQuote
@@ -63,6 +66,8 @@ data class FormatEntry(
     val icon: ImageVector,
     val labelRes: Int,
     val onClick: () -> Unit,
+    /** Native engine: the paragraph kind this entry sets; the row is active when the caret paragraph is of it. */
+    val kind: ParagraphKind? = null,
 )
 
 /** Full block-format catalogue surfaced by the ⋯ panel: paragraph, headings, quote/code/insert. */
@@ -78,6 +83,16 @@ fun formatMenuEntries(actions: RichBodyActions): List<FormatEntry> = listOf(
     FormatEntry(AztecTextFormat.FORMAT_PREFORMAT, Icons.Rounded.Code, R.string.toolbar_code, actions::toggleCode),
     FormatEntry(null, Icons.Rounded.Remove, R.string.toolbar_divider, actions::insertHorizontalRule),
     FormatEntry(null, Icons.Rounded.TableChart, R.string.toolbar_table, actions::insertTable),
+)
+
+/** The ⋯ catalogue of the native engine (spec §7): the paragraph kinds it has; the divider lives on the bar. */
+fun nativeFormatMenuEntries(actions: RichBodyActions): List<FormatEntry> = listOf(
+    FormatEntry(null, Lucide.Heading1, R.string.editor_style_title, actions::toggleHeading1, ParagraphKind.Title),
+    FormatEntry(null, Lucide.Heading2, R.string.editor_style_heading, actions::toggleHeading2, ParagraphKind.Heading),
+    FormatEntry(null, Lucide.Heading3, R.string.editor_style_subheading, actions::toggleSubheading, ParagraphKind.Subheading),
+    FormatEntry(null, Lucide.Pilcrow, R.string.editor_style_body, actions::toggleParagraph, ParagraphKind.Body),
+    FormatEntry(null, Icons.Rounded.Code, R.string.editor_style_mono, actions::toggleCode, ParagraphKind.Mono),
+    FormatEntry(null, Icons.Rounded.FormatQuote, R.string.toolbar_quote, actions::toggleQuote, ParagraphKind.Quote),
 )
 
 /**
@@ -97,6 +112,8 @@ fun MarkdownFormatMenu(
     activeFormats: Set<AztecTextFormat>,
     actions: RichBodyActions,
     onDismiss: () -> Unit,
+    nativeEngine: Boolean = false,
+    formatState: FormatState? = null,
 ) {
     if (!expanded) return
     val density = LocalDensity.current
@@ -130,8 +147,13 @@ fun MarkdownFormatMenu(
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 8.dp),
                 ) {
-                    formatMenuEntries(actions).forEach { entry ->
-                        val active = entry.format != null && entry.format in activeFormats
+                    val entries = if (nativeEngine) nativeFormatMenuEntries(actions) else formatMenuEntries(actions)
+                    entries.forEach { entry ->
+                        val active = if (nativeEngine) {
+                            entry.kind != null && formatState?.paragraph == ParagraphFormat.Single(entry.kind)
+                        } else {
+                            entry.format != null && entry.format in activeFormats
+                        }
                         val accent = if (active) {
                             MaterialTheme.colorScheme.primary
                         } else {

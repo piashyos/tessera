@@ -2,6 +2,7 @@ package app.tessera.ui.editor
 
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
+import app.tessera.test.fakes.FakeUserPreferences
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.FolderTreeNode
@@ -86,6 +87,22 @@ class NoteEditorViewModelTest {
         assertEquals("World", state.content)
         assertEquals(listOf("kotlin"), state.tags)
         assertTrue(state.isPinned == note.isPinned)
+    }
+
+    @Test
+    fun `native editor flag is off by default and follows the preference`() = runTest(dispatcher.scheduler) {
+        val prefs = FakeUserPreferences()
+        val vm = FakeEditorRepository(notes = listOf(sampleNote("note-flag"))).createViewModel("note-flag", prefs = prefs)
+        runCurrent()
+        assertFalse(vm.state.value.useNativeEditor)
+
+        prefs.setUseNativeEditor(true)
+        runCurrent()
+        assertTrue(vm.state.value.useNativeEditor)
+
+        prefs.setUseNativeEditor(false)
+        runCurrent()
+        assertFalse(vm.state.value.useNativeEditor)
     }
 
     @Test
@@ -636,7 +653,11 @@ private class FakeEditorRepository(
     }
     override fun observeMembers(id: NoteId): Flow<List<ShareMember>> = membersFlow
 
-    fun createViewModel(noteId: String, currentUser: String? = null): NoteEditorViewModel {
+    fun createViewModel(
+        noteId: String,
+        currentUser: String? = null,
+        prefs: FakeUserPreferences = FakeUserPreferences(),
+    ): NoteEditorViewModel {
         val savedState = SavedStateHandle(mapOf("noteId" to noteId))
         val auth = FakeAuthRepository(currentUser?.let(::UserId))
         val sync = FakeSyncRepository(permanentDeleteEverywhereCalls)
@@ -674,6 +695,7 @@ private class FakeEditorRepository(
             },
             authRepository = auth,
             folderRepository = FakeFolderRepository(),
+            userPreferences = prefs,
             savedStateHandle = savedState,
         )
     }

@@ -32,6 +32,8 @@ data class SettingsState(
     val grainEnabled: Boolean = true,
     val grainIntensity: Float = 0.5f,
     val languageTag: String = "",
+    /** Debug flag: edit notes with the native engine instead of Aztec. */
+    val useNativeEditor: Boolean = false,
     val syncStatus: SyncIndicator = SyncIndicator.Ok(),
     /** Number of notes currently in Trash; drives the "Empty trash" row's enabled state. */
     val trashCount: Int = 0,

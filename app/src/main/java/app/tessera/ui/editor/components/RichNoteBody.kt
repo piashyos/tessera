@@ -39,6 +39,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
 import app.tessera.R
 import app.tessera.core.text.applySerifHeadingSpans
+import app.tessera.ui.editor.engine.FormatState
 import org.wordpress.aztec.Aztec
 import org.wordpress.aztec.AztecAttributes
 import org.wordpress.aztec.AztecText
@@ -128,6 +129,22 @@ interface RichBodyActions {
      * The toolbar dropdown reads this to highlight active entries.
      */
     fun activeFormats(): Set<AztecTextFormat>
+
+    // --- Native engine (`NoteBody`). Default no-ops: the Aztec path has no such commands. ---
+    /** Toggle the Subheading paragraph kind on the current block(s). */
+    fun toggleSubheading() {}
+
+    /** Toggle a dashed list on the current block(s). */
+    fun toggleDashList() {}
+
+    /** Move the selected list items one level right. */
+    fun indent() {}
+
+    /** Move the selected list items one level left. */
+    fun outdent() {}
+
+    /** What the format bar shows at the caret; [FormatState.Empty] on the Aztec path (it reads [activeFormats]). */
+    fun formatState(): FormatState = FormatState.Empty
 }
 
 private const val DebounceMs = 300L
