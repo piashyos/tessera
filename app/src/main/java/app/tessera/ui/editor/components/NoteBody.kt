@@ -21,6 +21,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -171,8 +172,8 @@ internal class NoteBodyActions(private val editor: TesseraEditText) : RichBodyAc
     override fun redo() = editor.redo()
 
     override fun focusBody() {
-        // A viewer's editor is not focusable: never grab focus or surface the keyboard for it.
-        if (!editor.isFocusable) return
+        // A viewer's editor: never grab focus or surface the keyboard for it.
+        if (!editor.editable) return
         editor.requestFocus()
         editor.setSelection(editor.length())
         val imm = editor.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
@@ -199,15 +200,6 @@ private fun caretRectOf(editor: TesseraEditText): Rect? {
     return Rect(x, top, x + 1f, bottom)
 }
 
-/** Caret and selection handles in the accent (API 29+ exposes the drawables; before that the static tint stays), as `RichNoteBody`. */
-private fun applyCursorAndHandleTint(editor: TesseraEditText, accentArgb: Int) {
-    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
-    editor.textCursorDrawable = editor.textCursorDrawable?.mutate()?.apply { setTint(accentArgb) }
-    editor.textSelectHandle?.let { editor.setTextSelectHandle(it.mutate().apply { setTint(accentArgb) }) }
-    editor.textSelectHandleLeft?.let { editor.setTextSelectHandleLeft(it.mutate().apply { setTint(accentArgb) }) }
-    editor.textSelectHandleRight?.let { editor.setTextSelectHandleRight(it.mutate().apply { setTint(accentArgb) }) }
-}
-
 @Composable
 private fun rememberTypeface(fontRes: Int): Typeface? {
     val context = LocalContext.current
@@ -226,12 +218,13 @@ internal fun rememberEditorStyle(): EditorStyle {
     val imageLabel = stringResource(R.string.editor_object_image)
     val tableLabel = stringResource(R.string.editor_object_table)
     return with(density) {
+        val corner = MaterialTheme.shapes.medium.topStart.toPx(Size.Zero, density)
         EditorStyle(
             textColor = colors.onSurface.toArgb(),
             mutedTextColor = colors.onSurfaceVariant.toArgb(),
             bodyTextSizePx = MaterialTheme.typography.bodyLarge.fontSize.toPx(),
             titleTextSizePx = 26.sp.toPx(), // mockup .editor-h1 26px; Aztec H1 at the 15sp base
-            headingTextSizePx = 20.sp.toPx(), // §6.11, as the Aztec H2
+            headingTextSizePx = MaterialTheme.typography.headlineSmall.fontSize.toPx(), // §6.11, as the Aztec H2 (20sp)
             subheadingTextSizePx = MaterialTheme.typography.titleLarge.fontSize.toPx(),
             serifTypeface = serif,
             accentColor = colors.primary.toArgb(),
@@ -249,7 +242,7 @@ internal fun rememberEditorStyle(): EditorStyle {
             quoteGapPx = TesseraSpacing.md.toPx(), // mockup .editor-quote padding-left 12
             monoBackgroundColor = colors.surfaceContainerHigh.toArgb(),
             monoTextColor = colors.onSurface.toArgb(),
-            monoCornerPx = TesseraSpacing.md.toPx(), // mockup .editor-code radius-md 12
+            monoCornerPx = corner, // mockup .editor-code radius-md 12 = shapes.medium
             monoPaddingHorizontalPx = 14.dp.toPx(), // mockup .editor-code padding 12 14
             monoPaddingVerticalPx = TesseraSpacing.md.toPx(),
             codeBackgroundColor = colors.surfaceContainerHigh.toArgb(), // Aztec codeBackgroundColor
@@ -257,7 +250,7 @@ internal fun rememberEditorStyle(): EditorStyle {
             dividerThicknessPx = 1.dp.toPx(),
             placeholderBorderColor = colors.outlineVariant.toArgb(), // D9
             placeholderTextColor = colors.onSurfaceVariant.toArgb(),
-            placeholderCornerPx = TesseraSpacing.md.toPx(),
+            placeholderCornerPx = corner,
             placeholderPaddingPx = TesseraSpacing.lg.toPx(),
             imageLabel = imageLabel,
             tableLabel = tableLabel,

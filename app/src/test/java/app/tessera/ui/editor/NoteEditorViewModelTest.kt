@@ -2,7 +2,10 @@ package app.tessera.ui.editor
 
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
+import app.tessera.core.preferences.UserPreferences
 import app.tessera.test.fakes.FakeUserPreferences
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.delay
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.FolderTreeNode
@@ -44,6 +47,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -90,19 +94,65 @@ class NoteEditorViewModelTest {
     }
 
     @Test
-    fun `native editor flag is off by default and follows the preference`() = runTest(dispatcher.scheduler) {
-        val prefs = FakeUserPreferences()
-        val vm = FakeEditorRepository(notes = listOf(sampleNote("note-flag"))).createViewModel("note-flag", prefs = prefs)
+    fun `native flag arrives together with the content and is null before`() = runTest(dispatcher.scheduler) {
+        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
+        val vm = FakeEditorRepository(notes = listOf(sampleNote("n", content = "x"))).createViewModel("n", prefs = prefs)
+        val seen = mutableListOf<NoteEditorState>()
+        assertEquals(null, vm.state.value.useNativeEditor)
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { seen += it } }
         runCurrent()
-        assertFalse(vm.state.value.useNativeEditor)
 
-        prefs.setUseNativeEditor(true)
+        assertEquals(null, seen.first().useNativeEditor)
+        assertTrue(seen.first().isLoading)
+        assertTrue(
+            seen.none { it.content.isNotEmpty() && it.useNativeEditor == null },
+            "no state shows the content while the engine is unknown",
+        )
+        assertEquals(true, vm.state.value.useNativeEditor)
+        assertEquals("x", vm.state.value.content)
+        job.cancel()
+    }
+
+    @Test
+    fun `a slow preference holds the note back and the flag still comes with the content`() = runTest(dispatcher.scheduler) {
+        val slow = object : UserPreferences by FakeUserPreferences() {
+            override val useNativeEditor: Flow<Boolean> = flow { delay(1_000); emit(true) }
+        }
+        val repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = "x")))
+        val vm = repo.createViewModel("n", preferences = slow)
         runCurrent()
-        assertTrue(vm.state.value.useNativeEditor)
+        assertEquals(null, vm.state.value.useNativeEditor)
+        assertEquals("", vm.state.value.content)
+
+        advanceTimeBy(1_001)
+        runCurrent()
+        assertEquals(true, vm.state.value.useNativeEditor)
+        assertEquals("x", vm.state.value.content)
+        assertTrue(repo.updateCalls.isEmpty())
+    }
+
+    @Test
+    fun `native flag off is read once as false`() = runTest(dispatcher.scheduler) {
+        val vm = FakeEditorRepository(notes = listOf(sampleNote("n"))).createViewModel("n")
+        runCurrent()
+        assertEquals(false, vm.state.value.useNativeEditor)
+    }
+
+    @Test
+    fun `flag switched while the note is open changes nothing and writes nothing`() = runTest(dispatcher.scheduler) {
+        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
+        val repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = "* legacy")))
+        val vm = repo.createViewModel("n", prefs = prefs)
+        runCurrent()
+        val before = vm.state.value
 
         prefs.setUseNativeEditor(false)
+        advanceTimeBy(5_000)
         runCurrent()
-        assertFalse(vm.state.value.useNativeEditor)
+
+        assertEquals(before, vm.state.value)
+        assertEquals(true, vm.state.value.useNativeEditor)
+        assertTrue(repo.updateCalls.isEmpty())
     }
 
     @Test
@@ -573,11 +623,16 @@ private fun member(uid: String, role: ShareRole): ShareMember =
         joinedAt = 1L,
     )
 
-private class FakeEditorRepository(
+internal class FakeEditorRepository(
     notes: List<Note> = emptyList(),
 ) : NotesRepository {
 
     private val notesFlow = MutableStateFlow(notes)
+    /** A change that arrives from outside (sync, a collaborator): the store emits it to every observer. */
+    fun pushRemote(note: Note) {
+        notesFlow.value = notesFlow.value.map { if (it.id == note.id) note else it }
+    }
+
     val updateCalls = mutableListOf<Note>()
     val deleteCalls = mutableListOf<NoteId>()
 
@@ -657,6 +712,7 @@ private class FakeEditorRepository(
         noteId: String,
         currentUser: String? = null,
         prefs: FakeUserPreferences = FakeUserPreferences(),
+        preferences: UserPreferences = prefs,
     ): NoteEditorViewModel {
         val savedState = SavedStateHandle(mapOf("noteId" to noteId))
         val auth = FakeAuthRepository(currentUser?.let(::UserId))
@@ -695,7 +751,7 @@ private class FakeEditorRepository(
             },
             authRepository = auth,
             folderRepository = FakeFolderRepository(),
-            userPreferences = prefs,
+            userPreferences = preferences,
             savedStateHandle = savedState,
         )
     }
@@ -737,7 +793,7 @@ private class FakeAuthRepository(user: UserId?) : AuthRepository {
     override suspend fun signOut() {}
 }
 
-private fun sampleNote(
+internal fun sampleNote(
     id: String,
     content: String = "Body",
     pinned: Boolean = false,

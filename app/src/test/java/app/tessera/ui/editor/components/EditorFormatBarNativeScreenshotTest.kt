@@ -24,7 +24,7 @@ import org.robolectric.annotation.GraphicsMode
 /** The native bar: a state with marks, a heading and history on (the active pills), and the empty one (undo / redo / indents off). */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w411dp-h200dp-port-xxhdpi")
+@Config(sdk = [34], qualifiers = "w840dp-h200dp-land-xxhdpi")
 class EditorFormatBarNativeScreenshotTest {
     @get:Rule val rule = createComposeRule()
 

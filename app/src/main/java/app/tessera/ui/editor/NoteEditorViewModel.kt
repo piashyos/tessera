@@ -40,8 +40,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.wordpress.aztec.Html
 
 private const val AutosaveDebounceMs = 500L
@@ -110,15 +112,21 @@ class NoteEditorViewModel @Inject constructor(
     private var baselineNote: Note? = null
 
     private var autosaveJob: Job? = null
+    private var autosavePending = false
 
     init {
         viewModelScope.launch {
+            // The engine is fixed for the life of the open note and arrives WITH its content: until then the screen draws
+            // no body, so the wrong engine never sees the note (Aztec's dispose would rewrite it, §6.9). A switch in
+            // Settings acts from the next note opened.
+            val native = userPreferences.useNativeEditor.first()
             val note = getNoteUseCase(noteId)
             if (note != null) {
                 baselineNote = note
                 val me = authRepository.currentUser.value
                 _state.update { current ->
                     current.copy(
+                        useNativeEditor = native,
                         content = note.content,
                         tags = note.tags.map { it.name },
                         isPinned = note.isPinned,
@@ -128,7 +136,7 @@ class NoteEditorViewModel @Inject constructor(
                     )
                 }
             } else {
-                _state.update { it.copy(isLoading = false) }
+                _state.update { it.copy(useNativeEditor = native, isLoading = false) }
             }
         }
 
@@ -159,13 +167,6 @@ class NoteEditorViewModel @Inject constructor(
                 buildBreadcrumb(folderId, folders)
             }.collect { breadcrumb ->
                 _state.update { it.copy(folderBreadcrumb = breadcrumb) }
-            }
-        }
-
-        // Debug flag: which editor engine the screen uses.
-        viewModelScope.launch {
-            userPreferences.useNativeEditor.collect { enabled ->
-                _state.update { it.copy(useNativeEditor = enabled) }
             }
         }
 
@@ -405,10 +406,20 @@ class NoteEditorViewModel @Inject constructor(
 
     private fun scheduleAutosave() {
         autosaveJob?.cancel()
+        autosavePending = true
         autosaveJob = viewModelScope.launch {
             delay(AutosaveDebounceMs)
+            autosavePending = false
             persist()
         }
+    }
+
+    /**
+     * Leaving the screen hands over the editor's last edit (its dispose flushes), and the 500 ms autosave that edit starts
+     * dies with [viewModelScope] when the back stack entry goes first. Save what is pending, once, before the scope is gone.
+     */
+    override fun onCleared() {
+        if (autosavePending) runBlocking { persist() }
     }
 
     private suspend fun persist() {

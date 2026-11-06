@@ -135,6 +135,7 @@ class NoteBodyTest {
         assertFalse(e.editable)
         rule.runOnUiThread { actions!!.toggleHeading1(); actions!!.focusBody() }
         pass(400)
+        assertFalse(e.isFocused)
         assertEquals("abc", e.markdown())
         assertTrue(emitted.isEmpty())
     }

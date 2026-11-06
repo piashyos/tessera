@@ -374,7 +374,7 @@ private fun replaceOrderedListSpans(editor: AztecText, indicatorArgb: Int) {
  * brand), so without this they ignore dynamic color / palette switches. API 29+ exposes the
  * drawables directly; on 26–28 the platform offers no public hook, so the static tint stays.
  */
-private fun applyCursorAndHandleTint(editor: AztecText, accentArgb: Int) {
+internal fun applyCursorAndHandleTint(editor: android.widget.TextView, accentArgb: Int) {
     if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
     // The getters may return fresh instances loaded from theme attrs — mutate, tint, and hand
     // the drawable BACK through the setter so the Editor actually swaps what it renders.

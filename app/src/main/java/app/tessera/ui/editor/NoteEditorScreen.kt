@@ -138,11 +138,16 @@ fun NoteEditorScreen(
     var focusedTableIdx by remember { mutableStateOf<Int?>(null) }
     val currentFocusedBlock by rememberUpdatedState(lastFocusedBlock)
     // The native engine takes the whole Markdown itself: no HTML round-trip, no block split (a table is its placeholder).
-    val initialHtml = remember(state.content, state.useNativeEditor) {
-        if (state.useNativeEditor) "" else converter.markdownToHtml(state.content)
+    // `null` = the engine is not known yet (the VM sets it together with the content): no body is drawn, so Aztec never
+    // sees a note that the native engine is to edit (its dispose would rewrite the content). A state that is not loading
+    // and carries no flag (previews, tests) is the Aztec path.
+    val engine: Boolean? = state.useNativeEditor ?: if (state.isLoading) null else false
+    val native = engine == true
+    val initialHtml = remember(state.content, engine) {
+        if (engine != false) "" else converter.markdownToHtml(state.content)
     }
-    val blocks = remember(state.content, state.useNativeEditor) {
-        if (state.useNativeEditor) emptyList() else splitMarkdownIntoBlocks(state.content)
+    val blocks = remember(state.content, engine) {
+        if (engine != false) emptyList() else splitMarkdownIntoBlocks(state.content)
     }
     val hasTable = blocks.any { it is Block.Table }
 
@@ -486,7 +491,7 @@ fun NoteEditorScreen(
                                     activeFormats = activeFormats,
                                     menuExpanded = formatMenuExpanded,
                                     onToggleMenu = { formatMenuExpanded = !formatMenuExpanded },
-                                    nativeEngine = state.useNativeEditor,
+                                    nativeEngine = native,
                                     formatState = formatState,
                                 )
                             }
@@ -497,7 +502,7 @@ fun NoteEditorScreen(
                                 activeFormats = activeFormats,
                                 actions = currentActions,
                                 onDismiss = { formatMenuExpanded = false },
-                                nativeEngine = state.useNativeEditor,
+                                nativeEngine = native,
                                 formatState = formatState,
                             )
                         }
@@ -537,7 +542,9 @@ fun NoteEditorScreen(
                 // Read-only notes keep the outer Compose scroll: a non-editable AztecText doesn't
                 // scroll its own content, and viewers can't select text so the selection-overlap
                 // issue the internal-scroll path fixes doesn't apply to them.
-                if (state.useNativeEditor) {
+                if (engine == null) {
+                    Box(Modifier.weight(1f).fillMaxWidth())
+                } else if (native) {
                     // NATIVE ENGINE — one editor for reading and editing: fills the area and scrolls itself (like the fast
                     // path below), tables and images are placeholders in it.
                     NoteBody(
