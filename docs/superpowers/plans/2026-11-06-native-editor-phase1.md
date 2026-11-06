@@ -242,25 +242,27 @@ TDD: сначала падающие кейсы из таблицы §8 спек
 attributes и автозамен — они в Chunk 4); `EditorCheckboxTheming.kt` (открыть фабрику).
 Тесты (Robolectric): `DocBinderTest`, `NormalizerTest`, `AztecOracleTest`.
 
-- [ ] Спаны §6.1: составной `BlockSpan` на абзац (`SPAN_PARAGRAPH`), абзац без спана = `Body`;
+- [x] Спаны §6.1: составной `BlockSpan` на абзац (`SPAN_PARAGRAPH`), абзац без спана = `Body`;
   `MarkSpan` (`EXCLUSIVE_EXCLUSIVE`); `ObjectSpan` (`U+FFFC`, заглушки D9 с подписями из `EditorStyle` —
   D14, разделитель-линия);
   `SentinelSpan` для `U+200B` пустого последнего не-Body абзаца; Mono/Quote учитывают соседей;
   чекбокс D10; типографика §6.11; цвета только из `EditorStyle`.
-- [ ] `DocBinder`: `bind` / `read` / `reapplyTheme` (пересоздаёт спаны, текст не трогает).
-- [ ] `Normalizer` — инварианты 1–5 §6.2 (чужие оформляющие спаны, исключения `SuggestionSpan`,
+- [x] `DocBinder`: `bind` / `read` / `reapplyTheme` (пересоздаёт спаны, текст не трогает).
+- [x] `Normalizer` — инварианты 1–5 §6.2 (чужие оформляющие спаны, исключения `SuggestionSpan`,
   `SuggestionRangeSpan` по имени класса, `SPAN_COMPOSING`; служебные спаны фреймворка не трогать;
   `U+FFFC` без спана; `U+200B` только с `SentinelSpan`); новые абзацы от вставки берут вид абзаца
   начала вставки.
-- [ ] `DocBinderTest`: `read(bind(doc)) == normalize(doc)` на `NoteDocFixtures.sampleDocs` и на ≥ 300
+- [x] `DocBinderTest`: `read(bind(doc)) == normalize(doc)` на `NoteDocFixtures.sampleDocs` и на ≥ 300
   документах из генератора `NoteDocFixtures` (фиксированный seed).
-- [ ] `NormalizerTest`: вставка `Spanned` с чужими `StyleSpan`/`ForegroundColorSpan` → удалены;
+- [x] `NormalizerTest`: вставка `Spanned` с чужими `StyleSpan`/`ForegroundColorSpan` → удалены;
   `SuggestionSpan` и composing — живы; `U+FFFC` без спана удалён; правка внутри абзаца не меняет его
   `BlockSpan`.
-- [ ] `AztecOracleTest` — по §8 спеки: вход (`NoteDocFixtures.legacyCorpus` без таблиц), сравнение
+- [x] `AztecOracleTest` — по §8 спеки: вход (`NoteDocFixtures.legacyCorpus` без таблиц), сравнение
   (видимый текст + вид строки), нормализация, явный список допустимых расхождений отдельными кейсами с
   комментарием. Функция сравнения принимает список строк Markdown — её же `qa` прогонит на дампе
   реальных заметок (Chunk 6).
+
+**Итог:** принято, коммит см. ниже; `engine.*` + `CheckboxRenderColorTest` — 65 тестов, 0 упало, 1 skip (`realNotesDump` без дампа): AztecOracleTest 16, BlockSpanDrawTest 8, DocBinderTest 13, NeighbourLayoutTest 4, NormalizerTest 23. Оракул: 74 документа, 6 расходятся, 0 необъяснённых. Ревью: 0 блокеров, 3 «заметно» + мелочи исправлены; добавлен механизм соседей (`Normalizer.affectedRange/refreshNeighbours`, `Numbering`) — обязателен для 4a/4b.
 
 **Готово, когда:** `gw.sh :app:testDebugUnitTest --tests 'app.tessera.ui.editor.engine.*'` зелено (классы
 по отдельности при флаке `RenderNodeNatives`), список допустимых расхождений оракула — в отчёте.
