@@ -24,6 +24,20 @@ class UserPreferencesRepositoryTest {
         repo.setThemeMode(ThemeMode.AUTO)
         repo.setDynamicColor(true)
         repo.setLanguageTag("")
+        repo.setUseNativeEditor(false)
+    }
+
+    @Test
+    fun `native editor flag is off by default`() = runBlocking {
+        assertEquals(false, repo.useNativeEditor.first())
+    }
+
+    @Test
+    fun `native editor flag persists on and off`() = runBlocking {
+        repo.setUseNativeEditor(true)
+        assertEquals(true, repo.useNativeEditor.first())
+        repo.setUseNativeEditor(false)
+        assertEquals(false, repo.useNativeEditor.first())
     }
 
     @Test
