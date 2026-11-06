@@ -275,14 +275,14 @@ attributes и автозамен — они в Chunk 4); `EditorCheckboxTheming.
 только точки вызова). Тесты (Robolectric): `EditRulesTest`, `TypingAttributesTest`, `AutoReplaceTest`,
 `FormatStateTest`.
 
-- [ ] `EditRules`:
+- [x] `EditRules`:
   - Enter и Backspace по таблицам §6.4, каждая клетка — параметризованный кейс;
   - Backspace с кареткой сразу после `SentinelSpan` считается Backspace в начале абзаца;
   - удаление выделения через абзацы;
   - отступы §6.6 (0..4);
   - переключение вида и меток §6.6;
   - вставка `Divider` после абзаца с кареткой (`insertHorizontalRule`, §7 спеки).
-- [ ] `TypingAttributes` §6.6:
+- [x] `TypingAttributes` §6.6:
   - умолчание без `Code`;
   - применяются только к реально вставленной середине, префикс и суффикс получают прежние метки из
     снимка `beforeTextChanged`;
@@ -293,9 +293,11 @@ attributes и автозамен — они в Chunk 4); `EditorCheckboxTheming.
   - выключить жирный в конце жирного слова;
   - набор после legacy-кода — не код;
   - переключил метку, сдвинул каретку — набор без неё.
-- [ ] `AutoReplace` §6.5 — вся таблица; при вставке не срабатывает. Возврат по undo проверяется в 4b.
-- [ ] `FormatState` §7 спеки: вид у каретки, `Mixed`, метки по всему выделению, typing attributes без
+- [x] `AutoReplace` §6.5 — вся таблица; при вставке не срабатывает. Возврат по undo проверяется в 4b.
+- [x] `FormatState` §7 спеки: вид у каретки, `Mixed`, метки по всему выделению, typing attributes без
   выделения, `canIndent`/`canOutdent`. `canUndo`/`canRedo` заполняются в 4b.
+
+**Итог:** принято, коммит `a418056`; 277 тестов (graphics-классы по одному зелёные). Ревью 4a: 0 блокеров, 3 «заметно» — внесены в 4b.
 
 **Готово, когда:** `gw.sh :app:testDebugUnitTest --tests 'app.tessera.ui.editor.engine.*'` зелено. В отчёте:
 число кейсов `EditRulesTest` и подтверждение, что покрыта каждая клетка таблиц §6.4–6.5.
@@ -306,28 +308,30 @@ attributes и автозамен — они в Chunk 4); `EditorCheckboxTheming.
 `CheckboxAccessibilityHelper.kt`. Тесты (Robolectric): `EditHistoryTest`, `ClipboardBridgeTest`,
 `TesseraEditTextTest`, `TesseraEditTextEmitTest`.
 
-- [ ] `EditHistory` §6.7:
+- [x] `EditHistory` §6.7:
   - склейка по ~500 мс, команды — отдельные шаги, лимит 100;
   - undo/redo — пользовательская правка, выдаётся наружу;
   - очистка при внешней пересборке;
   - undo сразу после автозамены возвращает набранные символы.
-- [ ] `ClipboardBridge` §6.8: внутри Tessera формат сохраняется, вставка извне — plain text.
-- [ ] `TesseraInputConnection`: `commitText("\n")`, `sendKeyEvent(ENTER/DEL)`,
+- [x] `ClipboardBridge` §6.8: внутри Tessera формат сохраняется, вставка извне — plain text.
+- [x] `TesseraInputConnection`: `commitText("\n")`, `sendKeyEvent(ENTER/DEL)`,
   `deleteSurroundingText(1,0)`, `getCursorCapsMode` с учётом `SentinelSpan`.
-- [ ] `TesseraEditText`:
+- [x] `TesseraEditText`:
   - `onKeyDown`: Enter, Del, Tab/Shift+Tab, Ctrl+B/I/U/Z/Shift+Z;
   - тап по чекбоксу, зона ≥ 48dp;
   - read-only (§6.10);
   - каретка встаёт после `U+200B`;
   - выдача и эхо §6.9 (D13): `lastLoadedMarkdown`, `hasPendingUserEdit`, дебаунс 300 мс, dispose;
   - `formatState()` с `canUndo`/`canRedo`.
-- [ ] `CheckboxAccessibilityHelper`: виртуальный узел на чекбокс, `isCheckable`/`isChecked`, действие клика.
-- [ ] `TesseraEditTextEmitTest`:
+- [x] `CheckboxAccessibilityHelper`: виртуальный узел на чекбокс, `isCheckable`/`isChecked`, действие клика.
+- [x] `TesseraEditTextEmitTest`:
   - загрузка, `reapplyTheme`, смена `editable`, dispose без правки → ничего не выдано;
   - правка → одна выдача после дебаунса;
   - undo → выдача;
   - внешний `markdown` при `hasPendingUserEdit` пропущен, без неё — применён, история очищена;
   - legacy `* x` открывается и принимает внешнее обновление.
+
+**Итог:** сдан, коммит `a418056`; `engine.*` + `CheckboxRenderColorTest` — 365 тестов, 0 упало, 1 skip (оркестратор, `--rerun`). Отступление от D6: загрузка через `setText(DocBinder.build(..))`. Ревью 4b — идёт.
 
 **Готово, когда:** `gw.sh :app:testDebugUnitTest --tests 'app.tessera.ui.editor.engine.*'` зелено.
 
