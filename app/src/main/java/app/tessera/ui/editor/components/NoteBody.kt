@@ -254,6 +254,14 @@ internal fun rememberEditorStyle(): EditorStyle {
             placeholderPaddingPx = TesseraSpacing.lg.toPx(),
             imageLabel = imageLabel,
             tableLabel = tableLabel,
+            // Block spacing, spec §6.11 (mockup shared.css .editor-*). 6/10/3 have no TesseraSpacing token.
+            titleSpaceTopPx = TesseraSpacing.md.toPx(), // .editor-h1 margin-top 12
+            titleSpaceBottomPx = TesseraSpacing.sm.toPx(), // .editor-h1 margin-bottom 8
+            headingSpaceTopPx = TesseraSpacing.md.toPx(), // .editor-h2 margin-top 12
+            headingSpaceBottomPx = 6.dp.toPx(), // .editor-h2 margin-bottom 6
+            blockEdgePx = 10.dp.toPx(), // .editor-checklist/.editor-quote/.editor-code margin 10
+            listItemPaddingPx = 3.dp.toPx(), // .editor-checklist li padding 3px 0
+            quotePaddingVerticalPx = TesseraSpacing.xs.toPx(), // .editor-quote padding 4
         )
     }
 }
