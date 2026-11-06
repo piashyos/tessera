@@ -181,7 +181,7 @@ JUnit5 + Robolectric, Roborazzi, instrumented (`HiltTestRunner`).
 
 ### Chunk 1b: общий фейк предпочтений (`data`)
 
-- [ ] `app/src/test/java/app/tessera/test/fakes/FakeUserPreferences.kt`: реализует весь `UserPreferences`
+- [x] `app/src/test/java/app/tessera/test/fakes/FakeUserPreferences.kt` — принято, компиляция тестов зелёная, коммит `dfeaa94`: реализует весь `UserPreferences`
   на `MutableStateFlow` (по образцу приватного фейка в `SettingsViewModelTest`); `useNativeEditor`
   управляемый, `setUseNativeEditor` меняет его. Существующие приватные фейки не трогать.
 
@@ -212,22 +212,24 @@ JUnit5 + Robolectric, Roborazzi, instrumented (`HiltTestRunner`).
 
 TDD: сначала падающие кейсы из таблицы §8 спеки (строка «JVM»), потом код.
 
-- [ ] Модель §4 + `normalize` (правила 1–10).
-- [ ] Блоки §5.1–5.2 этапа 1: заголовки (H4–H6 → Subheading), fence (длина, незакрытый, язык
+- [x] Модель §4 + `normalize` (правила 1–10).
+- [x] Блоки §5.1–5.2 этапа 1: заголовки (H4–H6 → Subheading), fence (длина, незакрытый, язык
   отбрасывается, `~~~` — литерал), списки и чек-листы (чтение `* `, `N)`, `* [ ]`, `[X]`; запись `- `,
-  `+ `, `N. `, `- [ ] `, `- [x] `), вложенность (4 пробела, таб, `ceil`), цитата `> `, разделитель,
+  `+ `, `N. `, `- [x] `, `- [x] `), вложенность (4 пробела, таб, `ceil`), цитата `> `, разделитель,
   картинка (`IMAGE_LINE`), таблица (+ meta-комментарий), правило пробелов §5.2.
-- [ ] Инлайн §5.3: delimiter-run, code spans (чтение и запись), теги `<u>/<b>/<i>/<s>`
+- [x] Инлайн §5.3: delimiter-run, code spans (чтение и запись), теги `<u>/<b>/<i>/<s>`
   (`<strong>`/`<em>`/`<del>`/`<strike>` — литерал), `\`-экранирование (не в коде и не в fence),
   запись с проверкой и запасной формой.
-- [ ] Блочное экранирование — таблица §5.3 (в т.ч. `2024\. год`, `\|` всегда, `\[ ]` в пункте).
-- [ ] Нумерация §5.3.
-- [ ] `NoteMarkdownPropertyTest`: ≥ 2000 случайных документов, фиксированный seed, генератор §5.3;
+- [x] Блочное экранирование — таблица §5.3 (в т.ч. `2024\. год`, `\|` всегда, `\[ ]` в пункте).
+- [x] Нумерация §5.3.
+- [x] `NoteMarkdownPropertyTest`: ≥ 2000 случайных документов, фиксированный seed, генератор §5.3;
   проверяет `parse(serialize(doc)) == normalize(doc)` и `serialize(parse(serialize(doc))) == serialize(doc)`.
-- [ ] `NoteMarkdownCorpusTest`: хранимые Markdown-строки из `MarkdownHtmlConverterTest` (аргументы
+- [x] `NoteMarkdownCorpusTest`: хранимые Markdown-строки из `MarkdownHtmlConverterTest` (аргументы
   `roundTrip(...)`, входы `markdownToHtml`-тестов, ожидаемые значения `htmlToMarkdown`-тестов) —
   выписать в тест списком; каждая парсится, повторная запись не меняет видимый текст строк.
-- [ ] `MarkdownPreview`: снятие `\` перед ASCII-пунктуацией + кейс в `MarkdownPreviewTest`.
+- [x] `MarkdownPreview`: снятие `\` перед ASCII-пунктуацией + кейс в `MarkdownPreviewTest`.
+
+**Итог:** принято, коммит `dfeaa94`; `core.text.*` 253/253 (`--rerun`, оркестратор): InlineMarkdownTest 31, NoteMarkdownTest 63, NoteDocNormalizeTest 17, NoteMarkdownCorpusTest 6, NoteMarkdownPropertyTest 3 (6000 док.), MarkdownPreviewTest 27, базовые классы с прежними числами. Ревью: 0 блокеров; 2 «заметно» (legacy-эмфаза, `\` в коде превью) и 3 мелочи исправлены (спека §4 п.11–12, §5.3, §8 дополнены).
 
 **Готово, когда:** `gw.sh :app:testDebugUnitTest --tests 'app.tessera.core.text.*'` — все новые зелёные,
 старые классы `core.text` с числами базовой линии раздела 1 (`MarkdownBlocksTest` 5, `GfmTableParserTest` 6,
