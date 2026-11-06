@@ -87,12 +87,7 @@ object DocBinder {
         if (pe - ps == 1 && s[ps] == OBJECT_CHAR) {
             text.getSpans(ps, pe, ObjectSpan::class.java).firstOrNull { text.getSpanStart(it) == ps }?.let { return it.block }
         }
-        val kind = if (ps < s.length) {
-            text.getSpans(ps, minOf(pe + 1, s.length), BlockSpan::class.java)
-                .firstOrNull { text.getSpanStart(it) == ps }?.kind
-        } else {
-            null
-        } ?: ParagraphKind.Body
+        val kind = blockSpanAt(text, ps)?.kind ?: ParagraphKind.Body
         val sentinel = text.getSpans(ps, pe, SentinelSpan::class.java)
             .map { text.getSpanStart(it) }.firstOrNull { it in ps until pe && s[it] == SENTINEL_CHAR }
         val content = if (sentinel == null) s.substring(ps, pe) else s.substring(ps, sentinel) + s.substring(sentinel + 1, pe)
@@ -132,6 +127,10 @@ object DocBinder {
         for (s in text.getSpans(0, text.length, Any::class.java)) if (isEngineSpan(s)) text.removeSpan(s)
     }
 }
+
+/** The [BlockSpan] that starts at the paragraph start [ps] — the kind of that paragraph; `null` is Body. The one definition of "the span of a paragraph". */
+internal fun blockSpanAt(text: Spanned, ps: Int): BlockSpan? =
+    if (ps >= text.length) null else text.getSpans(ps, minOf(paragraphEnd(text, ps) + 1, text.length), BlockSpan::class.java).firstOrNull { text.getSpanStart(it) == ps }
 
 internal fun paragraphEnd(s: CharSequence, from: Int): Int {
     var i = from

@@ -45,7 +45,7 @@ class Normalizer(var style: EditorStyle, private val steps: List<NormalizeStep> 
     fun originKind(text: Spanned, index: Int): ParagraphKind {
         val ps = paragraphStart(text, index)
         if (ps < text.length && text.getSpans(ps, ps + 1, ObjectSpan::class.java).any { text.getSpanStart(it) == ps }) return ParagraphKind.Body
-        return homeSpan(text, ps)?.kind ?: ParagraphKind.Body
+        return blockSpanAt(text, ps)?.kind ?: ParagraphKind.Body
     }
 
     /**
@@ -121,7 +121,7 @@ class Normalizer(var style: EditorStyle, private val steps: List<NormalizeStep> 
 
     private fun guessOrigin(text: Spanned, index: Int): ParagraphKind {
         val ps = paragraphStart(text, index)
-        return homeSpan(text, ps)?.kind
+        return blockSpanAt(text, ps)?.kind
             ?: text.getSpans(ps, minOf(paragraphEnd(text, ps) + 1, text.length), BlockSpan::class.java)
                 .minByOrNull { text.getSpanStart(it) }?.kind
             ?: ParagraphKind.Body
@@ -166,9 +166,6 @@ class Normalizer(var style: EditorStyle, private val steps: List<NormalizeStep> 
             e.setSpan(keep, ps, end, BLOCK_SPAN_FLAGS)
         }
     }
-
-    private fun homeSpan(text: Spanned, ps: Int): BlockSpan? =
-        text.getSpans(ps, minOf(ps + 1, text.length).coerceAtLeast(ps), BlockSpan::class.java).firstOrNull { text.getSpanStart(it) == ps }
 
     private fun objectAt(text: Spanned, i: Int): ObjectSpan? =
         text.getSpans(i, i + 1, ObjectSpan::class.java).firstOrNull { text.getSpanStart(it) == i && text.getSpanEnd(it) == i + 1 }

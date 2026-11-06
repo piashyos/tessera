@@ -35,12 +35,12 @@ internal object Numbering {
      */
     fun renumber(text: Spannable, from: Int, to: Int) {
         var start = paragraphStart(text, from)
-        while (start > 0 && blockAt(text, paragraphStart(text, start - 1)) is ListItemSpan) start = paragraphStart(text, start - 1)
+        while (start > 0 && blockSpanAt(text, paragraphStart(text, start - 1)) is ListItemSpan) start = paragraphStart(text, start - 1)
         val counter = NumberCounter()
         var ps = start
         while (ps <= text.length) {
             val pe = paragraphEnd(text, ps)
-            val span = blockAt(text, ps)
+            val span = blockSpanAt(text, ps)
             if (span is ListItemSpan) {
                 val n = counter.next(span.kind)
                 if (span.number != n) {
@@ -55,7 +55,4 @@ internal object Numbering {
             ps = pe + 1
         }
     }
-
-    private fun blockAt(text: Spanned, ps: Int): BlockSpan? =
-        if (ps >= text.length) null else text.getSpans(ps, minOf(paragraphEnd(text, ps) + 1, text.length), BlockSpan::class.java).firstOrNull { text.getSpanStart(it) == ps }
 }

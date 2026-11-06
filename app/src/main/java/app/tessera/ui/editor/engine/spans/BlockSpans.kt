@@ -17,6 +17,7 @@ import app.tessera.core.text.notedoc.ParagraphKind
 import app.tessera.ui.editor.components.CheckboxPalette
 import app.tessera.ui.editor.components.TesseraCheckboxDrawable
 import app.tessera.ui.editor.engine.EditorStyle
+import app.tessera.ui.editor.engine.blockSpanAt
 
 /**
  * Flags of every [BlockSpan]: a paragraph span with a higher priority than the marks, so the heading's typeface and
@@ -244,7 +245,4 @@ internal fun previousBlock(text: Spanned, start: Int): Pair<BlockSpan?, Int>? {
 }
 
 /** The block span of the paragraph that starts at [end]. */
-internal fun nextBlock(text: Spanned, end: Int): BlockSpan? {
-    if (end >= text.length) return null
-    return text.getSpans(end, end + 1, BlockSpan::class.java).firstOrNull { text.getSpanStart(it) == end }
-}
+internal fun nextBlock(text: Spanned, end: Int): BlockSpan? = blockSpanAt(text, end)
