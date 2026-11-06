@@ -9,6 +9,11 @@ private val INLINE_STRIKE = Regex("""~~(?=\S)(.+?)(?<=\S)~~""")
 private val INLINE_CODE = Regex("""`([^`]+)`""")
 private val HTML_TAG = Regex("""<[^>]+>""")
 private val WHITESPACE = Regex("""\s+""")
+// `\` before ASCII punctuation is a Markdown escape (notedoc dialect). Escaped characters are swapped for
+// private-use code points while the emphasis/tag regexes run, so `\*x\*` is not mistaken for italic.
+// Code spans are matched first and returned as is: `\` is a literal there (and inside fences).
+private val ESCAPE = Regex("""`[^`]+`|\\([!-/:-@\[-`{-~])""")
+private const val ESCAPED_BASE = 0xE000
 private val IMAGE_REF_LINE = Regex("""^!\[[^\]]*]\(tessera-img://[^)]*\)$""")
 
 /**
@@ -33,12 +38,16 @@ fun markdownToPreviewPlainText(markdown: String): String {
  * Lines that sanitize to nothing are skipped so a card never shows an empty title/preview when
  * meaningful text follows.
  */
-private fun previewLines(markdown: String): Sequence<String> =
-    markdown.lineSequence()
-        .map(String::trim)
-        .filter { it.isNotEmpty() && !isTableSeparatorRow(it) && !it.startsWith("```") && !IMAGE_REF_LINE.matches(it) }
-        .map { sanitizePreviewLine(stripTableMarkup(it)) }
-        .filter(String::isNotEmpty)
+private fun previewLines(markdown: String): Sequence<String> = sequence {
+    var inFence = false
+    for (raw in markdown.lineSequence()) {
+        val line = raw.trim()
+        if (line.startsWith("```")) { inFence = !inFence; continue }
+        if (line.isEmpty() || isTableSeparatorRow(line) || IMAGE_REF_LINE.matches(line)) continue
+        val text = sanitizePreviewLine(stripTableMarkup(line), unescape = !inFence)
+        if (text.isNotEmpty()) yield(text)
+    }
+}
 
 /** A markdown table alignment row: only pipes, dashes, colons and spaces. */
 private fun isTableSeparatorRow(line: String): Boolean =
@@ -59,9 +68,16 @@ private fun stripTableMarkup(line: String): String =
 fun markdownBodyPreviewPlainText(markdown: String): String =
     previewLines(markdown).drop(1).firstOrNull() ?: ""
 
-private fun sanitizePreviewLine(line: String): String =
+private fun sanitizePreviewLine(line: String, unescape: Boolean): String =
     line
         .replace(BLOCK_PREFIX, "")
+        .let { l ->
+            if (!unescape) l
+            else l.replace(ESCAPE) { m ->
+                val c = m.groupValues[1]
+                if (c.isEmpty()) m.value else (ESCAPED_BASE + c[0].code).toChar().toString()
+            }
+        }
         .replace(INLINE_BOLD) { it.groupValues[1] }
         .replace(INLINE_ITALIC) { it.groupValues[1] }
         .replace(INLINE_STRIKE) { it.groupValues[1] }
@@ -69,3 +85,5 @@ private fun sanitizePreviewLine(line: String): String =
         .replace(HTML_TAG, "")
         .replace(WHITESPACE, " ")
         .trim()
+        .map { if (it.code in ESCAPED_BASE + 33..ESCAPED_BASE + 126) (it.code - ESCAPED_BASE).toChar() else it }
+        .joinToString("")

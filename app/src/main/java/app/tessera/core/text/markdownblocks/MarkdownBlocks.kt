@@ -17,8 +17,8 @@ sealed interface Block {
 //   | A | B |
 //   |---|---|
 //   | 1 | 2 |
-private val TESSERA_META = Regex("""^\s*<!--\s*tessera:(.*?)\s*-->\s*$""")
-private val SEPARATOR = Regex("""^\s*\|?\s*:?-{3,}:?""")
+internal val TESSERA_META = Regex("""^\s*<!--\s*tessera:(.*?)\s*-->\s*$""")
+internal val SEPARATOR = Regex("""^\s*\|?\s*:?-{3,}:?""")
 
 fun splitMarkdownIntoBlocks(markdown: String): List<Block> {
     if (markdown.isEmpty()) return emptyList()
@@ -76,7 +76,7 @@ fun joinBlocksIntoMarkdown(blocks: List<Block>): String =
     }
 
 /** Parse the `cols=...;rows=...` payload and attach it to [grid] if the sizes are valid. */
-private fun applyMeta(grid: TableGrid, payload: String): TableGrid {
+internal fun applyMeta(grid: TableGrid, payload: String): TableGrid {
     var cols: List<Float>? = null
     var heights: List<Float>? = null
     payload.split(';').forEach { part ->
@@ -94,7 +94,7 @@ private fun applyMeta(grid: TableGrid, payload: String): TableGrid {
 }
 
 /** Build the `<!-- tessera:... -->` comment for [grid], or null if it has no custom sizing. */
-private fun metaComment(grid: TableGrid): String? {
+internal fun metaComment(grid: TableGrid): String? {
     val parts = mutableListOf<String>()
     grid.colWidths?.let { parts.add("cols=" + it.joinToString(",") { w -> w.roundToInt().toString() }) }
     grid.rowHeights?.let { parts.add("rows=" + it.joinToString(",") { h -> h.roundToInt().toString() }) }

@@ -147,4 +147,23 @@ class MarkdownPreviewTest {
         assert(!preview.contains("tessera-img")) { "preview leaked raw image ref: $preview" }
         assert(!preview.contains("![")) { "preview leaked raw image markup: $preview" }
     }
+
+    @Test
+    fun `backslash before ascii punctuation is an escape and is dropped`() {
+        assertEquals("2024. год", markdownToPreviewPlainText("2024\\. год"))
+        assertEquals("- text", markdownToPreviewPlainText("\\- text"))
+        assertEquals("# not a heading", markdownToPreviewPlainText("\\# not a heading"))
+        assertEquals("*not italic* here", markdownToPreviewPlainText("\\*not italic\\* here"))
+        assertEquals("a <b> c", markdownToPreviewPlainText("a \\<b> c"))
+        assertEquals("C:\\Users \\ end\\", markdownToPreviewPlainText("C:\\Users \\ end\\"))
+        assertEquals("a\\b", markdownToPreviewPlainText("a\\\\b"))
+    }
+
+    @Test
+    fun `backslash stays literal inside code spans and fences`() {
+        assertEquals("\\d+\\.", markdownToPreviewPlainText("`\\d+\\.`"))
+        assertEquals("a *b* \\d", markdownToPreviewPlainText("a \\*b\\* `\\d`"))
+        assertEquals("C\\.x", markdownToPreviewPlainText("```\nC\\.x\n```"))
+        assertEquals("in \\* fence", markdownBodyPreviewPlainText("t\n```\nin \\* fence\n```"))
+    }
 }
