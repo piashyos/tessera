@@ -232,6 +232,51 @@ class NoteImageDecoderTest {
         assertEquals(120 to 200, decoder().storedSize("tessera-img://sz"))
     }
 
+    // --- corrupt local file ---
+    // Robolectric's BitmapFactory shadow returns a bitmap even for garbage (memory
+    // robolectric_bitmapfactory_bounds_mode), so "undecodable" is simulated through the decoder's
+    // fileDecoder seam: files holding CORRUPT fail, everything else uses the real decode path.
+    // That the real codec returns null for a truncated webp is a QA case on device.
+
+    private fun NoteImageDecoder.failingOnCorruptFiles() {
+        val real = fileDecoder
+        fileDecoder = { f, w, r, ref -> if (f.readText(Charsets.ISO_8859_1).startsWith("CORRUPT")) null else real(f, w, r, ref) }
+    }
+
+    private fun corruptCacheFile(id: String): File =
+        File(File(context.cacheDir, "images"), "$id.webp").apply {
+            parentFile?.mkdirs()
+            writeText("CORRUPT")
+        }
+
+    @Test
+    fun `corrupt cache file falls through to Drive which rewrites it`() = runTest {
+        val broken = corruptCacheFile("bad-1")
+        downloader = ImageDownloader { _ ->
+            writeImage(broken, 80, 80) // the real downloader overwrites cacheDir/images/<id>.webp
+        }
+        val d = decoder().apply { failingOnCorruptFiles() }
+        val result = d.decode("tessera-img://bad-1", 800)
+        assertEquals(80, (result as NoteImageDecoder.Result.Loaded).bitmap.width)
+        assertEquals(1, downloads)
+    }
+
+    @Test
+    fun `corrupt file and Drive failure is Unavailable`() = runTest {
+        corruptCacheFile("bad-2")
+        val d = decoder().apply { failingOnCorruptFiles() }
+        assertEquals(NoteImageDecoder.Result.Unavailable, d.decode("tessera-img://bad-2", 800))
+        assertEquals(1, downloads)
+    }
+
+    @Test
+    fun `corrupt file and download=false is Unavailable without calling Drive`() = runTest {
+        corruptCacheFile("bad-3")
+        val d = decoder().apply { failingOnCorruptFiles() }
+        assertEquals(NoteImageDecoder.Result.Unavailable, d.decode("tessera-img://bad-3", 800, download = false))
+        assertEquals(0, downloads)
+    }
+
     // --- prefetchSizes / cachedSize ---
     // Robolectric's bounds-mode shadow is not a real codec: that prefetch reads real file bounds
     // (no pixel decode) and matches the on-device decode size is a QA case, see the P2-1a report.

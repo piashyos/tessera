@@ -55,7 +55,12 @@ class DriveImageDownloader @Inject constructor(
         return withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, IMAGES_DIR).apply { mkdirs() }
             val file = File(dir, "$imageId.webp")
-            file.writeBytes(bytes)
+            // Atomic: a cut-off write must never leave a half-file under the final name.
+            val tmp = File(dir, "$imageId.webp.tmp").apply { writeBytes(bytes) }
+            if (!tmp.renameTo(file)) {
+                tmp.delete()
+                return@withContext null
+            }
             evictImageCache(dir, MAX_CACHE_BYTES)
             file
         }

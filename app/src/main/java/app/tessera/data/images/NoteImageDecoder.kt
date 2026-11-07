@@ -45,12 +45,18 @@ class NoteImageDecoder(
     suspend fun decode(src: String, maxWidthPx: Int, download: Boolean = true): Result {
         val ref = parseImageRef(src) ?: return Result.Unavailable
         val row = attempt { noteImageDao.byId(ref.id) }
-        val file = localFile(ref.id, row)
-            ?: if (download) attempt { downloader.download(ref.id) } else null
-        file ?: return Result.Unavailable
-        val bitmap = withContext(Dispatchers.IO) { decodeFile(file, maxWidthPx, row, ref) }
+        suspend fun decodeIo(file: File) = withContext(Dispatchers.IO) { fileDecoder(file, maxWidthPx, row, ref) }
+        // A local file that exists but won't decode (e.g. a truncated download) must not pin the image
+        // to "unavailable": fall through to Drive, whose download rewrites the cache file.
+        var bitmap = localFile(ref.id, row)?.let { decodeIo(it) }
+        if (bitmap == null && download) {
+            bitmap = attempt { downloader.download(ref.id) }?.let { decodeIo(it) }
+        }
         return bitmap?.let { Result.Loaded(it) } ?: Result.Unavailable
     }
+
+    /** Decode seam (file, maxWidth, row, ref → baked bitmap or null); tests swap it to simulate a corrupt file. */
+    internal var fileDecoder: (File, Int, NoteImageEntity?, ImageRef) -> Bitmap? = ::decodeFile
 
     /**
      * Reads ONLY the bounds (`inJustDecodeBounds`) of the local/cached files behind [srcs] and stores
@@ -93,7 +99,7 @@ class NoteImageDecoder(
     fun decodeLocal(src: String, maxWidthPx: Int): Bitmap? {
         val ref = parseImageRef(src) ?: return null
         val file = localFile(ref.id, null) ?: return null
-        return decodeFile(file, maxWidthPx, null, ref)
+        return fileDecoder(file, maxWidthPx, null, ref)
     }
 
     /** Stored (width, height) of [src]'s Room row, for sizing placeholders; null when unknown. */
