@@ -64,7 +64,8 @@ class NoteObjectImageSourceTest {
     fun tearDown() = scope.cancel()
 
     private fun source(maxBytes: Int = 8 * 1024 * 1024) =
-        NoteObjectImageSource(NoteImageDecoder(dao, context.filesDir, context.cacheDir) { null }, scope, maxBytes)
+        // Robolectric cannot decode through ImageDecoder: the BitmapFactory path (the device path is NativeImageSizeTest's).
+        NoteObjectImageSource(NoteImageDecoder(dao, context.filesDir, context.cacheDir) { null }.apply { strictDecoding = false }, scope, maxBytes)
 
     private fun write(id: String, w: Int = 40, h: Int = 20) {
         val f = File(File(context.filesDir, "images"), "$id.webp").apply { parentFile?.mkdirs() }
