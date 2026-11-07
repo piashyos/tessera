@@ -44,7 +44,10 @@ class AztecPathSmokeTest : NativeAppTest() {
         }
         app.settle()
         app.back()
-        assertEquals("an Aztec edit is saved", "# Aztec\n- [ ] task\nbody!", app.entity("qa-aztec-1")!!.content)
+        // Exactly what the Aztec path saved before phase 1: its html→md converter (unchanged, plan D4) puts a blank line
+        // between a list and the paragraph after it on any edit — see MarkdownHtmlConverterTest
+        // `paragraph right after a list gets a blank line`. The flag-off promise is "as before", not "canonical".
+        assertEquals("an Aztec edit is saved as before", "# Aztec\n- [ ] task\n\nbody!", app.entity("qa-aztec-1")!!.content)
     }
 
     private companion object {

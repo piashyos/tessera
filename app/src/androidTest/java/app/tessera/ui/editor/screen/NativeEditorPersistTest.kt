@@ -131,6 +131,7 @@ class NativeEditorPersistTest : NativeAppTest() {
         app.back()
         val after = app.entity("qa-persist-undo")!!
         assertEquals("edited and undone: the same content", SEED, after.content)
+        assertEquals("edited and undone: nothing was written", ts, after.updatedAt)
     }
 
     private fun q(s: String?) = s?.let { "\"" + it.replace("\n", "\\n") + "\"" } ?: "null"
