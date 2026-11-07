@@ -158,7 +158,7 @@ fun NoteEditorScreen(
     val engine: Boolean? = state.useNativeEditor ?: if (state.isLoading) null else false
     val native = engine == true
     // Aztec keeps its own debounce (RichNoteBody has no flush): at least the VM's autosave window is closed here.
-    if (engine == false) OnStop(onFlush)
+    if (engine == false) OnStop { handOverEdit(); onFlush() }
     val initialHtml = remember(state.content, engine) {
         if (engine != false) "" else converter.markdownToHtml(state.content)
     }

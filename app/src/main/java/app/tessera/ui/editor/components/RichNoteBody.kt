@@ -832,7 +832,7 @@ fun RichNoteBody(
 
             fun scheduleHtmlFlush() {
                 debounceRunnable?.let { handler.removeCallbacks(it) }
-                val runnable = Runnable { flushHtmlNow() }
+                val runnable = Runnable { debounceRunnable = null; flushHtmlNow() }
                 debounceRunnable = runnable
                 handler.postDelayed(runnable, DebounceMs)
             }
@@ -898,6 +898,16 @@ fun RichNoteBody(
 
             // Expose formatting actions to the toolbar
             onActionsReady(object : RichBodyActions {
+                // Back / ON_STOP: an edit still held back by the debounce goes to the host now, before the host saves (else the
+                // save sees the text 300 ms late; onDispose hands it over only after the screen is gone). Nothing pending: no-op,
+                // htmlToMarkdown(toHtml()) is not an identity and a visit without edits must not become a save.
+                override fun flushPendingEdit() {
+                    val pending = debounceRunnable ?: return
+                    handler.removeCallbacks(pending)
+                    debounceRunnable = null
+                    flushHtmlNow()
+                }
+
                 private inline fun withPreservedSelection(rebuildLayout: Boolean = false, block: () -> Unit) {
                     val start = editor.selectionStart
                     val end = editor.selectionEnd
