@@ -22,12 +22,14 @@ import app.tessera.ui.editor.engine.spans.markSpanOf
  * characters before [c] and 8 after it are looked at: a Backspace in a paragraph of 10 000 characters must not copy the paragraph and
  * break it into clusters every time (a cluster longer than 256 characters is a stack of combining marks nobody reads).
  */
+private val graphemes = ThreadLocal.withInitial { android.icu.text.BreakIterator.getCharacterInstance() }
+
 internal fun graphemeStart(e: CharSequence, cs: Int, c: Int): Int {
     var from = maxOf(cs, c - 256)
     if (from > cs && e[from].isLowSurrogate()) from--
     var to = c
     while (to < e.length && to < c + 8 && e[to] != '\n') to++
-    val it = android.icu.text.BreakIterator.getCharacterInstance()
+    val it = graphemes.get()
     it.setText(e.subSequence(from, to).toString())
     val p = it.preceding(c - from)
     return if (p == android.icu.text.BreakIterator.DONE) c - 1 else maxOf(from + p, cs)

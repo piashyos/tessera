@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.text.Editable
 import android.text.InputType
 import android.text.Spanned
+import android.text.SpannableStringBuilder
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.text.method.ArrowKeyMovementMethod
@@ -108,7 +109,12 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     private val autoReplace = AutoReplace(rules)
     private val history = EditHistory()
     private val emitHandler = Handler(Looper.getMainLooper())
-    private val emitRunnable = Runnable { flushPendingEdit() }
+    private val emitRunnable = Runnable { emitDebounced() }
+
+    /** Where the Markdown of a pending edit is written when the debounce fires: not on the main thread (a note of a thousand paragraphs takes tens of ms). */
+    internal var emitExecutor: java.util.concurrent.Executor = emitPool
+    private var emitToken = 0
+    private var disposed = false
     private val a11y = CheckboxAccessibilityHelper(this)
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
@@ -248,9 +254,39 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     private var markdownCache: MarkdownCache? = null
 
+    /**
+     * The debounce fired. A light copy of the document is taken here (it costs a fraction of the serialization), the Markdown is written from it on
+     * [emitExecutor], and the result comes back to the main thread: if the note is still the one that was copied, it is cached and emitted (§6.9: the
+     * same Markdown, the same moment of the contract); if the user went on, a newer debounce has been started and this result is dropped.
+     */
+    private fun emitDebounced() {
+        if (!hasPendingUserEdit) return
+        val t = text as? EngineEditable
+        val c = markdownCache
+        if (t == null || (c != null && c.editable === t && c.version == t.version)) { flushPendingEdit(); return }
+        val token = ++emitToken
+        val version = t.version
+        val copy = SpannableStringBuilder(t)
+        emitExecutor.execute {
+            val md = NoteMarkdown.serialize(DocBinder.read(copy))
+            emitHandler.post { deliverEmit(token, t, version, md) }
+        }
+    }
+
+    private fun deliverEmit(token: Int, t: EngineEditable, version: Int, md: String) {
+        if (disposed || token != emitToken) return
+        if (text !== t || t.version != version) { // the note changed while the Markdown was written: write it again after a pause
+            if (hasPendingUserEdit) { emitHandler.removeCallbacks(emitRunnable); emitHandler.postDelayed(emitRunnable, EMIT_DEBOUNCE_MS) }
+            return
+        }
+        markdownCache = MarkdownCache(t, version, md)
+        flushPendingEdit()
+    }
+
     /** Emits a pending user edit now (leaving the screen, saving). */
     fun flushPendingEdit() {
         emitHandler.removeCallbacks(emitRunnable)
+        emitToken++ // a Markdown that is being written in the background is not needed any more
         if (!hasPendingUserEdit) return
         hasPendingUserEdit = false
         val md = markdown()
@@ -262,6 +298,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     /** The host composable leaves: a pending user edit is emitted, nothing else is; no callback fires after this. */
     fun dispose() {
         flushPendingEdit()
+        disposed = true
         emitHandler.removeCallbacksAndMessages(null)
         onMarkdownChange = null
         onFormatStateChanged = null
@@ -399,6 +436,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         val s = at ?: selectionStart.coerceAtLeast(0)
         val t = at ?: selectionEnd.coerceAtLeast(0)
         val before = snapshot(e, s, t)
+        val v0 = versionOf(e)
         var sel: Sel? = null
         guard {
             inCommand = true
@@ -406,7 +444,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             applyObjectWidth()
         }
         sel?.let { setSelection(it.start.coerceAtMost(e.length), it.end.coerceAtMost(e.length)) }
-        val changed = sel != null && snapshot(e).markdown != before.markdown
+        val changed = sel != null && changedSince(e, v0)
         if (changed) {
             history.step(before)
             commitUserEdit()
@@ -416,8 +454,21 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         return changed
     }
 
-    private fun snapshot(e: Editable, s: Int = selectionStart.coerceAtLeast(0), t: Int = selectionEnd.coerceAtLeast(0)) =
-        Snapshot(currentMarkdown(e), s, t)
+    /**
+     * The state of the note for the history. When the Markdown of the current version is known it is the snapshot; otherwise the snapshot is a light
+     * copy of the document and the Markdown is written when a step is used (undo, redo): taking it costs nothing like a serialization of the note.
+     */
+    private fun snapshot(e: Editable, s: Int = selectionStart.coerceAtLeast(0), t: Int = selectionEnd.coerceAtLeast(0)): Snapshot {
+        val en = e as? EngineEditable
+        val c = markdownCache
+        if (en != null && c != null && c.editable === en && c.version == en.version) return Snapshot(c.markdown, s, t)
+        val copy = SpannableStringBuilder(e)
+        return Snapshot.lazy(s, t) { NoteMarkdown.serialize(DocBinder.read(copy)) }
+    }
+
+    /** Did [op] change the document since [version] (text or the spans of the engine)? */
+    private fun changedSince(e: Editable, version: Int?) = version == null || (e as? EngineEditable)?.version != version
+    private fun versionOf(e: Editable) = (e as? EngineEditable)?.version
 
     private fun now() = SystemClock.uptimeMillis()
 
@@ -505,10 +556,11 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         }
         val e = text ?: return
         val before = snapshot(e)
+        val v0 = versionOf(e)
         pasting = true
         inCommand = true
         try { super.onTextContextMenuItem(android.R.id.pasteAsPlainText) } finally { pasting = false; inCommand = false }
-        if (snapshot(e).markdown != before.markdown) {
+        if (changedSince(e, v0)) {
             history.step(before)
             notifyFormatState() // the watcher notified before the step: canUndo / canRedo were stale
         }
@@ -626,6 +678,10 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     private companion object {
+        /** One thread for all editors: the Markdown of the last pending edit is what counts. */
+        val emitPool: java.util.concurrent.Executor by lazy {
+            java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "tessera-emit").apply { isDaemon = true } }
+        }
         const val EMIT_DEBOUNCE_MS = 300L
         const val MIN_TOUCH_DP = 48
     }

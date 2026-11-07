@@ -254,4 +254,82 @@ class EngineRaceTest {
         assertEquals("", h.text.toString())
         s.check("race 8c")
     }
+
+    // --- the Markdown of a debounced emit is written in the background: what the main thread does meanwhile
+
+    private class Background(val h: HostFixture) {
+        val jobs = ArrayList<Runnable>()
+        init { h.view.emitExecutor = java.util.concurrent.Executor { jobs += it } }
+        fun run() { val j = ArrayList(jobs); jobs.clear(); j.forEach { it.run() }; h.pass(10) }
+    }
+
+    @Test
+    fun anEditWhileTheMarkdownIsBeingWrittenDropsThatResultAndEmitsTheNewState() {
+        val s = session("a"); val h = s.h; val bg = Background(h)
+        h.caret(1)
+        s.ic().commitText("b", 1)
+        h.pass(300) // the debounce: a copy goes to the background
+        assertEquals(1, bg.jobs.size)
+        s.ic().commitText("c", 1) // the user goes on while it is written
+        bg.run() // the result of "ab" comes back: the note is "abc" now
+        assertEquals("a stale result is not emitted", emptyList<String>(), h.emitted)
+        h.pass(300)
+        bg.run()
+        assertEquals(listOf("abc"), h.emitted)
+        s.check("race 9a")
+    }
+
+    @Test
+    fun aFlushWhileTheMarkdownIsBeingWrittenEmitsAtOnceAndOnlyOnce() {
+        val s = session("a"); val h = s.h; val bg = Background(h)
+        h.caret(1)
+        s.ic().commitText("b", 1)
+        h.pass(300)
+        h.view.flushPendingEdit()
+        assertEquals(listOf("ab"), h.emitted)
+        bg.run()
+        h.pass(1000)
+        assertEquals("the result of the background is not emitted again", listOf("ab"), h.emitted)
+    }
+
+    @Test
+    fun disposeWhileTheMarkdownIsBeingWrittenEmitsOnceAndTheResultComesToNothing() {
+        val s = session("a"); val h = s.h; val bg = Background(h)
+        h.caret(1)
+        s.ic().commitText("b", 1)
+        h.pass(300)
+        h.view.dispose()
+        assertEquals(listOf("ab"), h.emitted)
+        bg.run()
+        h.pass(1000)
+        assertEquals(listOf("ab"), h.emitted)
+    }
+
+    @Test
+    fun theNoteReplacedWhileTheMarkdownIsBeingWrittenStillEmitsThePendingEdit() {
+        val s = session("a"); val h = s.h; val bg = Background(h)
+        h.caret(1)
+        s.ic().commitText("b", 1)
+        h.pass(300)
+        h.view.editable = false // a new Editable: the copy no longer belongs to the note
+        h.view.editable = true
+        bg.run()
+        h.pass(300)
+        bg.run()
+        assertEquals("the pending edit is written again and emitted", listOf("ab"), h.emitted)
+    }
+
+    @Test
+    fun undoAfterAFirstKeyThatTookALightCopyGivesTheStateBackByteForByte() {
+        val s = session("a\n- b\n> c"); val h = s.h
+        val before = h.md()
+        h.pass(600)
+        h.caret(1)
+        s.ic().commitText("x", 1) // no Markdown of this note was written yet: the history step is a copy
+        h.view.toggleKind(app.tessera.core.text.notedoc.ParagraphKind.Title)
+        h.view.undo(); h.view.undo()
+        assertEquals(before, h.md())
+        h.view.redo(); h.view.redo()
+        assertTrue(h.md().contains("# "))
+    }
 }

@@ -137,15 +137,48 @@ internal fun blockSpanAt(text: Spanned, ps: Int): BlockSpan? =
     if (ps >= text.length) null else text.getSpans(ps, minOf(paragraphEnd(text, ps) + 1, text.length), BlockSpan::class.java)
         .firstOrNull { text.getSpanStart(it) == ps && text.getSpanEnd(it) > ps }
 
-internal fun paragraphEnd(s: CharSequence, from: Int): Int {
-    var i = from
-    while (i < s.length && s[i] != '\n') i++
-    return i
+/**
+ * Index of [ch] in [s] between [from] and [to] (`-1` if it is not there). An `Editable` is read in chunks: a `charAt` per character of a
+ * paragraph of 10 000 characters, several times for each key, was a tenth of the cost of a Backspace.
+ */
+internal fun indexOfChar(s: CharSequence, ch: Char, from: Int, to: Int = s.length): Int {
+    val end = minOf(to, s.length)
+    var i = from.coerceAtLeast(0)
+    if (s is String) return s.indexOf(ch, i).let { if (it < 0 || it >= end) -1 else it }
+    if (s is android.text.GetChars) {
+        val buf = CharArray(512)
+        while (i < end) {
+            val n = minOf(512, end - i)
+            s.getChars(i, i + n, buf, 0)
+            for (k in 0 until n) if (buf[k] == ch) return i + k
+            i += n
+        }
+        return -1
+    }
+    while (i < end) { if (s[i] == ch) return i; i++ }
+    return -1
 }
 
-/** Start of the paragraph that contains [index] (an index just after a `\n` starts the next paragraph). */
-internal fun paragraphStart(s: CharSequence, index: Int): Int {
-    var i = index.coerceIn(0, s.length)
-    while (i > 0 && s[i - 1] != '\n') i--
-    return i
+/** Last index of [ch] in [s] before [before] and not before [limit] (`-1` if it is not there). */
+internal fun lastIndexOfChar(s: CharSequence, ch: Char, before: Int, limit: Int = 0): Int {
+    var end = minOf(before, s.length)
+    val low = limit.coerceAtLeast(0)
+    if (s is String) return if (end <= low) -1 else s.lastIndexOf(ch, end - 1).let { if (it < low) -1 else it }
+    if (s is android.text.GetChars) {
+        val buf = CharArray(512)
+        while (end > low) {
+            val n = minOf(512, end - low)
+            s.getChars(end - n, end, buf, 0)
+            for (k in n - 1 downTo 0) if (buf[k] == ch) return end - n + k
+            end -= n
+        }
+        return -1
+    }
+    while (end > low) { end--; if (s[end] == ch) return end }
+    return -1
 }
+
+internal fun paragraphEnd(s: CharSequence, from: Int): Int = indexOfChar(s, '\n', from).let { if (it < 0) s.length else it }
+
+/** Start of the paragraph that contains [index] (an index just after a `\n` starts the next paragraph). */
+internal fun paragraphStart(s: CharSequence, index: Int): Int = lastIndexOfChar(s, '\n', index.coerceIn(0, s.length)) + 1

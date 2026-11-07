@@ -23,6 +23,7 @@ internal class HostFixture(md: String, val width: Int = 400, val height: Int = 8
         val ctx: Context = themedContext()
         view = TesseraEditText(ctx, style)
         view.layoutParams = ViewGroup.LayoutParams(width, height)
+        view.emitExecutor = java.util.concurrent.Executor { it.run() } // the Markdown of an emit is written at once: a test steps the main Looper by hand
         view.onMarkdownChange = { emitted += it }
         view.onFormatStateChanged = { states += it }
         view.setMarkdown(md)

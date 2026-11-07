@@ -67,29 +67,35 @@ class Normalizer(var style: EditorStyle, private val steps: List<NormalizeStep> 
         removeForeignSpans(editable, ws, we)
 
         // rule 11 of spec §4: a carriage return is a space in the document, so it is one on the screen
-        for (i in ws until minOf(we, editable.length)) if (editable[i] == '\r') editable.replace(i, i + 1, " ")
+        var cr = indexOfChar(editable, '\r', ws, minOf(we, editable.length))
+        while (cr >= 0) {
+            editable.replace(cr, cr + 1, " ")
+            cr = indexOfChar(editable, '\r', cr + 1, minOf(we, editable.length))
+        }
 
         // U+FFFC without an ObjectSpan goes; an ObjectSpan that no longer wraps exactly one U+FFFC goes.
         for (o in editable.getSpans(ws, we, ObjectSpan::class.java)) {
             val s = editable.getSpanStart(o)
             if (editable.getSpanEnd(o) - s != 1 || editable[s] != OBJECT_CHAR) editable.removeSpan(o)
         }
-        var i = we - 1
-        while (i >= ws) {
-            if (editable[i] == OBJECT_CHAR && objectAt(editable, i) == null) {
+        var i = lastIndexOfChar(editable, OBJECT_CHAR, we, ws)
+        while (i >= 0) {
+            if (objectAt(editable, i) == null) {
                 editable.delete(i, i + 1)
                 we--
                 if (ce > i) ce--
                 if (cs > i) cs--
             }
-            i--
+            i = lastIndexOfChar(editable, OBJECT_CHAR, i, ws)
         }
 
         // An object shares its paragraph with typed text: split it, the object stays alone.
         var ps = ws
         while (ps < we && ps < editable.length) {
             val pe = paragraphEnd(editable, ps)
-            val at = (ps until pe).firstOrNull { objectAt(editable, it) != null }
+            var at: Int? = null
+            var o = indexOfChar(editable, OBJECT_CHAR, ps, pe)
+            while (o >= 0 && at == null) { if (objectAt(editable, o) != null) at = o else o = indexOfChar(editable, OBJECT_CHAR, o + 1, pe) }
             if (at != null && pe - ps > 1) {
                 if (at + 1 < pe) { editable.insert(at + 1, "\n"); we++; ce++ }
                 if (at > ps) { editable.insert(at, "\n"); we++; ce++ }

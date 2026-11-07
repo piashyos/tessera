@@ -8,7 +8,26 @@ package app.tessera.ui.editor.engine
  * A step is stored as the state *before* it. [undo] and [redo] take the current state and give back the one to show.
  */
 class EditHistory(private val limit: Int = 100, private val mergeMs: Long = 500) {
-    data class Snapshot(val markdown: String, val selStart: Int, val selEnd: Int)
+    /**
+     * One state of the note. Its [markdown] may be built later: a snapshot taken on a key is a light copy of the document ([lazy]), and the
+     * Markdown is written only when the step is used (undo, redo, a comparison) — serializing a note of a thousand paragraphs on every first key of
+     * a typing run was most of the cost of that key.
+     */
+    class Snapshot private constructor(private var text: String?, private var source: (() -> String)?, val selStart: Int, val selEnd: Int) {
+        constructor(markdown: String, selStart: Int, selEnd: Int) : this(markdown, null, selStart, selEnd)
+
+        val markdown: String
+            get() = text ?: source!!().also { text = it; source = null }
+
+        override fun equals(other: Any?) = other is Snapshot && other.markdown == markdown && other.selStart == selStart && other.selEnd == selEnd
+        override fun hashCode() = markdown.hashCode() * 31 + selStart * 7 + selEnd
+        override fun toString() = "Snapshot(selStart=$selStart, selEnd=$selEnd)"
+
+        companion object {
+            /** [markdown] is called once, when the Markdown is first needed; what it reads must not change. */
+            fun lazy(selStart: Int, selEnd: Int, markdown: () -> String) = Snapshot(null, markdown, selStart, selEnd)
+        }
+    }
 
     private val undoStack = ArrayDeque<Snapshot>()
     private val redoStack = ArrayDeque<Snapshot>()

@@ -85,4 +85,14 @@ class EditHistoryTest {
         h.typing(100) { s("") } // within 500 ms of the old run, yet a new step
         assertTrue(h.canUndo)
     }
+
+    @Test
+    fun aLazySnapshotWritesItsMarkdownOnceWhenFirstAskedAndEqualsAnEagerOne() {
+        var calls = 0
+        val lazy = Snapshot.lazy(1, 2) { calls++; "text" }
+        assertEquals(0, calls)
+        assertEquals(Snapshot("text", 1, 2), lazy)
+        assertEquals("text", lazy.markdown)
+        assertEquals(1, calls)
+    }
 }
