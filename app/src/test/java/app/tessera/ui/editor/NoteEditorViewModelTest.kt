@@ -198,6 +198,40 @@ class NoteEditorViewModelTest {
     }
 
     @Test
+    fun `a delete during a running write waits for it, so the write cannot bring the note back`() = runTest(dispatcher.scheduler) {
+        val repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = "abc")))
+        val vm = repo.createViewModel("n")
+        runCurrent()
+        repo.writeDelayMs = 200
+
+        vm.onContentChange("abcX")
+        vm.flush()
+        runCurrent() // the write is running (it upserts at its end)
+        vm.delete()
+        advanceTimeBy(2_000)
+        runCurrent()
+
+        assertEquals(listOf("update", "delete"), repo.log)
+    }
+
+    @Test
+    fun `leaving during a running write waits for it as well`() = runTest(dispatcher.scheduler) {
+        val repo = FakeEditorRepository(notes = listOf(sharedNote("n", ShareRole.EDITOR, owner = "someone-else").copy(content = "abc")))
+        val vm = repo.createViewModel("n")
+        runCurrent()
+        repo.writeDelayMs = 200
+
+        vm.onContentChange("abcX")
+        vm.flush()
+        runCurrent()
+        vm.leave()
+        advanceTimeBy(2_000)
+        runCurrent()
+
+        assertEquals(listOf("update", "leave"), repo.log)
+    }
+
+    @Test
     fun `content change schedules autosave with 500ms debounce`() =
         runTest(dispatcher.scheduler) {
             val note = sampleNote("note-2", content = "Old")
@@ -676,6 +710,9 @@ internal class FakeEditorRepository(
     }
 
     var writeDelayMs = 0L
+
+    /** What reached the store, in order (a slow write is logged when it ends). */
+    val log = mutableListOf<String>()
     val updateCalls = mutableListOf<Note>()
     val deleteCalls = mutableListOf<NoteId>()
 
@@ -706,12 +743,14 @@ internal class FakeEditorRepository(
     override suspend fun updateNote(note: Note): Note {
         if (writeDelayMs > 0) delay(writeDelayMs) // a slow write: the call is recorded when it has finished
         updateCalls += note
+        log += "update"
         val updated = notesFlow.value.map { if (it.id == note.id) note else it }
         notesFlow.value = updated
         return note
     }
     override suspend fun deleteNote(id: NoteId) {
         deleteCalls += id
+        log += "delete"
     }
     override suspend fun permanentlyDeleteNote(id: NoteId) {
         permanentDeleteEverywhereCalls += id
@@ -744,6 +783,7 @@ internal class FakeEditorRepository(
     }
     override suspend fun leaveSharedNote(id: NoteId): Result<Unit> {
         leaveCalls += id
+        log += "leave"
         return Result.success(Unit)
     }
     override suspend fun unshareNote(id: NoteId): Result<Unit> {

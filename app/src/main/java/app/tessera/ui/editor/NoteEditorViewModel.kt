@@ -260,7 +260,9 @@ class NoteEditorViewModel @Inject constructor(
         // out of the trash: `persist` does nothing without a baseline.
         baselineNote = null
         closed = true
-        viewModelScope.launch { deleteNoteUseCase(noteId) }
+        // Behind a write that is already running: it upserts from its baseline with deletedAt = null, so a delete that
+        // slipped in between its steps would be undone by it.
+        viewModelScope.launch { withContext(NonCancellable) { persistMutex.withLock { deleteNoteUseCase(noteId) } } }
     }
 
     // --- Sharing actions (Phase 4) ---
@@ -342,8 +344,12 @@ class NoteEditorViewModel @Inject constructor(
         baselineNote = null
         closed = true
         viewModelScope.launch {
-            leaveSharedNoteUseCase(noteId).onFailure { e ->
-                _state.update { it.copy(shareError = e.message ?: "Couldn't leave this note") }
+            withContext(NonCancellable) {
+                persistMutex.withLock {
+                    leaveSharedNoteUseCase(noteId).onFailure { e ->
+                        _state.update { it.copy(shareError = e.message ?: "Couldn't leave this note") }
+                    }
+                }
             }
         }
     }

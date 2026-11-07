@@ -232,6 +232,8 @@ internal class NoteBodyActions(private val editor: TesseraEditText) : RichBodyAc
     override fun activeFormats(): Set<AztecTextFormat> = emptySet()
 
     override fun formatState(): FormatState = editor.formatState()
+
+    override fun flushPendingEdit() = editor.flushPendingEdit()
 }
 
 /**

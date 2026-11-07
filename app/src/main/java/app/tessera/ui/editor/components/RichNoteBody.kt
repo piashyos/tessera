@@ -143,6 +143,9 @@ interface RichBodyActions {
     /** Move the selected list items one level left. */
     fun outdent() {}
 
+    /** Hand over an edit the editor still holds back (its debounce) to the host now; the Aztec path keeps its own flushing. */
+    fun flushPendingEdit() {}
+
     /** What the format bar shows at the caret; [FormatState.Empty] on the Aztec path (it reads [activeFormats]). */
     fun formatState(): FormatState = FormatState.Empty
 }

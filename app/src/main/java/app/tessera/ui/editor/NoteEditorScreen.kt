@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -133,6 +134,11 @@ fun NoteEditorScreen(
     val haptics = rememberHaptics()
     val converter = remember { MarkdownHtmlConverter() }
     var actions by remember { mutableStateOf<RichBodyActions?>(null) }
+    // Leaving: the editor hands over its pending edit FIRST, then the host saves once (the VM text lags the editor by the
+    // engine's debounce; saving before the hand-over writes a stale text and then the real one). The system Back goes through
+    // here too: this handler sits deeper than the navigation's own and takes precedence.
+    val handOverEdit = { actions?.flushPendingEdit() }
+    BackHandler { handOverEdit(); onBack() }
     // Index of the text block whose Aztec editor last held focus. Drives where the
     // "insert table" action places the new table (after the focused block, not at the end).
     var lastFocusedBlock by remember { mutableStateOf(0) }
@@ -269,7 +275,7 @@ fun NoteEditorScreen(
                     title = {},
                     navigationIcon = {
                         TesseraTopBarIconButton(
-                            onClick = { haptics.tick(); onBack() },
+                            onClick = { haptics.tick(); handOverEdit(); onBack() },
                             contentDescription = stringResource(R.string.editor_back),
                             modifier = Modifier.testTag(UiTestTags.EditorBack),
                         ) {
@@ -315,7 +321,7 @@ fun NoteEditorScreen(
                         key("editor-action-delete") {
                             if (!state.isShared) {
                                 TesseraTopBarIconButton(
-                                    onClick = { haptics.tick(); onDelete() },
+                                    onClick = { haptics.tick(); handOverEdit(); onDelete() },
                                     contentDescription = stringResource(R.string.editor_delete),
                                     modifier = Modifier.testTag(UiTestTags.EditorDelete),
                                 ) {

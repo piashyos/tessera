@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -64,8 +66,8 @@ class NoteEditorNativeRacesTest {
                         onAddTag = {},
                         onRemoveTag = {},
                         onTogglePin = {},
-                        onBack = {},
-                        onDelete = {},
+                        onBack = vm::flush, // as the navigation's back action: save, then pop
+                        onDelete = vm::delete,
                     )
                 }
             }
@@ -298,5 +300,60 @@ class NoteEditorNativeRacesTest {
         stop()
         pass(3_000)
         assertTrue(repo.updateCalls.isEmpty())
+    }
+
+    // ------------------------------------------------------------------ Back: hand over first, save once
+
+    private fun clickBack() {
+        rule.onNodeWithContentDescription("Back").performClick()
+        rule.waitForIdle()
+    }
+
+    @Test fun back_after_an_edit_writes_exactly_once_with_the_final_text() {
+        open("abc")
+        type(3, "!")
+        pass(50) // the engine still holds it back: the VM text lags
+        clickBack()
+        stop() // the host stops after the pop: no second write
+        pass(3_000)
+        assertEquals(1, repo.updateCalls.size)
+        assertEquals("abc!", stored())
+    }
+
+    @Test fun system_back_goes_the_same_way() {
+        open("abc")
+        type(3, "!")
+        pass(50)
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.waitForIdle()
+        stop()
+        pass(3_000)
+        assertEquals(1, repo.updateCalls.size)
+        assertEquals("abc!", stored())
+    }
+
+    @Test fun back_after_an_edit_and_its_undo_writes_nothing_and_keeps_updatedAt() {
+        open("abc")
+        type(3, "!")
+        pass(350) // emitted; the VM autosave is waiting
+        rule.runOnUiThread { editor().undo() } // back to the text the note was opened with, held back by the engine
+        clickBack()
+        stop()
+        pass(3_000)
+        assertTrue("no write at all", repo.updateCalls.isEmpty())
+        assertEquals(1L, vm.state.value.updatedAt)
+        assertEquals("abc", vm.state.value.content)
+    }
+
+    @Test fun delete_right_after_a_key_writes_nothing() {
+        open("abc")
+        type(3, "!")
+        pass(50)
+        rule.onNodeWithContentDescription("Delete note").performClick()
+        rule.waitForIdle()
+        stop()
+        pass(3_000)
+        assertTrue(repo.updateCalls.isEmpty())
+        assertEquals(listOf(NoteId("n")), repo.deleteCalls)
     }
 }
