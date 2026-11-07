@@ -80,6 +80,7 @@ import app.tessera.ui.editor.components.OnStop
 import app.tessera.ui.editor.engine.FormatState
 import app.tessera.ui.editor.components.EditorMeta
 import app.tessera.ui.editor.components.RichBodyActions
+import app.tessera.ui.editor.engine.ObjectImageSource
 import app.tessera.ui.editor.components.RichNoteBody
 import app.tessera.ui.editor.components.TableActionsBar
 import app.tessera.ui.editor.components.TableBlockEditor
@@ -127,6 +128,7 @@ fun NoteEditorScreen(
     onDismissMembers: () -> Unit = {},
     onClearShareError: () -> Unit = {},
     imageGetter: Html.ImageGetter? = null,
+    imageSource: ObjectImageSource? = null,
     onInsertImageUri: (Uri) -> Unit = {},
     insertedImageIds: Flow<String> = emptyFlow(),
     consentRequests: Flow<android.app.PendingIntent> = emptyFlow(),
@@ -565,6 +567,8 @@ fun NoteEditorScreen(
                         onFormatStateChanged = { formatState = it },
                         editable = !state.isReadOnly,
                         onStopFlushed = onFlush,
+                        imageSource = imageSource,
+                        onImageCommitted = onImageCommitted,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()

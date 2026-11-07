@@ -144,8 +144,9 @@ class NoteEditorViewModel @Inject constructor(
             val native = userPreferences.useNativeEditor.first()
             val note = getNoteUseCase(noteId)
             if (note != null) {
-                baselineNote = note
                 if (native) prefetchImageSizes(note.content) // before `content` reaches the state: the placeholders get their exact size, nothing jumps (spec §3.1)
+                // after the prefetch, which suspends: a flush in that window (Back) would find a baseline and an empty content and delete the note as blank
+                baselineNote = note
                 val me = authRepository.currentUser.value
                 _state.update { current ->
                     current.copy(

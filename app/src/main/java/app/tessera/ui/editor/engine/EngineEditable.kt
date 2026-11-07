@@ -18,7 +18,7 @@ import android.text.style.ReplacementSpan
  * - **[quietly]** — the one change that is not a change of the document: a span set again as it is, so the layout measures it anew (an
  *   image that has arrived, spec §3.2).
  */
-internal class EngineEditable(source: CharSequence) : SpannableStringBuilder(source) {
+internal class EngineEditable(source: CharSequence, private val strict: Boolean = true) : SpannableStringBuilder(source) {
     var version = 0
         private set
 
@@ -27,7 +27,7 @@ internal class EngineEditable(source: CharSequence) : SpannableStringBuilder(sou
     /**
      * Runs [block] without a new [version]: for [setSpan] of a span that is set again on its own range with its own flags, which tells the layout
      * to measure it anew and is no change of the document. Anything else inside (a text change, another range, a new span, a removal) breaks the
-     * promise that nothing was changed: it throws when [strict] (the host turns it off in a release build, where the version just grows).
+     * promise that nothing was changed: it throws when [strict] (a debug build and the unit tests; the host passes `false` in a release build, where the version just grows).
      */
     fun quietly(block: () -> Unit) {
         quiet++
@@ -57,9 +57,10 @@ internal class EngineEditable(source: CharSequence) : SpannableStringBuilder(sou
     // An explicit change of a span (the normalizer, a command, the auto-replace, all inside the afterTextChanged of a replace) is always told to
     // the layout: only the shifts that `replace` itself sends are quiet.
     override fun setSpan(what: Any?, start: Int, end: Int, flags: Int) {
-        if (quiet > 0) {
-            if (what == null || getSpanStart(what) != start || getSpanEnd(what) != end || getSpanFlags(what) != flags) breach("a span that is not set again as it is")
-        } else if (what != null && DocBinder.isEngineSpan(what)) version++
+        val same = what != null && getSpanStart(what) == start && getSpanEnd(what) == end && getSpanFlags(what) == flags
+        if (quiet > 0 && !same) breach("a span that is not set again as it is")
+        // only a span set again as it is is quiet; any other change of an engine span is a change of the document, also when the breach is not thrown
+        if (what != null && DocBinder.isEngineSpan(what) && !(quiet > 0 && same)) version++
         val outer = editEnd
         editEnd = -1
         try { super.setSpan(what, start, end, flags) } finally { editEnd = outer }
@@ -91,10 +92,7 @@ internal class EngineEditable(source: CharSequence) : SpannableStringBuilder(sou
         return out
     }
 
-    companion object {
-        /** See [quietly]. */
-        @Volatile var strict = true
-
-        private const val LAYOUT_WATCHER = "android.text.DynamicLayout\$ChangeWatcher"
+    private companion object {
+        const val LAYOUT_WATCHER = "android.text.DynamicLayout\$ChangeWatcher"
     }
 }

@@ -49,7 +49,7 @@ class EditRulesTest(
         action == "backspace" -> rules.backspace(f.e, f.selStart, f.selEnd)
         action == "indent" -> rules.changeLevel(f.e, f.selStart, f.selEnd, +1)
         action == "outdent" -> rules.changeLevel(f.e, f.selStart, f.selEnd, -1)
-        action == "hr" -> rules.insertHorizontalRule(f.e, f.selStart)
+        action == "hr" -> rules.insertHorizontalRule(f.e, f.selStart, f.selEnd)
         action == "image" -> rules.insertObject(f.e, f.selStart, f.selEnd, NoteBlock.Image(IMG))
         action == "forwarddelete" -> rules.forwardDelete(f.e, f.selStart, f.selEnd) ?: Sel(f.selStart, f.selEnd)
         action.startsWith("kind:") -> rules.toggleKind(f.e, f.selStart, f.selEnd, kindOf(action.removePrefix("kind:")))
@@ -269,6 +269,10 @@ class EditRulesTest(
             row("P2 insertObject | selection inside a paragraph is deleted first", "a«bc»d", "image", "a\n$MD\n‸d"),
             row("P2 insertObject | selection across paragraphs", "# a«b\n- c»d", "image", "# a\n$MD\n# ‸d"),
             row("P2 insertObject | selected object is replaced", "a\n---\nb", "image", "a\n$MD\n‸b", "2-3", "4"),
+            row("P2 insertObject | selected object, an empty last item after it: replaced in place", "a\n---\n- ", "image", "a\n$MD\n- ", "2-3", "5"),
+            row("P2 insertObject | selected object, a list item after it: replaced in place", "a\n---\n- b", "image", "a\n$MD\n- b", "2-3", "4"),
+            row("P2 insertObject | selected last object: replaced, an empty Body after it", "a\n---", "image", "a\n$MD\n", "2-3", "4"),
+            row("P2 hr | a divider over a selected image", "a\n$MD\nb", "hr", "a\n---\nb", "2-3", "4"),
             row("P2 insertObject | after an object (caret at its end)", "a\n---", "image", "a\n---\n$MD\n", "3", "6"),
             row("P2 insertObject | before an object (caret at its start)", "---", "image", "$MD\n---", "0", "2"),
             row("P2 insertObject | between two objects", "---\n---", "image", "---\n$MD\n---", "1", "4"),

@@ -370,6 +370,7 @@ class EditRules(style: EditorStyle) {
      * (an empty Body at the end of the document).
      */
     fun insertObject(e: Editable, selStart: Int, selEnd: Int, block: NoteBlock): Sel {
+        if (selEnd - selStart == 1 && isObjectParagraph(e, selStart)) return replaceSelectedObject(e, selStart, block)
         val c = if (selEnd > selStart) deleteSelection(e, selStart, selEnd) else selStart
         val ps = paragraphStart(e, c)
         val pe = paragraphEnd(e, ps)
@@ -389,11 +390,24 @@ class EditRules(style: EditorStyle) {
             }
             else -> insertObjectAfter(e, pe, obj)
         }
-        return Sel(e.getSpanStart(obj) + 2) // the paragraph after the object always exists
+        return Sel(afterSentinel(e, e.getSpanStart(obj) + 2)) // the paragraph after the object always exists
     }
 
     /** A divider (spec §7): [insertObject] of [NoteBlock.Divider]. */
-    fun insertHorizontalRule(e: Editable, caret: Int): Sel = insertObject(e, caret, caret, NoteBlock.Divider)
+    fun insertHorizontalRule(e: Editable, selStart: Int, selEnd: Int): Sel = insertObject(e, selStart, selEnd, NoteBlock.Divider)
+
+    /**
+     * One whole object selected: the new object takes its place (the paragraph stays where it is, whatever follows it), and the caret goes to the
+     * paragraph after it — an empty Body when the object was the last paragraph. The new object shows no picture of the old one.
+     */
+    private fun replaceSelectedObject(e: Editable, ps: Int, block: NoteBlock): Sel {
+        val old = e.getSpans(ps, ps + 1, ObjectSpan::class.java).first { e.getSpanStart(it) == ps }
+        val fresh = ObjectSpan(block, style).also { it.widthPx = maxOf(old.widthPx, objectWidthPx) }
+        e.removeSpan(old)
+        e.setSpan(fresh, ps, ps + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (ps + 1 >= e.length) { e.insert(ps + 1, "\n"); finish(e, ps, ps + 2) }
+        return Sel(afterSentinel(e, e.getSpanStart(fresh) + 2))
+    }
 
     private fun insertObjectAfter(e: Editable, pe: Int, obj: ObjectSpan) {
         val tail = if (pe >= e.length) "\n$OBJECT_CHAR\n" else "\n$OBJECT_CHAR"
@@ -419,7 +433,7 @@ class EditRules(style: EditorStyle) {
     fun replaceObject(e: Editable, ps: Int, block: NoteBlock): Sel? {
         val old = e.getSpans(ps, ps + 1, ObjectSpan::class.java).firstOrNull { e.getSpanStart(it) == ps } ?: return null
         if (!isObjectParagraph(e, ps)) return null
-        val fresh = ObjectSpan(block, style).also { it.widthPx = maxOf(old.widthPx, objectWidthPx) }
+        val fresh = old.replacedBy(block, style).also { it.widthPx = maxOf(old.widthPx, objectWidthPx) }
         e.removeSpan(old)
         e.setSpan(fresh, ps, ps + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         return Sel(ps, ps + 1)

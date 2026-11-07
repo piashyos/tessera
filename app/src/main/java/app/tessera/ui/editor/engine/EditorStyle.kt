@@ -69,4 +69,8 @@ data class EditorStyle(
     /** Captions of the stage-1 placeholders ("Изображение" / "Таблица"), resolved by the host (D14). */
     val imageLabel: String,
     val tableLabel: String,
+    /** An image that is loading or cannot be read: the tile (`surfaceContainerHigh`) and its caption, the height it takes when its size is not known (160dp). */
+    val imageFillColor: Int,
+    val imageUnavailableLabel: String,
+    val imagePlaceholderHeightPx: Float,
 )

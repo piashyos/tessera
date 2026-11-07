@@ -148,7 +148,30 @@ class NoteEditorViewModelTest {
     }
 
     @Test
-    fun `the old engine and a note without images read no bounds`() = runTest(dispatcher.scheduler) {
+    fun `a flush while the bounds are read does not delete the note as a blank one`() = runTest(dispatcher.scheduler) {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val dao = RecordingImageDao(gate)
+        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
+        val note = sampleNote("n", content = "a\n\n![](tessera-img://abc)")
+        val repo = FakeEditorRepository(notes = listOf(note))
+        val vm = repo.createViewModel("n", prefs = prefs, imageDao = dao)
+        runCurrent()
+        waitFor("the prefetch reached the table", { dao.byIdCalls.isNotEmpty() })
+
+        vm.flush() // Back in the window: the content of the state is still empty, the note must not be taken for a blank one
+        runCurrent()
+        assertEquals(emptyList<NoteId>(), repo.deleteCalls)
+        assertEquals(emptyList<NoteId>(), repo.permanentDeleteEverywhereCalls)
+
+        gate.complete(Unit)
+        waitFor("the note is shown", { !vm.state.value.isLoading }, pump = { runCurrent() })
+        assertEquals(note.content, vm.state.value.content)
+        assertEquals(emptyList<NoteId>(), repo.deleteCalls)
+        assertEquals(emptyList<NoteId>(), repo.permanentDeleteEverywhereCalls)
+    }
+
+    @Test
+    fun `the old engine and a note without images read no bounds`()= runTest(dispatcher.scheduler) {
         val dao = RecordingImageDao()
         val withImage = sampleNote("n", content = "![](tessera-img://abc)")
         val aztec = FakeEditorRepository(notes = listOf(withImage)).createViewModel("n", imageDao = dao)

@@ -253,6 +253,7 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                 onDismissMembers = viewModel::dismissMembersSheet,
                 onClearShareError = viewModel::clearShareError,
                 imageGetter = viewModel.imageGetter,
+                imageSource = viewModel.imageSource,
                 onInsertImageUri = viewModel::insertImage,
                 insertedImageIds = viewModel.imageInserts,
                 consentRequests = viewModel.consentRequests,

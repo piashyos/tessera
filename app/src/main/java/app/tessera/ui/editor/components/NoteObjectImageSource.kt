@@ -39,7 +39,7 @@ class NoteObjectImageSource(
 
     override fun load(src: String, maxWidthPx: Int, onResult: (ImageResult) -> Unit): () -> Unit {
         var cancelled = false
-        val job = scope.launch(Dispatchers.Main.immediate) {
+        val job = scope.launch(Dispatchers.Main) {
             val result = when (val r = decoder.decode(src, maxWidthPx)) {
                 is NoteImageDecoder.Result.Loaded -> {
                     r.bitmap.density = android.graphics.Bitmap.DENSITY_NONE

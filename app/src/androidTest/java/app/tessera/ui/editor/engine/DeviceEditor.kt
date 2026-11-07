@@ -79,6 +79,9 @@ internal object DeviceStyle {
             placeholderPaddingPx = dp(8f),
             imageLabel = "Изображение",
             tableLabel = "Таблица",
+            imageFillColor = 0xFFE0E0E0.toInt(),
+            imageUnavailableLabel = "Изображение недоступно",
+            imagePlaceholderHeightPx = dp(160f),
         )
     }
 }

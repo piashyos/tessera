@@ -178,7 +178,7 @@ class BlockSpanDrawTest {
         val mid = (l.getLineTop(1) + l.getLineBottom(1)) / 2
         assertTrue((mid - 2..mid + 2).any { d.px(40, it) == EngineTestStyle.DIVIDER })
         val imageTop = l.getLineTop(2)
-        assertEquals("frame of the image placeholder", 0xFF999999.toInt(), d.px(30, imageTop + 1))
+        assertEquals("the tile of an image that is not loaded: `imageFillColor`, no frame", style.imageFillColor, d.px(30, imageTop + 1))
     }
 
     @Test

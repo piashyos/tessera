@@ -30,7 +30,10 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatEditText
+import androidx.core.view.ContentInfoCompat
+import androidx.core.view.OnReceiveContentListener
 import androidx.core.view.ViewCompat
+import app.tessera.core.text.notedoc.NoteBlock
 import app.tessera.core.text.notedoc.ListType
 import app.tessera.core.text.notedoc.Mark
 import app.tessera.core.text.notedoc.NoteMarkdown
@@ -38,7 +41,12 @@ import app.tessera.core.text.notedoc.ParagraphKind
 import app.tessera.ui.editor.engine.EditHistory.Snapshot
 import app.tessera.ui.editor.engine.spans.ListItemSpan
 import app.tessera.ui.editor.engine.spans.ObjectSpan
+import java.io.File
+import java.util.UUID
 import kotlin.math.abs
+
+/** A selected image: its paragraph, its `src`, and where it is in the view (the host draws the resize and rotate handles there). */
+data class ImageSelection(val ps: Int, val src: String, val rect: Rect)
 
 /** A tap target of a check box: where it is in the view, and what TalkBack says about it. */
 internal class CheckboxZone(val ps: Int, val rect: Rect, val checked: Boolean, val label: String)
@@ -112,6 +120,44 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             restartBlink()
         }
 
+    /** Where the pictures of the image objects come from (phase 2 §3.1); without it they are tiles. */
+    var imageSource: ObjectImageSource? = null
+        set(value) {
+            field = value
+            images.setSource(value)
+            if (ready) guard { applyObjectWidth() }
+        }
+
+    /**
+     * An image that arrived through the keyboard (rich content) or the clipboard: a `file:` URI of a copy in the app's cache, made while the system's
+     * grant is held. `true` when the host takes it (the editor's insert command is `insertImage`, called when the image is stored).
+     */
+    var onImageCommitted: ((android.net.Uri) -> Boolean)? = null
+
+    /** The selected image, `null` when the selection is not exactly one image or the editor is read-only. Delivered on the main thread after a draw. */
+    var onImageSelectionChanged: ((ImageSelection?) -> Unit)? = null
+    private var lastImageSelection: ImageSelection? = null
+
+    /**
+     * Images of the keyboard's rich content and of a paste go to [onImageCommitted]; whatever else came with them (text) goes on to the default
+     * handling. The system's grant on the URI lapses when this returns, so the bytes are copied here, into a file of the app.
+     */
+    private val receiveImages =
+        OnReceiveContentListener { _, payload ->
+            val handler = onImageCommitted
+            if (handler == null || !editable) return@OnReceiveContentListener payload
+            val split = payload.partition { item -> item.uri?.let { isImage(it) } == true }
+            val taken = split.first
+            if (taken != null) {
+                for (i in 0 until taken.clip.itemCount) {
+                    val uri = taken.clip.getItemAt(i).uri ?: continue
+                    copyToCache(uri)?.let { handler(it) }
+                }
+            }
+            split.second
+        }
+
+    private val images = ImageObjects { span -> deliverImage(span) }
     private val normalizer = Normalizer(style)
     private val rules = EditRules(style)
     private val typing = TypingAttributes(style)
@@ -181,6 +227,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     private var tapTarget: Int? = null
+    private var imageTapTarget: Int? = null
     private var downX = 0f
     private var downY = 0f
     private var longPressMs = 0L
@@ -220,7 +267,9 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     init {
         setEditableFactory(object : Editable.Factory() {
-            override fun newEditable(source: CharSequence): Editable = EngineEditable(source)
+            // a debug build (and the unit tests) refuse a misuse of `quietly`, a release build lets the version grow
+            override fun newEditable(source: CharSequence): Editable =
+                EngineEditable(source, strict = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
         })
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
             InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
@@ -231,6 +280,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         hidePlatformCaret()
         addTextChangedListener(watcher)
         ViewCompat.setAccessibilityDelegate(this, a11y)
+        ViewCompat.setOnReceiveContentListener(this, arrayOf("image/*"), receiveImages)
         ready = true
     }
 
@@ -341,7 +391,10 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     fun dispose() {
         flushPendingEdit()
         disposed = true
+        images.cancelAll()
         emitHandler.removeCallbacksAndMessages(null)
+        onImageSelectionChanged = null
+        onImageCommitted = null
         onMarkdownChange = null
         onFormatStateChanged = null
     }
@@ -356,6 +409,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     /** Replaces the whole text with [doc]; the engine's spans, the width of the objects and the IME state follow. */
     private fun rebuild(doc: app.tessera.core.text.notedoc.NoteDoc) {
+        images.carryOver(text)
         guard { setText(DocBinder.build(doc, editorStyle), TextView.BufferType.EDITABLE) }
         applyObjectWidth()
     }
@@ -398,7 +452,45 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     fun indent() { command { e, s, t -> rules.changeLevel(e, s, t, +1) } }
     fun outdent() { command { e, s, t -> rules.changeLevel(e, s, t, -1) } }
-    fun insertHorizontalRule() { command { e, _, t -> rules.insertHorizontalRule(e, t) } }
+    fun insertHorizontalRule() { command { e, s, t -> rules.insertHorizontalRule(e, s, t) } }
+
+    /** [block] as a paragraph of its own after the caret's (phase 2 §2). A selection is deleted first. */
+    fun insertObject(block: NoteBlock) { command { e, s, t -> rules.insertObject(e, s, t, block) } }
+
+    /** The image `tessera-img://<imageId>` at the caret, once the host has stored it. */
+    fun insertImage(imageId: String) = insertObject(NoteBlock.Image("tessera-img://$imageId"))
+
+    /** The image of the paragraph [ps] gets [src] (a resize, a rotation): one history step; the old picture stays on screen until the new one comes. */
+    fun replaceImageSrc(ps: Int, src: String) {
+        if (imageSpanAt(ps)?.block == NoteBlock.Image(src)) { previewImageWidth(ps, null); return }
+        command { e, _, _ -> rules.replaceObject(e, ps, NoteBlock.Image(src)) }
+    }
+
+    /** While a handle is dragged: the image of [ps] is shown at [percent] of its width (`null` ends the preview). Not an edit. */
+    fun previewImageWidth(ps: Int, percent: Int?) {
+        val span = imageSpanAt(ps) ?: return
+        val st = span.image ?: return
+        if (st.previewPercent == percent) return
+        st.previewPercent = percent
+        deliverImage(span)
+    }
+
+    private fun imageSpanAt(ps: Int): ObjectSpan? {
+        val t = text ?: return null
+        if (ps !in 0 until t.length) return null
+        return t.getSpans(ps, ps + 1, ObjectSpan::class.java).firstOrNull { t.getSpanStart(it) == ps && it.block is NoteBlock.Image }
+    }
+
+    /** The span was changed in size or picture: the layout measures it again; nothing of the document changed. */
+    private fun deliverImage(span: ObjectSpan) {
+        val t = text as? EngineEditable ?: return
+        if (disposed) return
+        val s = t.getSpanStart(span)
+        if (s < 0) return
+        guard { t.quietly { t.setSpan(span, s, t.getSpanEnd(span), t.getSpanFlags(span)) } }
+        a11y.invalidateRoot()
+        invalidate()
+    }
 
     fun undo() { travel { cur -> history.undo(cur) } }
     fun redo() { travel { cur -> history.redo(cur) } }
@@ -514,6 +606,20 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     private fun now() = SystemClock.uptimeMillis()
 
+    // ------------------------------------------------------------------ images from the keyboard and the clipboard
+
+    private fun isImage(uri: android.net.Uri): Boolean = runCatching { context.contentResolver.getType(uri)?.startsWith("image/") == true }.getOrDefault(false)
+
+    private fun copyToCache(source: android.net.Uri): android.net.Uri? =
+        try {
+            val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+            val file = File(dir, "clip-${UUID.randomUUID()}")
+            val copied = context.contentResolver.openInputStream(source)?.use { input -> file.outputStream().use { input.copyTo(it) }; true } ?: false
+            if (copied) android.net.Uri.fromFile(file) else null
+        } catch (_: Exception) {
+            null
+        }
+
     // ------------------------------------------------------------------ keys
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -522,6 +628,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             when (keyCode) {
                 KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> if (plain) return performEnter()
                 KeyEvent.KEYCODE_DEL -> if (plain) return performBackspace()
+                KeyEvent.KEYCODE_FORWARD_DEL -> if (plain && command { e, s, t -> rules.forwardDelete(e, s, t) }) return true
                 KeyEvent.KEYCODE_TAB -> if (plain && indentByKey(if (event.isShiftPressed) -1 else +1)) return true
             }
             if (handleShortcut(keyCode, event)) return true
@@ -645,15 +752,25 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     tapTarget = checkboxZoneAt(event.x, event.y)?.ps
+                    imageTapTarget = if (tapTarget == null) imageZones().firstOrNull { it.rect.contains(event.x.toInt(), event.y.toInt()) }?.ps else null
                     longPressMs = ViewConfiguration.getLongPressTimeout().toLong()
                     downX = event.x
                     downY = event.y
                 }
-                MotionEvent.ACTION_MOVE -> if (tapTarget != null && (abs(event.x - downX) > touchSlop || abs(event.y - downY) > touchSlop)) tapTarget = null
-                MotionEvent.ACTION_CANCEL -> tapTarget = null
+                MotionEvent.ACTION_MOVE -> if (abs(event.x - downX) > touchSlop || abs(event.y - downY) > touchSlop) { tapTarget = null; imageTapTarget = null }
+                MotionEvent.ACTION_CANCEL -> { tapTarget = null; imageTapTarget = null }
                 MotionEvent.ACTION_UP -> {
                     val ps = tapTarget
                     tapTarget = null
+                    val image = imageTapTarget
+                    imageTapTarget = null
+                    if (image != null && event.eventTime - event.downTime < longPressMs) { // a tap on an image selects it: no caret, no keyboard
+                        val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                        super.onTouchEvent(cancel)
+                        cancel.recycle()
+                        selectImage(image)
+                        return true
+                    }
                     if (ps != null && event.eventTime - event.downTime < longPressMs) { // a long press is a selection of the word, not a tap // a tap on a check box: the text under the finger gets no caret, no keyboard
                         val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
                         super.onTouchEvent(cancel)
@@ -665,6 +782,13 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    /** The image of the paragraph [ps] is the selection; the keyboard goes away (a tap on an image is not a place to type). */
+    private fun selectImage(ps: Int) {
+        requestFocus() // the hardware keys (Backspace, Delete) reach the selected object
+        setSelection(ps, ps + 1)
+        context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(windowToken, 0)
     }
 
     override fun dispatchHoverEvent(event: MotionEvent): Boolean = (ready && a11y.dispatchHoverEvent(event)) || super.dispatchHoverEvent(event)
@@ -751,6 +875,28 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (caretOn) caretRect()?.let { canvas.drawRect(it, caretPaint) }
+        pushImageSelection()
+    }
+
+    /**
+     * Where the handles of the selected image go: read after each draw, so the scroll, a new layout and a picture that has arrived are all
+     * in it. Told to the host (posted: a draw is no place for it to change its state) only when it differs from what it was told last.
+     */
+    private fun pushImageSelection() {
+        val now = currentImageSelection()
+        if (now == lastImageSelection) return
+        lastImageSelection = now
+        val cb = onImageSelectionChanged ?: return
+        emitHandler.post { if (!disposed) cb(now) }
+    }
+
+    private fun currentImageSelection(): ImageSelection? {
+        if (!editable) return null
+        val s = selectionStart
+        if (selectionEnd - s != 1) return null
+        val span = imageSpanAt(s) ?: return null
+        val rect = objectRect(s) ?: return null
+        return ImageSelection(s, (span.block as NoteBlock.Image).src, rect)
     }
 
     private object NoCaret : Drawable() {
@@ -772,17 +918,21 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     /**
-     * Objects are as wide as the text area. The width is given to the spans, then they are set again so a live layout measures them
-     * anew (the size of a replacement span is cached by the layout).
+     * Objects are as wide as the text area. The width is given to the spans, the pictures are brought up to date ([ImageObjects.sync]), then the
+     * spans that changed are set again, quietly (nothing of the document changed), so a live layout measures them anew (the size of a
+     * replacement span is cached by the layout).
      */
     private fun applyObjectWidth() {
         val w = (width - totalPaddingLeft - totalPaddingRight).coerceAtLeast(0)
         rules.objectWidthPx = w
         val t = text ?: return
         val spans = t.getSpans(0, t.length, ObjectSpan::class.java)
-        if (spans.none { it.widthPx != w }) return
-        DocBinder.setObjectWidth(t, w)
-        for (o in spans) t.setSpan(o, t.getSpanStart(o), t.getSpanEnd(o), t.getSpanFlags(o))
+        val again = ArrayList<ObjectSpan>()
+        for (o in spans) if (o.widthPx != w) { o.widthPx = w; again += o }
+        for (o in images.sync(t, spans, w)) if (o !in again) again += o
+        if (again.isEmpty()) return
+        val reset = { for (o in again) t.setSpan(o, t.getSpanStart(o), t.getSpanEnd(o), t.getSpanFlags(o)) }
+        if (t is EngineEditable) t.quietly(reset) else reset()
     }
 
     private fun applyViewStyle() {

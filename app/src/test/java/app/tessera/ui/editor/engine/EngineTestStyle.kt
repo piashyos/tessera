@@ -52,5 +52,8 @@ object EngineTestStyle {
         placeholderPaddingPx = 8f,
         imageLabel = imageLabel,
         tableLabel = tableLabel,
+        imageFillColor = 0xFFE0E0E0.toInt(),
+        imageUnavailableLabel = "Image unavailable",
+        imagePlaceholderHeightPx = 160f,
     )
 }

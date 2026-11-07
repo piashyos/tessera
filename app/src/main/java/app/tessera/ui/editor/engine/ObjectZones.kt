@@ -17,10 +17,11 @@ internal fun TesseraEditText.objectRect(ps: Int): Rect? {
     val span = t.getSpans(ps, minOf(ps + 1, t.length), ObjectSpan::class.java).firstOrNull { t.getSpanStart(it) == ps } ?: return null
     val line = l.getLineForOffset(ps)
     val left = totalPaddingLeft - scrollX
-    val width = if (span.widthPx > 0) span.widthPx else (width - totalPaddingLeft - totalPaddingRight).coerceAtLeast(0)
+    val box = span.imageBox()
+    val w = box?.width ?: if (span.widthPx > 0) span.widthPx else (width - totalPaddingLeft - totalPaddingRight).coerceAtLeast(0)
     val top = totalPaddingTop - scrollY + l.getLineTop(line) + (span.baked?.gapTop ?: 0)
-    val bottom = totalPaddingTop - scrollY + l.getLineBottom(line) - (span.baked?.gapBottom ?: 0)
-    return Rect(left, top, left + width, maxOf(bottom, top))
+    val bottom = if (box != null) top + box.height else totalPaddingTop - scrollY + l.getLineBottom(line) - (span.baked?.gapBottom ?: 0)
+    return Rect(left, top, left + w, maxOf(bottom, top))
 }
 
 /** The images on screen (and a little beyond it): the objects TalkBack announces. */

@@ -1,12 +1,15 @@
 package app.tessera.ui.editor.components
 
 import android.content.Context
+import android.net.Uri
 import android.graphics.Typeface
 import android.view.ContextThemeWrapper
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -41,6 +44,9 @@ import app.tessera.core.text.notedoc.ListType
 import app.tessera.core.text.notedoc.Mark
 import app.tessera.core.text.notedoc.ParagraphKind
 import app.tessera.core.ui.theme.TesseraSpacing
+import app.tessera.domain.model.parseImageRef
+import app.tessera.ui.editor.engine.ImageSelection
+import app.tessera.ui.editor.engine.ObjectImageSource
 import app.tessera.ui.editor.engine.EditorStyle
 import app.tessera.ui.editor.engine.FormatState
 import app.tessera.ui.editor.engine.TesseraEditText
@@ -67,6 +73,10 @@ fun NoteBody(
     onFocusChanged: (Boolean) -> Unit = {},
     /** Called on ON_STOP right after a pending edit was handed out, so the host can save at once (the app may be killed in the background). */
     onStopFlushed: () -> Unit = {},
+    /** Where the pictures of the images come from (the ViewModel's); without it an image is a tile. */
+    imageSource: ObjectImageSource? = null,
+    /** An image from the keyboard or the clipboard (a file in the app's cache); `true` when the screen takes it. */
+    onImageCommitted: (Uri) -> Boolean = { false },
 ) {
     if (LocalInspectionMode.current) return // the View cannot be instantiated in a Compose preview
 
@@ -84,6 +94,8 @@ fun NoteBody(
     val currentOnMarkdownChange by rememberUpdatedState(onMarkdownChange)
     val currentOnFormatStateChanged by rememberUpdatedState(onFormatStateChanged)
     val currentOnFocusChanged by rememberUpdatedState(onFocusChanged)
+    val currentOnImageCommitted by rememberUpdatedState(onImageCommitted)
+    val imageSelection = remember { mutableStateOf<ImageSelection?>(null) }
     val editorRef = remember { mutableStateOf<TesseraEditText?>(null) }
 
     // The caret and the focus survive a re-creation of the host (rotation, process death): read from the live editor at the
@@ -117,8 +129,9 @@ fun NoteBody(
         onDispose { editorRef.value?.dispose() } // emits a pending user edit, nothing else
     }
 
+    Box(modifier) {
     AndroidView(
-        modifier = modifier.bringIntoViewRequester(bringIntoViewRequester),
+        modifier = Modifier.fillMaxSize().bringIntoViewRequester(bringIntoViewRequester),
         factory = { context ->
             // The Material3 XML theme is applied explicitly: the host context is not guaranteed to carry it
             // (Compose test rules use a bare ComponentActivity).
@@ -151,6 +164,9 @@ fun NoteBody(
             }
             editor.onMarkdownChange = { md -> currentOnMarkdownChange(md) }
             editor.onFormatStateChanged = { fs -> currentOnFormatStateChanged(fs) }
+            editor.onImageCommitted = { uri -> currentOnImageCommitted(uri) }
+            editor.onImageSelectionChanged = { imageSelection.value = it }
+            editor.imageSource = imageSource
             editor.editable = editable
             editor.setMarkdown(markdown)
             if (caret.start >= 0) {
@@ -182,8 +198,45 @@ fun NoteBody(
         update = { editor ->
             if (editor.editorStyle != style) editor.editorStyle = style
             if (editor.editable != editable) editor.editable = editable
+            if (editor.imageSource !== imageSource) editor.imageSource = imageSource
             editor.setMarkdown(markdown)
         },
+    )
+    imageSelection.value?.let { sel ->
+        if (editable) ImageHandles(sel, editorRef.value)
+    }
+    }
+}
+
+/**
+ * The handles of the selected image over the editor (spec §3.3): a drag on a corner shows the image at the dragged width at once (the editor
+ * scales its picture) and one history step is made when the finger leaves; the rotate button turns it by 90° at once. The handles follow the
+ * image: the editor tells where it is after every draw.
+ */
+@Composable
+private fun ImageHandles(sel: ImageSelection, editor: TesseraEditText?) {
+    val ref = parseImageRef(sel.src) ?: return
+    // what the drag began with: the percent, and the width the image has at 100% (its own width follows the preview)
+    val drag = remember(sel.ps, sel.src) { IntArray(3) { -1 } } // start percent, width at 100%, last percent
+    ImageSelectionOverlay(
+        rect = Rect(sel.rect.left.toFloat(), sel.rect.top.toFloat(), sel.rect.right.toFloat(), sel.rect.bottom.toFloat()),
+        onResizeDelta = { delta ->
+            if (drag[0] < 0) { drag[0] = ref.wPercent; drag[1] = (sel.rect.width() * 100f / ref.wPercent).toInt().coerceAtLeast(1) }
+            drag[2] = dragToWidthPercent(drag[0], delta, drag[1])
+            editor?.previewImageWidth(sel.ps, drag[2])
+        },
+        onResizeCommit = {
+            val percent = drag[2]
+            val start = drag[0]
+            drag.fill(-1)
+            if (editor != null && start >= 0) {
+                if (percent in 10..100 && percent != start) editor.replaceImageSrc(sel.ps, withWidthPercent(sel.src, percent))
+                else editor.previewImageWidth(sel.ps, null)
+            }
+        },
+        onRotate = { editor?.replaceImageSrc(sel.ps, withRotation(sel.src, (ref.rotDegrees + 90) % 360)) },
+        resizeContentDescription = stringResource(R.string.image_resize_handle_description),
+        rotateContentDescription = stringResource(R.string.image_rotate_button_description),
     )
 }
 
@@ -216,6 +269,7 @@ internal class NoteBodyActions(private val editor: TesseraEditText) : RichBodyAc
     override fun indent() = editor.indent()
     override fun outdent() = editor.outdent()
     override fun insertHorizontalRule() = editor.insertHorizontalRule()
+    override fun insertImage(imageId: String) = editor.insertImage(imageId)
     override fun undo() = editor.undo()
     override fun redo() = editor.redo()
 
@@ -267,6 +321,7 @@ internal fun rememberEditorStyle(): EditorStyle {
     val serif = rememberTypeface(R.font.playfair_display_regular)
     val imageLabel = stringResource(R.string.editor_object_image)
     val tableLabel = stringResource(R.string.editor_object_table)
+    val imageUnavailableLabel = stringResource(R.string.editor_object_image_unavailable)
     return with(density) {
         val corner = MaterialTheme.shapes.medium.topStart.toPx(Size.Zero, density)
         EditorStyle(
@@ -304,6 +359,9 @@ internal fun rememberEditorStyle(): EditorStyle {
             placeholderPaddingPx = TesseraSpacing.lg.toPx(),
             imageLabel = imageLabel,
             tableLabel = tableLabel,
+            imageFillColor = colors.surfaceContainerHigh.toArgb(), // spec §3.1
+            imageUnavailableLabel = imageUnavailableLabel,
+            imagePlaceholderHeightPx = 160.dp.toPx(), // spec §3.1: the size of a placeholder whose image size is not known
             // Block spacing, spec §6.11 (mockup shared.css .editor-*). 6/10/3 have no TesseraSpacing token.
             titleSpaceTopPx = TesseraSpacing.md.toPx(), // .editor-h1 margin-top 12
             titleSpaceBottomPx = TesseraSpacing.sm.toPx(), // .editor-h1 margin-bottom 8

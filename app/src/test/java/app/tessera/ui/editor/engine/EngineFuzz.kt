@@ -33,6 +33,8 @@ internal object EngineFuzz {
         TYPE, COMPOSE, COMPOSE_REGION, COMPOSE_FINISH, ENTER_COMMIT, ENTER_KEY, ENTER_IC, BACK_DELETE, BACK_KEY, BACK_IC,
         SELECT, CARET, DELETE_SEL, KIND, MARK, INDENT, OUTDENT, HR, CHECK, MARKER, UNDO, REDO,
         COPY_PASTE, CUT_PASTE, PASTE_EXT, PASTE_STYLED, SET_MD, ECHO, STALE, THEME, READ_ONLY, PASS, FLUSH, DISPOSE, UNDO_RUN, UNDO_CMD,
+        // phase 2: images — insert, resize, rotate, a load result arrives (also a late one), an image is deleted while its load is in flight
+        IMG_INSERT, IMG_RESIZE, IMG_ROTATE, IMG_RESULT, IMG_CANCEL,
     }
 
     data class Step(val a: A, val x: Double = 0.0, val y: Double = 0.0, val z: Double = 0.0, val i: Int = 0, val s: String = "") {
@@ -46,6 +48,7 @@ internal object EngineFuzz {
         A.MARKER to 3, A.UNDO to 3, A.REDO to 2, A.COPY_PASTE to 2, A.CUT_PASTE to 1, A.PASTE_EXT to 2, A.PASTE_STYLED to 1,
         A.SET_MD to 1, A.ECHO to 1, A.STALE to 1, A.THEME to 1, A.READ_ONLY to 1, A.PASS to 4, A.FLUSH to 1, A.DISPOSE to 0,
         A.UNDO_RUN to 1, A.UNDO_CMD to 1,
+        A.IMG_INSERT to 2, A.IMG_RESIZE to 2, A.IMG_ROTATE to 1, A.IMG_RESULT to 3, A.IMG_CANCEL to 1,
     )
     private val total = weights.sumOf { it.second }
     private val words = listOf("при", "привет", "hello", "wor", "мир", "ok", "x", "é", "😀", "שלום", "مر")
@@ -97,6 +100,8 @@ internal object EngineFuzz {
     class Session(val h: HostFixture, val startMd: String, private val layoutEvery: Int = 0) : AutoCloseable {
         constructor(startMd: String, style: EditorStyle = EngineTestStyle.create(), layoutEvery: Int = 0) : this(HostFixture(startMd, style = style), startMd, layoutEvery)
 
+        /** The pictures of the image objects: loads wait here until a step answers them. */
+        val images = FakeImageSource().also { h.view.imageSource = it }
         private val incoming = arrayListOf(startMd)
         private var externalSinceEmit = false
         private var disposed = false
@@ -114,6 +119,15 @@ internal object EngineFuzz {
         private fun select(x: Double, y: Double) { val a = pos(x); val b = pos(y); h.select(minOf(a, b), maxOf(a, b)) }
         private fun canonical(m: String) = NoteMarkdown.serialize(NoteMarkdown.parse(m))
         private fun chars(): Int = DocBinder.read(h.text).blocks.filterIsInstance<NoteBlock.Text>().sumOf { it.content.text.length }
+        private fun imagesOf(doc: app.tessera.core.text.notedoc.NoteDoc = DocBinder.read(h.text)) = doc.blocks.filterIsInstance<NoteBlock.Image>()
+
+        /** Paragraph start of the [n]-th image of the text (modulo their number), or -1. */
+        private fun imagePs(n: Int): Int {
+            val starts = ArrayList<Int>()
+            for (i in 0 until len()) if (h.text[i] == '￼' && isObjectParagraph(h.text, paragraphStart(h.text, i)) && imagesAt(i)) starts += i
+            return if (starts.isEmpty()) -1 else starts[n % starts.size]
+        }
+        private fun imagesAt(i: Int) = h.text.getSpans(i, i + 1, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).any { it.block is NoteBlock.Image }
         private fun composing() = BaseInputConnection.getComposingSpanStart(h.text) >= 0
 
         fun run(step: Step) {
@@ -121,6 +135,46 @@ internal object EngineFuzz {
             val emits = h.emitted.size
             val editable = h.view.editable
             when (step.a) {
+                A.IMG_INSERT -> {
+                    h.caret(pos(step.x))
+                    val n = imagesOf().size
+                    h.view.insertImage("f${step.i % 5}")
+                    if (editable) assertEquals("an insert adds one image", n + 1, imagesOf().size)
+                }
+                A.IMG_RESIZE, A.IMG_ROTATE -> {
+                    val ps = imagePs(step.i)
+                    if (ps < 0) return
+                    val old = (h.text.getSpans(ps, ps + 1, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).first().block as NoteBlock.Image).src
+                    val ref = app.tessera.domain.model.parseImageRef(old) ?: return
+                    h.select(ps, ps + 1)
+                    val src = if (step.a == A.IMG_RESIZE) {
+                        val percent = 10 + (step.i / 7) % 91
+                        h.view.previewImageWidth(ps, percent) // the drag
+                        canonicalImageSrc(ref.id, percent, ref.rotDegrees)
+                    } else canonicalImageSrc(ref.id, ref.wPercent, (ref.rotDegrees + 90) % 360)
+                    h.view.replaceImageSrc(ps, src)
+                    if (editable) assertTrue("the image has its new src", imagesOf().any { it.src == src })
+                    else assertEquals("a read-only editor does not change", before, md())
+                }
+                A.IMG_RESULT -> {
+                    if (images.requests.isEmpty()) return
+                    val r = images.requests[step.i % images.requests.size] // also a cancelled one or one that was answered: the engine drops it
+                    val v = (h.text as EngineEditable).version
+                    val canUndo = h.view.formatState().canUndo
+                    val result = if (step.x < 0.25) ImageResult.Unavailable else ImageResult.Loaded(FakeImageSource.drawable(20 + (step.i % 40) * 10, 20 + (step.i % 13) * 10))
+                    images.deliver(r, result)
+                    assertEquals("a result is no change of the document", v, (h.text as EngineEditable).version)
+                    assertEquals("nor a step of the history", canUndo, h.view.formatState().canUndo)
+                    assertEquals("nor of the Markdown", before, md())
+                }
+                A.IMG_CANCEL -> {
+                    val ps = imagePs(step.i)
+                    if (ps < 0 || !editable) return
+                    val n = imagesOf().size
+                    h.select(ps, ps + 1)
+                    key(KeyEvent.KEYCODE_DEL)
+                    assertEquals("the selected image is deleted", n - 1, imagesOf().size)
+                }
                 A.TYPE -> {
                     val c = ic() ?: return
                     h.caret(pos(step.x))
@@ -243,6 +297,8 @@ internal object EngineFuzz {
         /** The invariants that hold after every step. */
         fun check(label: String) {
             HostFixture.releaseNatives()
+            val srcs = imagesOf().map { it.src }.toSet()
+            for (r in images.pending) assertTrue("$label: a load is alive for an image that is not in the text: ${r.src}", r.src in srcs)
             val e = h.text
             EngineAssertions.assertInvariant1(e, label)
             for (sp in e.getSpans(0, e.length, Any::class.java)) {
@@ -266,6 +322,7 @@ internal object EngineFuzz {
         fun checkLayout(label: String) {
             val live = h.view.layout ?: return
             val fresh = HostFixture(md(), style = h.view.editorStyle)
+            carryPictures(fresh)
             val f = fresh.view.layout
             assertNotNull(f)
             // a mark that starts or ends on a white space stays on the screen and is trimmed by `read` (spec §4 rule 2): its italic or code font
@@ -281,6 +338,19 @@ internal object EngineFuzz {
             assertEquals("$label: numbers", numbers(fresh.text), numbers(h.text))
             fun baked(t: android.text.Spanned) = t.getSpans(0, t.length, BlockSpan::class.java).sortedBy { t.getSpanStart(it) }.map { it.baked }
             assertEquals("$label: the spacing the spans measured with", baked(fresh.text), baked(h.text))
+        }
+
+        /** A fresh build has no pictures: it gets the ones the live spans show (what is drawn is part of the layout), in document order. */
+        private fun carryPictures(fresh: HostFixture) {
+            fun spans(t: android.text.Spanned) = t.getSpans(0, t.length, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).filter { it.image != null }.sortedBy { t.getSpanStart(it) }
+            val live = spans(h.text)
+            val again = spans(fresh.text)
+            assertEquals("the same images", live.size, again.size)
+            if (live.isEmpty()) return
+            for ((l, f) in live.zip(again)) f.image!!.apply { val from = l.image!!; drawable = from.drawable; bakedPercent = from.bakedPercent; failed = from.failed; planned = from.planned }
+            val t = fresh.text as EngineEditable
+            t.quietly { for (f in again) t.setSpan(f, t.getSpanStart(f), t.getSpanEnd(f), t.getSpanFlags(f)) }
+            fresh.layout()
         }
 
         fun finish(label: String) {
@@ -350,6 +420,11 @@ internal object EngineFuzz {
             appendLine("minimized to ${min.size} steps (of ${steps.size}), fails with: $again")
             min.forEachIndexed { i, s -> appendLine("  $i. $s") }
         }
+    }
+
+    private fun canonicalImageSrc(id: String, wPercent: Int, rot: Int): String {
+        val params = buildList { if (wPercent != 100) add("w=$wPercent"); if (rot != 0) add("rot=$rot") }
+        return if (params.isEmpty()) "tessera-img://$id" else "tessera-img://$id?${params.joinToString("&")}"
     }
 
     /** Sessions for the deep mode: `ENGINE_FUZZ_DEEP=1` in the environment (a system property of the Gradle client does not reach the forked test JVM) or `-Dengine.fuzz.deep`. */

@@ -57,7 +57,7 @@ class NoteObjectImageSourceTest {
         context = ApplicationProvider.getApplicationContext()
         File(context.filesDir, "images").deleteRecursively()
         File(context.cacheDir, "images").deleteRecursively()
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }
 
     @After
@@ -124,6 +124,18 @@ class NoteObjectImageSourceTest {
         s.load("https://example.com/x.png", 300) { foreign += it }
         await("the result of a foreign source") { foreign.isNotEmpty() }
         assertEquals(listOf<ImageResult>(ImageResult.Unavailable), foreign)
+    }
+
+    @Test
+    fun aResultIsNeverDeliveredInsideLoadItself() {
+        val s = source()
+        var returned = false
+        var insideLoad = false
+        val results = ArrayList<ImageResult>()
+        s.load("https://example.com/x.png", 300) { insideLoad = !returned; results += it } // a refusal needs no decode: the quickest result there is
+        returned = true
+        await("the result") { results.isNotEmpty() }
+        assertEquals("the caller had its cancel function first", false, insideLoad)
     }
 
     @Test

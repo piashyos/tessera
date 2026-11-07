@@ -273,6 +273,7 @@
     <string name="editor_outdent">Outdent</string>
     <string name="editor_object_image">Image</string>
     <string name="editor_object_image_a11y">Image</string>
+    <string name="editor_object_image_unavailable">Image unavailable</string>
     <string name="editor_object_table">Table</string>
     <string name="settings_native_editor">New editor (beta)</string>
 </resources>

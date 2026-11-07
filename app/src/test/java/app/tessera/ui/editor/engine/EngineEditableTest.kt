@@ -101,10 +101,21 @@ class EngineEditableTest {
         assertTrue("a text change", refused { ours.insert(0, "x") })
         assertTrue("a removal", refused { ours.removeSpan(obj) })
         assertEquals("the scope is left after a refusal: the next change counts again", true, ours.version.let { v -> ours.insert(0, "y"); ours.version > v })
-        EngineEditable.strict = false
-        try {
-            ours.quietly { ours.insert(0, "z") } // a release build: no crash
-        } finally { EngineEditable.strict = true }
+        val release = EngineEditable("a\n\uFFFC\nd", strict = false) // a release build: no crash, the change is counted
+        val kept = app.tessera.ui.editor.engine.spans.ObjectSpan(app.tessera.core.text.notedoc.NoteBlock.Divider, style)
+        release.setSpan(kept, 2, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        var v = release.version
+        release.quietly { release.insert(0, "z") }
+        assertTrue("a text change", release.version > v)
+        v = release.version
+        release.quietly { release.setSpan(kept, 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+        assertTrue("another range", release.version > v)
+        v = release.version
+        release.quietly { release.setSpan(app.tessera.ui.editor.engine.spans.ObjectSpan(app.tessera.core.text.notedoc.NoteBlock.Divider, style), 1, 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+        assertTrue("a new span", release.version > v)
+        v = release.version
+        release.quietly { release.removeSpan(kept) }
+        assertTrue("a removal", release.version > v)
     }
 
     private fun Editable.addTextChangedListener(w: TextWatcher) = setSpan(w, 0, length, Spanned.SPAN_INCLUSIVE_INCLUSIVE)

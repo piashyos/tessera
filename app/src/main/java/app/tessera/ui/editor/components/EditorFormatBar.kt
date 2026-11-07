@@ -73,8 +73,8 @@ import androidx.compose.material.icons.rounded.Remove
  * button anchors the [MarkdownFormatMenu] (paragraph / headings) Material 3 dropdown.
  *
  * With [nativeEngine] the buttons read [formatState] instead of [activeFormats], undo/redo follow
- * `canUndo`/`canRedo`, a dashed list and the two indent buttons are added, and table / image / camera
- * are hidden (the native editor has no objects to insert in stage 1).
+ * `canUndo`/`canRedo`, a dashed list and the two indent buttons are added, and image and camera are there (phase 2),
+ * the table button is hidden until the native editor can insert one.
  */
 @Composable
 fun EditorFormatBar(
@@ -148,6 +148,9 @@ fun EditorFormatBar(
         FormatToggle(Lucide.IndentDecrease, R.string.editor_outdent, active = false, enabled = fs.canOutdent, reportsSelected = nativeEngine) { actions?.outdent() }
         GroupSeparator()
         blocks()
+        GroupSeparator()
+        FormatToggle(Icons.Rounded.Image, R.string.toolbar_image, active = false, reportsSelected = nativeEngine) { actions?.onInsertImage() }
+        FormatToggle(Icons.Rounded.PhotoCamera, R.string.toolbar_camera, active = false, reportsSelected = nativeEngine) { actions?.onCaptureImage() }
       } else {
         marks()
         GroupSeparator()

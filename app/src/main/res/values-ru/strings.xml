@@ -280,6 +280,7 @@
     <string name="editor_outdent">Отступ влево</string>
     <string name="editor_object_image">Изображение</string>
     <string name="editor_object_image_a11y">Изображение</string>
+    <string name="editor_object_image_unavailable">Изображение недоступно</string>
     <string name="editor_object_table">Таблица</string>
     <string name="settings_native_editor">Новый редактор (beta)</string>
 </resources>

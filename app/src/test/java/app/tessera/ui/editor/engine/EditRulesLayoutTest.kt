@@ -116,7 +116,7 @@ class EditRulesLayoutTest {
         rules.objectWidthPx = width // the host gives new objects the width of the text area
         val (e, layout) = live("1. a\n2. b\n3. c")
         val p = at(e, "a") + 1
-        rules.insertHorizontalRule(e, p)
+        rules.insertHorizontalRule(e, p, p)
         assertLooksFresh("divider", e, layout)
     }
 
@@ -125,7 +125,7 @@ class EditRulesLayoutTest {
         rules.objectWidthPx = width
         val (e, layout) = live("```\na\nb\n```\nbelow")
         val p = at(e, "b") + 1
-        rules.insertHorizontalRule(e, p)
+        rules.insertHorizontalRule(e, p, p)
         assertLooksFresh("divider after the last mono line", e, layout)
     }
 
@@ -136,7 +136,7 @@ class EditRulesLayoutTest {
         val p = at(e, "a") + 1
         val sel = rules.enter(e, p, p)
         assertLooksFresh("enter in mono", e, layout)
-        rules.insertHorizontalRule(e, sel.start)
+        rules.insertHorizontalRule(e, sel.start, sel.start)
         assertLooksFresh("divider after an empty mono line", e, layout)
     }
 
