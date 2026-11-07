@@ -162,7 +162,7 @@ class EditRulesTest(
             // ---- 2 — Body after an object: select it, the next Backspace deletes it ----
             row("6.4 Backspace start | divider before a Body paragraph: select it", "---\nb", "backspace", "---\nb", "2", "0-1"),
             row("6.4 Backspace start | image before a Body paragraph: select it", "a\n![](tessera-img://1)\nb", "backspace", "a\n![](tessera-img://1)\nb", "4", "2-3"),
-            row("6.4 Backspace start | caret right after the object (an IME put it there after selecting it): delete it", "a\n---", "backspace", "a", "3", "1"),
+            row("6.4 Backspace start | caret right after the object: select it", "a\n---", "backspace", "a\n---", "3", "2-3"),
             row("6.4 Backspace | selected object in the middle: its paragraph goes whole", "a\n---\nb", "backspace", "a\nb", "2-3", "2"),
             row("6.4 Backspace | selected object, last paragraph: the break before it goes too", "a\n---", "backspace", "a", "2-3", "1"),
             row("6.4 Backspace | selected object, the only paragraph: nothing is left but an empty Body", "---", "backspace", "", "0-1", "0"),

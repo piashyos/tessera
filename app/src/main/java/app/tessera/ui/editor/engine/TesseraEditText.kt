@@ -126,6 +126,31 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     private var hasPendingUserEdit = false
     private var lastFormatState: FormatState? = null
 
+    /**
+     * The object paragraph that was selected whole (and the version of the document then): the next Backspace deletes it. An IME moves the caret
+     * to the end of the selection first (AOSP LatinIME, Gboard) and that keeps the mark; any other move or edit drops it. A caret that
+     * got after an object by itself (a tap, an arrow) has no mark: Backspace selects the object first.
+     */
+    private var selectedObject = -1
+    private var selectedObjectVersion = -1
+    private var selectedObjectIn: Editable? = null
+
+    private fun trackSelectedObject(s: Int, e: Int) {
+        val t = text as? EngineEditable ?: return
+        if (e - s == 1 && isObjectParagraph(t, s)) {
+            selectedObject = s
+            selectedObjectVersion = t.version
+            selectedObjectIn = t
+        } else if (!(s == e && s == selectedObject + 1 && selectedObjectVersion == t.version && selectedObjectIn === t)) {
+            selectedObject = -1
+        }
+    }
+
+    private fun caretAfterSelectedObject(at: Int): Boolean {
+        val t = text as? EngineEditable ?: return false
+        return selectedObject >= 0 && selectedObjectVersion == t.version && selectedObjectIn === t && at == selectedObject + 1 && selectionStart == selectionEnd
+    }
+
     private var tapTarget: Int? = null
     private var downX = 0f
     private var downY = 0f
@@ -141,6 +166,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         }
 
         override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+            markdownCache = null // the version of the editable changes when the replace is over; a step taken in afterTextChanged needs the text as it is now
             if (guarded || !ready) return
             changeStart = start
             changeEnd = start + count
@@ -341,7 +367,8 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             }
             commitUserEdit()
         } else {
-            command(at = if (at >= 0) at else null) { ed, a, b -> rules.backspace(ed, a, b) }
+            val afterSelectedObject = caretAfterSelectedObject(pos)
+            command(at = if (at >= 0) at else null) { ed, a, b -> rules.backspace(ed, a, b, afterSelectedObject) }
         }
         return true
     }
@@ -554,6 +581,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         super.onSelectionChanged(selStart, selEnd)
         if (!ready) return // the TextView constructor gets here before this class is built
         typing.onSelectionChanged(selStart, selEnd)
+        trackSelectedObject(selStart, selEnd)
         val t = text
         if (!guarded && t != null && selStart == selEnd && selStart >= 0) {
             val cs = contentStart(t, paragraphStart(t, selStart))

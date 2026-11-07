@@ -59,6 +59,18 @@ class SpacingWrappedTest {
             val last = if (doc.endsWith("below")) lines - 2 else lines - 1
             for (i in first + 1 until last) assertEquals("$name inner line $i of ${e}", 0, e[i])
             assertEquals("$name above is Body", 0, e.getOrElse(0) { 0 }.takeIf { first == 1 } ?: 0)
+            // and the edges carry exactly what Spacing says: the top on the first line of the paragraph, the bottom on its last
+            val text = DocBinder.build(NoteMarkdown.parse(doc), style)
+            DocBinder.setObjectWidth(text, 400)
+            val size = style.bodyTextSizePx
+            val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply { textSize = size }
+            val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, 400).setLineSpacing(8f, 1f).build()
+            val ps = paragraphStart(text, text.toString().indexOf("word"))
+            val sp = SpacingRules.of(text, ps, style)
+            val firstLine = layout.getLineForOffset(ps)
+            val lastLine = layout.getLineForOffset(maxOf(paragraphEnd(text, ps) - 1, ps))
+            assertEquals("$name: extraTop of the first line in $doc", sp.extraTop, e[firstLine])
+            assertEquals("$name: extraBottom of the last line in $doc", sp.extraBottom, e[lastLine])
         }
     }
 }

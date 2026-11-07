@@ -114,6 +114,7 @@ class ListItemSpan(override val kind: ParagraphKind.ListItem, override val style
     }
     private val checkbox = TesseraCheckboxDrawable(kind.checked, palette, style.checkboxCornerPx, style.checkboxStrokePx)
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val fmScratch = Paint.FontMetrics()
 
     /**
      * The shown number of a [ListType.Number] item. Kept up to date by `Numbering` (the binder, and the normalizer after
@@ -138,7 +139,8 @@ class ListItemSpan(override val kind: ParagraphKind.ListItem, override val style
         if (!first) return
         val size = style.checkboxSizePx
         val left = if (dir > 0) x + kind.level * style.listLevelStepPx else x - kind.level * style.listLevelStepPx - size
-        val fm = p.fontMetrics
+        p.getFontMetrics(fmScratch)
+        val fm = fmScratch
         val cy = baseline + (fm.ascent + fm.descent) / 2f // the middle of the first text line: margins of the series do not move it
         when (kind.type) {
             ListType.Check -> {

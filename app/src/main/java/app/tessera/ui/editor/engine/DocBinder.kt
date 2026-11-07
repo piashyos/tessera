@@ -128,9 +128,14 @@ object DocBinder {
     }
 }
 
-/** The [BlockSpan] that starts at the paragraph start [ps] — the kind of that paragraph; `null` is Body. The one definition of "the span of a paragraph". */
+/**
+ * The [BlockSpan] that starts at the paragraph start [ps] — the kind of that paragraph; `null` is Body. The one definition of "the span of a
+ * paragraph". A span that a deletion collapsed to nothing is not a paragraph's (the layout reads the neighbours while the replace is still
+ * going, and a collapsed span of the paragraph before made the item after it measure as the second of a series).
+ */
 internal fun blockSpanAt(text: Spanned, ps: Int): BlockSpan? =
-    if (ps >= text.length) null else text.getSpans(ps, minOf(paragraphEnd(text, ps) + 1, text.length), BlockSpan::class.java).firstOrNull { text.getSpanStart(it) == ps }
+    if (ps >= text.length) null else text.getSpans(ps, minOf(paragraphEnd(text, ps) + 1, text.length), BlockSpan::class.java)
+        .firstOrNull { text.getSpanStart(it) == ps && text.getSpanEnd(it) > ps }
 
 internal fun paragraphEnd(s: CharSequence, from: Int): Int {
     var i = from

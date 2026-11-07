@@ -64,7 +64,7 @@ internal object MarkOps {
      * Rule 3 of spec §4 on the screen: a mark that starts or ends inside `Code` is cut at the code, one that lies inside it goes,
      * one that covers it whole stays. The same three cases as `normalizeInline`, so `read` returns what is shown.
      */
-    private fun clipAtCode(e: Editable, span: Any, from: Int, to: Int) {
+    internal fun clipAtCode(e: Editable, span: Any, from: Int, to: Int) {
         var s = from
         var en = to
         for (c in e.getSpans(from, to, CodeMarkSpan::class.java).sortedBy { e.getSpanStart(it) }) {

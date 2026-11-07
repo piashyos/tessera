@@ -3,6 +3,7 @@ package app.tessera.ui.editor.engine
 import android.text.Editable
 import android.text.SpanWatcher
 import android.text.SpannableStringBuilder
+import android.text.style.ReplacementSpan
 
 /**
  * The `Editable` of [TesseraEditText]. Two jobs, both for a note of a thousand paragraphs:
@@ -34,20 +35,28 @@ internal class EngineEditable(source: CharSequence) : SpannableStringBuilder(sou
         }
     }
 
+    // An explicit change of a span (the normalizer, a command, the auto-replace, all inside the afterTextChanged of a replace) is always told to
+    // the layout: only the shifts that `replace` itself sends are quiet.
     override fun setSpan(what: Any?, start: Int, end: Int, flags: Int) {
         if (what != null && DocBinder.isEngineSpan(what)) version++
-        super.setSpan(what, start, end, flags)
+        val outer = editEnd
+        editEnd = -1
+        try { super.setSpan(what, start, end, flags) } finally { editEnd = outer }
     }
 
     override fun removeSpan(what: Any?) {
         if (what != null && DocBinder.isEngineSpan(what)) version++
-        super.removeSpan(what)
+        val outer = editEnd
+        editEnd = -1
+        try { super.removeSpan(what) } finally { editEnd = outer }
     }
 
     override fun <T : Any?> getSpans(queryStart: Int, queryEnd: Int, kind: Class<T>?): Array<T> {
         val all = super.getSpans(queryStart, queryEnd, kind)
         if (kind !== SpanWatcher::class.java || editEnd < 0 || queryStart <= editEnd) return all
-        // asked for the watchers of a span that starts after the edit: it only moved
+        // asked for the watchers of a span that starts after the edit: it only moved. A replacement span (an object) is always told: the
+        // layout keeps the size of one and a placeholder moved next to a full-width line broke the line after it (found by the layout fuzzer)
+        if (super.getSpans(queryStart, queryEnd, ReplacementSpan::class.java).isNotEmpty()) return all
         @Suppress("UNCHECKED_CAST")
         val quiet = all.filter { it?.javaClass?.name != LAYOUT_WATCHER } as List<T>
         return if (quiet.size == all.size) all else quiet.toTypedArray(all)

@@ -17,14 +17,25 @@ import app.tessera.ui.editor.engine.spans.SENTINEL_CHAR
 import app.tessera.ui.editor.engine.spans.SentinelSpan
 import app.tessera.ui.editor.engine.spans.markSpanOf
 
-/** Start of the grapheme cluster that ends at [c] (a flag, a skin tone, a ZWJ sequence and a keycap go whole), not before [cs]. */
+/**
+ * Start of the grapheme cluster that ends at [c] (a flag, a skin tone, a ZWJ sequence and a keycap go whole), not before [cs]. Only the 256
+ * characters before [c] and 8 after it are looked at: a Backspace in a paragraph of 10 000 characters must not copy the paragraph and
+ * break it into clusters every time (a cluster longer than 256 characters is a stack of combining marks nobody reads).
+ */
 internal fun graphemeStart(e: CharSequence, cs: Int, c: Int): Int {
+    var from = maxOf(cs, c - 256)
+    if (from > cs && e[from].isLowSurrogate()) from--
+    var to = c
+    while (to < e.length && to < c + 8 && e[to] != '\n') to++
     val it = android.icu.text.BreakIterator.getCharacterInstance()
-    val line = e.subSequence(cs, paragraphEnd(e, cs)).toString()
-    it.setText(line)
-    val p = it.preceding(c - cs)
-    return if (p == android.icu.text.BreakIterator.DONE) c - 1 else maxOf(cs + p, cs)
+    it.setText(e.subSequence(from, to).toString())
+    val p = it.preceding(c - from)
+    return if (p == android.icu.text.BreakIterator.DONE) c - 1 else maxOf(from + p, cs)
 }
+
+/** Spec §4 rule 12: a boundary inside a surrogate pair moves to the start of the pair. */
+internal fun pairStart(t: CharSequence, i: Int): Int =
+    if (i in 1 until t.length && t[i - 1].isHighSurrogate() && t[i].isLowSurrogate()) i - 1 else i
 
 /** Selection after a command: a caret when [end] == [start]. */
 data class Sel(val start: Int, val end: Int = start)
@@ -154,7 +165,11 @@ class EditRules(style: EditorStyle) {
 
     // ------------------------------------------------------------ Backspace
 
-    fun backspace(e: Editable, selStart: Int, selEnd: Int): Sel {
+    /**
+     * [afterSelectedObject]: the caret stands right after an object that was selected whole a moment ago (the IME moved the caret to the
+     * end of the selection before its Backspace): the object goes. A caret that got there by itself selects the object first.
+     */
+    fun backspace(e: Editable, selStart: Int, selEnd: Int, afterSelectedObject: Boolean = false): Sel {
         if (selEnd > selStart) {
             if (selEnd - selStart == 1 && isObjectParagraph(e, selStart)) return Sel(deleteObjectParagraph(e, selStart))
             return Sel(deleteRange(e, selStart, selEnd))
@@ -163,7 +178,7 @@ class EditRules(style: EditorStyle) {
         val ps = paragraphStart(e, c)
         val pe = paragraphEnd(e, ps)
         val cs = contentStart(e, ps)
-        if (isObjectParagraph(e, ps)) return backspaceAtObject(e, c, ps, pe)
+        if (isObjectParagraph(e, ps)) return backspaceAtObject(e, c, ps, pe, afterSelectedObject)
         if (c > cs) { // a character of the paragraph
             val from = graphemeStart(e, cs, c)
             val kind = kindOf(e, ps)
@@ -192,13 +207,9 @@ class EditRules(style: EditorStyle) {
         return Sel(afterSentinel(e, ps - 1))
     }
 
-    /**
-     * The caret is just after an object (delete it: the caret never gets there by itself, an IME put it there when it moved the caret
-     * to the end of the selected object before its second Backspace, as AOSP LatinIME does) or just before it (the line above is not
-     * touched, an empty one goes).
-     */
-    private fun backspaceAtObject(e: Editable, c: Int, ps: Int, pe: Int): Sel {
-        if (c > ps) return Sel(deleteObjectParagraph(e, ps))
+    /** The caret is just after an object (select it; delete it after a selection of it, see [backspace]) or just before it (the line above is not touched, an empty one goes). */
+    private fun backspaceAtObject(e: Editable, c: Int, ps: Int, pe: Int, afterSelectedObject: Boolean): Sel {
+        if (c > ps) return if (afterSelectedObject) Sel(deleteObjectParagraph(e, ps)) else Sel(ps, pe)
         if (ps == 0) return Sel(c)
         val prev = paragraphStart(e, ps - 1)
         if (isObjectParagraph(e, prev)) return Sel(prev, prev + 1)
@@ -282,9 +293,11 @@ class EditRules(style: EditorStyle) {
      * ([TypingAttributes.toggle]), not a command: nothing happens here.
      */
     fun toggleMark(e: Editable, selStart: Int, selEnd: Int, mark: Mark): Sel {
-        if (selEnd <= selStart) return Sel(selStart, selEnd)
+        val a = pairStart(e, selStart)
+        val b = pairStart(e, selEnd)
+        if (b <= a) return Sel(selStart, selEnd)
         // a mark never lies over the part of a code that the selection only touches (spec §4, rule 3), so those characters are not part of the toggle
-        val ranges = MarkOps.eligibleRanges(e, selStart, selEnd).flatMap { MarkOps.effectiveRanges(e, it.first, it.last + 1, mark) }
+        val ranges = MarkOps.eligibleRanges(e, a, b).flatMap { MarkOps.effectiveRanges(e, it.first, it.last + 1, mark) }
         if (ranges.isEmpty()) return Sel(selStart, selEnd)
         val all = ranges.all { MarkOps.covers(e, it.first, it.last + 1, mark) }
         for (r in ranges) if (all) MarkOps.remove(e, r.first, r.last + 1, mark, style) else MarkOps.add(e, r.first, r.last + 1, mark, style)
@@ -392,7 +405,11 @@ class EditRules(style: EditorStyle) {
         val pe = paragraphEnd(e, ps)
         val end = minOf(pe + 1, e.length)
         if (kind == ParagraphKind.Mono) MarkOps.removeAll(e, ps, pe) // a mono line has no marks (spec §4, rule 4), whichever path made it mono
-        if (end > ps) for (b in e.getSpans(ps, end, BlockSpan::class.java)) if (e.getSpanStart(b) >= ps) e.removeSpan(b)
+        if (end > ps) {
+            var collapsed = false
+            for (b in e.getSpans(ps, end, BlockSpan::class.java)) if (e.getSpanStart(b) >= ps) { collapsed = collapsed || e.getSpanEnd(b) <= e.getSpanStart(b); e.removeSpan(b) }
+            if (collapsed) Normalizer.relayout(e, ps, end) // the layout measured the paragraph with the collapsed span's margin and taking it off does not measure again
+        }
         val last = pe >= e.length
         if (kind == ParagraphKind.Body) {
             if (last && contentStart(e, ps) > ps) {

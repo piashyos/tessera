@@ -202,13 +202,51 @@ class TesseraInputConnectionTest {
         }
     }
 
-    /** The same state reached by the hardware key: the caret after the object deletes it too. */
+    /** A caret that got right after an object by itself (a tap, an arrow) has not selected it: Backspace selects it first, the next one deletes it. */
     @Test
-    fun theCaretAfterAnObjectDeletesItOnAnyPath() {
-        val h = HostFixture("above\n---\nbody")
-        val ps = h.at("\uFFFC")
-        h.caret(ps + 1)
-        h.ic().sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
-        assertEquals("above\nbody", h.md())
+    fun aCaretThatGotAfterAnObjectByItselfSelectsItFirst() {
+        for (viaKey in listOf(false, true)) {
+            val h = HostFixture("above\n---\nbody")
+            val ps = h.at("\uFFFC")
+            h.caret(ps + 1)
+            if (viaKey) h.ic().sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL)) else h.ic().deleteSurroundingText(1, 0)
+            assertEquals("selected, not deleted (key=$viaKey)", ps to ps + 1, h.view.selectionStart to h.view.selectionEnd)
+            assertEquals("above\n---\nbody", h.md())
+            h.ic().sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL)) // KEYCODE_DEL over the selection deletes it
+            assertEquals("above\nbody", h.md())
+        }
+    }
+
+    @Test
+    fun theMarkOfASelectedObjectIsDroppedByAnyOtherMoveOrEdit() {
+        fun selectedAfter(h: HostFixture) = h.view.selectionStart to h.view.selectionEnd
+        // a move elsewhere in between
+        val a = HostFixture("above\n---\nbody")
+        val ps = a.at("\uFFFC")
+        a.select(ps, ps + 1)
+        a.caret(0)
+        a.ic().setSelection(ps + 1, ps + 1)
+        a.ic().deleteSurroundingText(1, 0)
+        assertEquals("the caret went away and came back: select again", ps to ps + 1, selectedAfter(a))
+        assertEquals("above\n---\nbody", a.md())
+
+        // an edit in between
+        val b = HostFixture("above\n---\nbody")
+        b.select(ps, ps + 1)
+        b.caret(0)
+        b.ic().commitText("x", 1)
+        b.caret(b.at("\uFFFC") + 1)
+        b.ic().deleteSurroundingText(1, 0)
+        assertEquals("xabove\n---\nbody", b.md())
+        assertEquals(b.at("\uFFFC") to b.at("\uFFFC") + 1, selectedAfter(b))
+
+        // an external rebuild in between
+        val c = HostFixture("above\n---\nbody")
+        c.select(ps, ps + 1)
+        c.view.setMarkdown("a\nb\nc\nd\n---\nq")
+        val q = c.at("\uFFFC")
+        c.ic().setSelection(q + 1, q + 1)
+        c.ic().deleteSurroundingText(1, 0)
+        assertEquals(q to q + 1, selectedAfter(c))
     }
 }

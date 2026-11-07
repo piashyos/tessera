@@ -19,13 +19,46 @@ internal class HostFixture(md: String, val width: Int = 400, val height: Int = 8
     val states = ArrayList<FormatState>()
 
     init {
-        val ctx: Context = ContextThemeWrapper(RuntimeEnvironment.getApplication(), androidx.appcompat.R.style.Theme_AppCompat)
+        releaseNativesSometimes()
+        val ctx: Context = themedContext()
         view = TesseraEditText(ctx, style)
         view.layoutParams = ViewGroup.LayoutParams(width, height)
         view.onMarkdownChange = { emitted += it }
         view.onFormatStateChanged = { states += it }
         view.setMarkdown(md)
         layout()
+    }
+
+    companion object {
+        private var created = 0
+
+        /**
+         * Robolectric's `ShadowLineBreaker` keeps the result of every line-break computation in a static registry for ever (one per reflow: 400 000
+         * of them were ~60 MB after 8 000 sessions, and a long fuzz run ran out of memory). A result is read at once by the `StaticLayout` that asked
+         * for it, so the registry is emptied between fixtures; objects of the fixture in use are not touched while it is being laid out.
+         */
+        fun releaseNativesSometimes() {
+            if (++created % 10 != 0) return
+            releaseNatives()
+        }
+
+        /** Also called by a long walk inside one fixture ([EngineFuzz.Session.check]): a reflow of a paragraph of 11 000 characters leaves ~20 KB. */
+        fun releaseNatives() {
+            runCatching {
+                val registry = Class.forName("org.robolectric.shadows.ShadowLineBreaker").getDeclaredField("nativeObjectRegistry").apply { isAccessible = true }.get(null)
+                registry.javaClass.getMethod("clear").invoke(registry)
+            }
+        }
+
+        private var app: android.app.Application? = null
+        private var themed: Context? = null
+
+        /** One themed context per application: a new one for each of thousands of fixtures kept ~0.35 MB each (a theme with its resources) in a long fuzz run. */
+        fun themedContext(): Context {
+            val a = RuntimeEnvironment.getApplication()
+            if (app !== a) { app = a; themed = ContextThemeWrapper(a, androidx.appcompat.R.style.Theme_AppCompat) }
+            return themed!!
+        }
     }
 
     fun layout() {
