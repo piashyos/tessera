@@ -222,7 +222,8 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         // coming again (the note has not caught up with our emit yet) must not roll the text back.
         if (markdown == lastIncoming) return
         lastIncoming = markdown
-        if (markdown == lastLoadedMarkdown || hasPendingUserEdit) return
+        if (markdown == lastLoadedMarkdown) return
+        if (hasPendingUserEdit) { skippedIncoming = markdown; return } // the pending emit reconciles; if it has nothing to say, this value is applied then
         val s = selectionStart.coerceAtLeast(0)
         val t = selectionEnd.coerceAtLeast(0)
         rebuild(NoteMarkdown.parse(markdown))
@@ -230,6 +231,8 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         history.clear()
         typing.reset()
         lastLoadedMarkdown = markdown
+        known(markdown)
+        skippedIncoming = null
         a11y.invalidateRoot()
         notifyFormatState()
     }
@@ -290,10 +293,24 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         if (!hasPendingUserEdit) return
         hasPendingUserEdit = false
         val md = markdown()
-        if (md == lastLoadedMarkdown) return // edited and put back: nothing to say
+        if (md == lastLoadedMarkdown) {
+            // edited and put back: nothing to say. A value from outside that came while the edit was pending is the news then: apply it (§6.9), unless it
+            // is one this editor has loaded or emitted already (the stale value of a recomposition that has not caught up).
+            val skipped = skippedIncoming
+            skippedIncoming = null
+            if (skipped != null && skipped != md && skipped !in knownValues) { lastIncoming = null; setMarkdown(skipped) }
+            return
+        }
         lastLoadedMarkdown = md
+        known(md)
+        skippedIncoming = null // the edit goes out: the owner of the note takes it, a value that was skipped behind it is older
         onMarkdownChange?.invoke(md)
     }
+
+    /** Markdown values this editor has loaded or emitted (the last 32): what comes back as a stale value is not news. */
+    private val knownValues = LinkedHashSet<String>()
+    private fun known(md: String) { knownValues.remove(md); knownValues.add(md); if (knownValues.size > 32) knownValues.remove(knownValues.first()) }
+    private var skippedIncoming: String? = null
 
     /** The host composable leaves: a pending user edit is emitted, nothing else is; no callback fires after this. */
     fun dispose() {

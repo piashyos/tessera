@@ -61,6 +61,9 @@ class NoteBodyTest {
     }
 
     private fun pass(ms: Long) {
+        // The debounced emit serializes on a background executor; run it inline so the main-looper clock alone drives it
+        // (as HostFixture does) — otherwise the result can land after the assert.
+        rule.runOnUiThread { runCatching { editor().emitExecutor = java.util.concurrent.Executor { it.run() } } }
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))
         rule.waitForIdle()
     }

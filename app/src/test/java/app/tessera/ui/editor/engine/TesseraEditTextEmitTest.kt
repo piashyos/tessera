@@ -234,4 +234,99 @@ class TesseraEditTextEmitTest {
         assertTrue(h.states.last().canUndo)
         assertFalse(h.states.last().canRedo)
     }
+
+    // --- a value from outside that came while an edit was pending (§6.9: the pending emit reconciles)
+
+    @Test
+    fun anEditThatWasPutBackAppliesTheRemoteValueThatWasSkipped_typedAndErased() {
+        val h = HostFixture("a")
+        h.caret(1)
+        h.ic().commitText("b", 1)
+        h.view.setMarkdown("remote") // a co-author's edit arrives while ours is pending: skipped
+        assertEquals("ab", h.md())
+        h.ic().deleteSurroundingText(1, 0) // and our edit is erased
+        h.pass(300)
+        assertEquals("remote", h.md())
+        assertTrue("nothing of ours to emit", h.emitted.isEmpty())
+    }
+
+    @Test
+    fun anEditThatWasPutBackAppliesTheRemoteValueThatWasSkipped_undone() {
+        val h = HostFixture("a")
+        h.caret(1)
+        h.ic().commitText("b", 1)
+        h.view.setMarkdown("remote")
+        h.view.undo()
+        h.pass(300)
+        assertEquals("remote", h.md())
+        assertTrue(h.emitted.isEmpty())
+    }
+
+    @Test
+    fun anEditThatWasPutBackAppliesTheRemoteValueThatWasSkipped_checkboxTappedTwice() {
+        val h = HostFixture("- [ ] a")
+        h.view.toggleCheckAt(0)
+        h.view.setMarkdown("remote")
+        h.view.toggleCheckAt(0)
+        h.pass(300)
+        assertEquals("remote", h.md())
+        assertTrue(h.emitted.isEmpty())
+    }
+
+    @Test
+    fun theSameThroughTheBackgroundWriter() {
+        val h = HostFixture("a")
+        val jobs = ArrayList<Runnable>()
+        h.view.emitExecutor = java.util.concurrent.Executor { jobs += it }
+        h.caret(1)
+        h.ic().commitText("b", 1)
+        h.view.setMarkdown("remote")
+        h.ic().deleteSurroundingText(1, 0)
+        h.pass(300)
+        jobs.forEach { it.run() }
+        h.pass(10)
+        assertEquals("remote", h.md())
+        assertTrue(h.emitted.isEmpty())
+    }
+
+    @Test
+    fun anEditThatGoesOutIsNotRolledBackByTheRemoteValueThatWasSkippedBehindIt() {
+        val h = HostFixture("a")
+        h.caret(1)
+        h.ic().commitText("b", 1)
+        h.view.setMarkdown("remote")
+        h.pass(300)
+        assertEquals(listOf("ab"), h.emitted)
+        assertEquals("ab", h.md())
+        h.pass(1000)
+        assertEquals("the skipped value is not applied behind a real edit", "ab", h.md())
+        h.view.setMarkdown("remote") // the same value again is a repeat
+        assertEquals("ab", h.md())
+    }
+
+    @Test
+    fun aStaleValueOfTheNoteIsNotTakenForNewsWhenTheEditIsPutBack() {
+        val h = HostFixture("a")
+        h.caret(1)
+        h.ic().commitText("b", 1)
+        h.pass(300) // "ab" is out; the note has not caught up yet
+        h.ic().commitText("c", 1)
+        h.view.setMarkdown("a") // the stale value of the recomposition, skipped while "abc" is pending
+        h.ic().deleteSurroundingText(1, 0) // "abc" is erased back to what was emitted
+        h.pass(300)
+        assertEquals("the stale value is not applied", "ab", h.md())
+        assertEquals(listOf("ab"), h.emitted)
+    }
+
+    @Test
+    fun theLastOfSeveralRemoteValuesIsTheOneApplied() {
+        val h = HostFixture("a")
+        h.caret(1)
+        h.ic().commitText("b", 1)
+        h.view.setMarkdown("remote 1")
+        h.view.setMarkdown("remote 2")
+        h.ic().deleteSurroundingText(1, 0)
+        h.pass(300)
+        assertEquals("remote 2", h.md())
+    }
 }
