@@ -31,7 +31,14 @@ import app.tessera.domain.usecase.UpdateNoteUseCase
 import app.tessera.ui.editor.components.NoteImageLoaderFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,7 +50,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.wordpress.aztec.Html
 
 private const val AutosaveDebounceMs = 500L
@@ -113,6 +119,15 @@ class NoteEditorViewModel @Inject constructor(
 
     private var autosaveJob: Job? = null
     private var autosavePending = false
+
+    /** Writes run one at a time; each compares the screen's text with what the previous one wrote (see [persist]). */
+    private val persistMutex = Mutex()
+
+    /** Set by delete / leave: nothing writes the note after that, not even a write that was already waiting. */
+    private var closed = false
+
+    /** Outlives [viewModelScope]: the last save of [onCleared] must not die with it, and must not block the main thread. */
+    private val lastSaveScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     init {
         viewModelScope.launch {
@@ -244,6 +259,7 @@ class NoteEditorViewModel @Inject constructor(
         // A late autosave or flush (the editor's dispose hands over its last key after this) must not write the note back
         // out of the trash: `persist` does nothing without a baseline.
         baselineNote = null
+        closed = true
         viewModelScope.launch { deleteNoteUseCase(noteId) }
     }
 
@@ -324,6 +340,7 @@ class NoteEditorViewModel @Inject constructor(
         autosaveJob = null
         autosavePending = false
         baselineNote = null
+        closed = true
         viewModelScope.launch {
             leaveSharedNoteUseCase(noteId).onFailure { e ->
                 _state.update { it.copy(shareError = e.message ?: "Couldn't leave this note") }
@@ -422,16 +439,24 @@ class NoteEditorViewModel @Inject constructor(
     }
 
     /**
-     * Leaving the screen hands over the editor's last edit (its dispose flushes), and the 500 ms autosave that edit starts
-     * dies with [viewModelScope] when the back stack entry goes first. Save what is pending, once, before the scope is gone.
+     * Leaving the screen hands over the native editor's last edit (its dispose flushes), and the 500 ms autosave that edit
+     * starts dies with [viewModelScope] when the back stack entry goes first: save what is pending, once. Only for the native
+     * engine: Aztec hands over `htmlToMarkdown(toHtml())` on dispose, which is not an identity, so on that path an edit-less
+     * visit must not become a save (it never did: that autosave died with the scope).
      */
     override fun onCleared() {
-        if (autosavePending) runBlocking { persist() }
+        if (autosavePending && _state.value.useNativeEditor == true) lastSaveScope.launch { persist() }
     }
 
-    private suspend fun persist() {
+    // NonCancellable: a write that was started (or is next in line) is finished even when the back stack entry takes
+    // viewModelScope with it; a cancelled one would leave the store with a text that `baselineNote` does not know about.
+    private suspend fun persist() = withContext(NonCancellable) { persistLocked() }
+
+    private suspend fun persistLocked() = persistMutex.withLock {
+        // Read inside the lock: the text of the moment the write starts, against what the write before it left behind.
+        if (closed) return@withLock
         val current = _state.value
-        val baseline = baselineNote ?: return
+        val baseline = baselineNote ?: return@withLock
         // Skip the save entirely when nothing the user can edit has actually changed —
         // otherwise opening a note bumps `updatedAt` and shuffles it to the top of the
         // list without any real edit having happened.
@@ -439,7 +464,7 @@ class NoteEditorViewModel @Inject constructor(
         val pinUnchanged = current.isPinned == baseline.isPinned
         val baselineTags = baseline.tags.map { it.name }
         val tagsUnchanged = current.tags == baselineTags
-        if (contentUnchanged && pinUnchanged && tagsUnchanged) return
+        if (contentUnchanged && pinUnchanged && tagsUnchanged) return@withLock
 
         // A note edited down to blank is removed everywhere (cloud + local), not kept as a draft.
         // A local-only hard delete would leave the remote document intact, and the next remote pull
@@ -449,7 +474,7 @@ class NoteEditorViewModel @Inject constructor(
         if (current.content.isBlank()) {
             permanentlyDeleteNoteUseCase(noteId)
             baselineNote = null
-            return
+            return@withLock
         }
 
         val updated = baseline.copy(
@@ -458,6 +483,7 @@ class NoteEditorViewModel @Inject constructor(
             isPinned = current.isPinned,
         )
         val saved = updateNoteUseCase(updated)
-        baselineNote = saved
+        // What was written is the baseline of the next write (a delete that came meanwhile keeps its null).
+        if (!closed) baselineNote = saved
     }
 }

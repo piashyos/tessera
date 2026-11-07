@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.engine.FormatState
@@ -150,5 +151,58 @@ class NoteBodyTest {
         editable = true
         rule.waitForIdle()
         assertTrue(editor().editable)
+    }
+
+    @Test fun caret_and_focus_survive_a_recreation_of_the_host() {
+        val tester = StateRestorationTester(rule)
+        tester.setContent {
+            TesseraTheme(darkTheme = false, dynamicColor = false) {
+                NoteBody(
+                    markdown = "hello world",
+                    onMarkdownChange = {},
+                    onActionsReady = {},
+                    onFormatStateChanged = {},
+                    editable = true,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        rule.waitForIdle()
+        rule.runOnUiThread { editor().apply { requestFocus(); setSelection(3, 5) } }
+        assertTrue(editor().isFocused)
+        assertEquals("before the save", 3, editor().selectionStart)
+
+        tester.emulateSavedInstanceStateRestore() // the rotation: a new View over the same text
+        rule.waitForIdle()
+
+        val e = editor()
+        assertEquals("hello world", e.markdown())
+        assertEquals(3, e.selectionStart)
+        assertEquals(5, e.selectionEnd)
+        assertTrue("focus is back", e.isFocused)
+    }
+
+    @Test fun without_focus_only_the_caret_comes_back() {
+        val tester = StateRestorationTester(rule)
+        tester.setContent {
+            TesseraTheme(darkTheme = false, dynamicColor = false) {
+                NoteBody(
+                    markdown = "hello world",
+                    onMarkdownChange = {},
+                    onActionsReady = {},
+                    onFormatStateChanged = {},
+                    editable = true,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        rule.waitForIdle()
+        rule.runOnUiThread { editor().setSelection(4); editor().clearFocus() }
+
+        tester.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+
+        assertEquals(4, editor().selectionStart)
+        assertFalse(editor().isFocused)
     }
 }

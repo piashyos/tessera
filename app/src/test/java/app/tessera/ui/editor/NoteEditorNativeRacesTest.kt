@@ -71,6 +71,9 @@ class NoteEditorNativeRacesTest {
             }
         }
         pass(50)
+        // The engine writes the Markdown of a debounced emit on a pool thread; these tests drive time through the main looper only,
+        // so the write runs in place (the emit still goes out through the same debounce and the same hand-back).
+        find(TesseraEditText::class.java)?.emitExecutor = java.util.concurrent.Executor { it.run() }
     }
 
     private fun pass(ms: Long) {
@@ -269,6 +272,29 @@ class NoteEditorNativeRacesTest {
         type(3, "!")
         pass(50)
         vm.delete()
+        stop()
+        pass(3_000)
+        assertTrue(repo.updateCalls.isEmpty())
+    }
+
+    // ------------------------------------------------------------------ the Aztec path stays as it was
+
+    @Test fun aztec_visit_without_an_edit_leaves_the_note_alone_even_when_the_view_model_is_cleared() {
+        prefs.useNativeEditor.value = false
+        open("# Aztec\n- [ ] task\nbody")
+        assertNotNull(find(AztecText::class.java))
+        pass(3_000)
+        shown = false // Aztec hands over htmlToMarkdown(toHtml()) on dispose: not an identity
+        rule.waitForIdle()
+        store.clear() // the autosave that rewrite starts dies with the scope, and onCleared does not save for Aztec
+        pass(3_000)
+        assertTrue("content and updatedAt are the ones of the store", repo.updateCalls.isEmpty())
+    }
+
+    @Test fun aztec_stop_without_an_edit_writes_nothing() {
+        prefs.useNativeEditor.value = false
+        open("# Aztec\n- [ ] task\nbody")
+        pass(3_000)
         stop()
         pass(3_000)
         assertTrue(repo.updateCalls.isEmpty())

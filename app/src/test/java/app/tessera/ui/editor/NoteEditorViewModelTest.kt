@@ -156,6 +156,48 @@ class NoteEditorViewModelTest {
     }
 
     @Test
+    fun `an edit undone after a flush still writes the last state, not the one the flush wrote`() = runTest(dispatcher.scheduler) {
+        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
+        val repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = "abc")))
+        val created = repo.createViewModel("n", prefs = prefs)
+        val store = androidx.lifecycle.ViewModelStore()
+        val vm = androidx.lifecycle.ViewModelProvider(store, object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T = created as T
+        })[NoteEditorViewModel::class.java]
+        runCurrent()
+        repo.writeDelayMs = 200
+
+        vm.onContentChange("abcX")
+        vm.flush() // writes "abcX" and sleeps in the write
+        runCurrent()
+        vm.onContentChange("abc") // undone to the text the note was opened with
+        store.clear() // back: onCleared saves what is pending
+        advanceTimeBy(2_000)
+        runCurrent()
+
+        assertEquals(listOf("abcX", "abc"), repo.updateCalls.map { it.content })
+    }
+
+    @Test
+    fun `writes do not overlap and the later one compares with what the earlier one wrote`() = runTest(dispatcher.scheduler) {
+        val repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = "abc")))
+        val vm = repo.createViewModel("n")
+        runCurrent()
+        repo.writeDelayMs = 200
+
+        vm.onContentChange("abcX")
+        vm.flush()
+        runCurrent()
+        vm.onContentChange("abc")
+        vm.flush()
+        advanceTimeBy(2_000)
+        runCurrent()
+
+        assertEquals(listOf("abcX", "abc"), repo.updateCalls.map { it.content })
+    }
+
+    @Test
     fun `content change schedules autosave with 500ms debounce`() =
         runTest(dispatcher.scheduler) {
             val note = sampleNote("note-2", content = "Old")
@@ -633,6 +675,7 @@ internal class FakeEditorRepository(
         notesFlow.value = notesFlow.value.map { if (it.id == note.id) note else it }
     }
 
+    var writeDelayMs = 0L
     val updateCalls = mutableListOf<Note>()
     val deleteCalls = mutableListOf<NoteId>()
 
@@ -661,6 +704,7 @@ internal class FakeEditorRepository(
     override suspend fun getNote(id: NoteId): Note? = notesFlow.value.firstOrNull { it.id == id }
     override suspend fun createNote(ownerId: UserId?): Note = sampleNote("created")
     override suspend fun updateNote(note: Note): Note {
+        if (writeDelayMs > 0) delay(writeDelayMs) // a slow write: the call is recorded when it has finished
         updateCalls += note
         val updated = notesFlow.value.map { if (it.id == note.id) note else it }
         notesFlow.value = updated

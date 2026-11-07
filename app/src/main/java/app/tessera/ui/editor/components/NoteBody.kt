@@ -18,6 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -84,6 +86,15 @@ fun NoteBody(
     val currentOnFocusChanged by rememberUpdatedState(onFocusChanged)
     val editorRef = remember { mutableStateOf<TesseraEditText?>(null) }
 
+    // The caret and the focus survive a re-creation of the host (rotation, process death): read from the live editor at the
+    // moment the state is saved, put back into the new one below.
+    val caret = rememberSaveable(
+        saver = Saver<CaretSnapshot, List<Any>>(
+            save = { old -> editorRef.value?.let { listOf(it.selectionStart, it.selectionEnd, it.isFocused) } ?: listOf(old.start, old.end, old.focused) },
+            restore = { CaretSnapshot(it[0] as Int, it[1] as Int, it[2] as Boolean) },
+        ),
+    ) { CaretSnapshot(-1, -1, false) }
+
     // Keeps the caret line above the keyboard: the IME inset is read here so only this subtree recomposes while it animates.
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val caretScope = rememberCoroutineScope()
@@ -124,11 +135,34 @@ fun NoteBody(
             editor.hint = hint
             editor.setHintTextColor(hintColor)
             applyCursorAndHandleTint(editor, accentArgb)
-            editor.setOnFocusChangeListener { _, hasFocus -> currentOnFocusChanged(hasFocus) }
+            // Gaining the focus moves the caret to the end (TextView), also the focus that is given back after a re-creation:
+            // the saved selection is put over that once, right after it.
+            var restoreCaret = caret.start >= 0 && caret.focused
+            fun putCaretBack() {
+                val len = editor.length()
+                editor.setSelection(caret.start.coerceIn(0, len), caret.end.coerceIn(0, len))
+            }
+            editor.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus && restoreCaret) {
+                    restoreCaret = false
+                    editor.post { putCaretBack() }
+                }
+                currentOnFocusChanged(hasFocus)
+            }
             editor.onMarkdownChange = { md -> currentOnMarkdownChange(md) }
             editor.onFormatStateChanged = { fs -> currentOnFormatStateChanged(fs) }
             editor.editable = editable
             editor.setMarkdown(markdown)
+            if (caret.start >= 0) {
+                putCaretBack()
+                if (caret.focused && editable) {
+                    editor.requestFocus()
+                    editor.post {
+                        val imm = editor.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                        imm.showSoftInput(editor, InputMethodManager.SHOW_IMPLICIT)
+                    }
+                }
+            }
             // Typing moves the caret: pull its line above the keyboard (posted: the layout must reflect the edit first).
             editor.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -152,6 +186,9 @@ fun NoteBody(
         },
     )
 }
+
+/** Where the caret was and whether the editor had the focus when the host was saved. */
+private class CaretSnapshot(val start: Int, val end: Int, val focused: Boolean)
 
 /** The toolbar's commands over the native engine (spec §7): the `RichBodyActions` mapping. */
 internal class NoteBodyActions(private val editor: TesseraEditText) : RichBodyActions {
