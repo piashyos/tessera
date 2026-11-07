@@ -1,7 +1,11 @@
 package app.tessera.core.di
 
 import app.tessera.data.images.DriveImageDownloader
+import android.content.Context
 import app.tessera.data.images.ImageDownloader
+import app.tessera.data.images.NoteImageDecoder
+import app.tessera.data.local.dao.NoteImageDao
+import dagger.hilt.android.qualifiers.ApplicationContext
 import app.tessera.ui.editor.components.DefaultNoteImageLoaderFactory
 import app.tessera.ui.editor.components.NoteImageLoaderFactory
 import dagger.Module
@@ -17,6 +21,14 @@ object ImageModule {
     @Provides
     @Singleton
     fun provideImageDownloader(impl: DriveImageDownloader): ImageDownloader = impl
+
+    @Provides
+    @Singleton
+    fun provideNoteImageDecoder(
+        @ApplicationContext context: Context,
+        noteImageDao: NoteImageDao,
+        downloader: ImageDownloader,
+    ): NoteImageDecoder = NoteImageDecoder(noteImageDao, context.filesDir, context.cacheDir, downloader)
 
     @Provides
     @Singleton

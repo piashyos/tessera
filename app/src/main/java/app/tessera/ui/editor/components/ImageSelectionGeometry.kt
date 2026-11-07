@@ -1,5 +1,7 @@
 package app.tessera.ui.editor.components
 
+import app.tessera.domain.model.parseImageRef
+
 /**
  * Pure geometry + canonical-src helpers for the in-editor image resize/rotate overlay.
  * No Android dependencies — unit-tested in [ImageSelectionGeometryTest].

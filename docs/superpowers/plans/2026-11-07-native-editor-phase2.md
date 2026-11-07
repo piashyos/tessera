@@ -44,7 +44,12 @@
 
 ### P2-1a · картинки, слой данных (`data`)
 
-- [ ] В `data/images` появляется декодер картинок заметки: логика `TesseraImageLoader`
+- [x] **Принято 2026-11-07.** `NoteImageDecoder` (decode / prefetchSizes / cachedSize / decodeLocal /
+  storedSize), `ImageRef` → `domain/model`, `TesseraImageLoader` — обёртка. Приёмка оркестратора:
+  компиляция, 96 тестов / 0 упало (data.images, обёртка, ImageRef, геометрия, ImageSpanRect, ViewModel).
+  Ревью по гейтам — вместе с P2-1b. QA: bounds = размер decode на webp с w/rot, битый файл, 20 картинок.
+  Уборка в P2-4: вторичный конструктор обёртки, `storedSize`/`resolve`.
+- [x] В `data/images` появляется декодер картинок заметки: логика `TesseraImageLoader`
   (`localPath` → кэш → Drive, `DENSITY_NONE`, запекание `w`/`rot`, ширина =
   `min(ширина после поворота, maxWidth) × w%`) без Aztec и без UI. Старый `TesseraImageLoader` становится тонкой обёрткой `Html.ImageGetter` над новым декодером (копии логики нет), Aztec-путь работает через тот же код до P2-4.
 - [ ] Тесты переносятся из `TesseraImageLoaderTest`, плюс отказ и отмена.

@@ -1,5 +1,6 @@
 package app.tessera.ui.editor.components
 
+import app.tessera.domain.model.parseImageRef
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper

@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import androidx.test.core.app.ApplicationProvider
 import app.tessera.data.images.ImageDownloader
@@ -13,6 +14,7 @@ import app.tessera.data.local.entity.NoteImageEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -68,51 +70,40 @@ class TesseraImageLoaderTest {
         assertTrue("drawable must have real bounds", delivered!!.bounds.width() > 0 && delivered!!.bounds.height() > 0)
     }
 
-    private fun loaderWithImage(id: String, w: Int, h: Int): TesseraImageLoader {
-        val dir = File(context.filesDir, "images").apply { mkdirs() }
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.GREEN) }
-        @Suppress("DEPRECATION")
-        FileOutputStream(File(dir, "$id.webp")).use { bmp.compress(Bitmap.CompressFormat.WEBP, 80, it) }
-        return TesseraImageLoader(
-            noteImageDao = NoDbDao(),
-            filesDir = context.filesDir,
-            cacheDir = context.cacheDir,
-            downloader = ImageDownloader { null },
-            scope = CoroutineScope(Dispatchers.Unconfined),
-        )
+    private class Recorder : Html.ImageGetter.Callbacks {
+        var loading: Drawable? = null
+        var loaded: Drawable? = null
+        var failed = false
+        override fun onImageLoaded(drawable: Drawable?) { loaded = drawable }
+        override fun onImageLoading(drawable: Drawable?) { loading = drawable }
+        override fun onImageFailed() { failed = true }
     }
 
-    private fun deliver(loader: TesseraImageLoader, source: String, maxWidth: Int): BitmapDrawable {
-        var delivered: Drawable? = null
-        loader.loadImage(source, object : Html.ImageGetter.Callbacks {
-            override fun onImageLoaded(drawable: Drawable?) { delivered = drawable }
-            override fun onImageLoading(drawable: Drawable?) {}
-            override fun onImageFailed() {}
-        }, maxWidth)
-        return delivered as BitmapDrawable
-    }
+    private fun emptyLoader() = TesseraImageLoader(
+        noteImageDao = NoDbDao(),
+        filesDir = context.filesDir,
+        cacheDir = context.cacheDir,
+        downloader = ImageDownloader { null },
+        scope = CoroutineScope(Dispatchers.Unconfined),
+    )
 
-    /** rot=90 on a 120x200 portrait source swaps orientation → landscape drawable. */
     @Test
-    fun `rot 90 swaps orientation`() {
-        val loader = loaderWithImage("rot-1", 120, 200)
-        val d = deliver(loader, "tessera-img://rot-1?rot=90", 800)
-        assertTrue("rotated should be landscape: ${d.intrinsicWidth}x${d.intrinsicHeight}", d.intrinsicWidth > d.intrinsicHeight)
+    fun `non tessera source fails without placeholder`() {
+        val cb = Recorder()
+        emptyLoader().loadImage("https://x/y.png", cb, 800)
+        assertTrue(cb.failed)
+        assertNull(cb.loading)
+        assertNull(cb.loaded)
     }
 
-    /** w=50 delivers half the intrinsic width of the w=100 (default) case. */
     @Test
-    fun `w 50 halves intrinsic width`() {
-        val full = deliver(loaderWithImage("w-full", 120, 200), "tessera-img://w-full?w=100", 800)
-        val half = deliver(loaderWithImage("w-half", 120, 200), "tessera-img://w-half?w=50", 800)
-        assertEquals(full.intrinsicWidth / 2, half.intrinsicWidth)
-    }
-
-    /** A sub-maxWidth image at w=100 keeps its native pixel width (not upscaled). */
-    @Test
-    fun `w 100 keeps native width`() {
-        val d = deliver(loaderWithImage("w-native", 120, 200), "tessera-img://w-native?w=100", 800)
-        assertEquals(120, d.intrinsicWidth)
+    fun `unavailable image gets loading tile then unavailable tile`() {
+        val cb = Recorder()
+        emptyLoader().loadImage("tessera-img://missing", cb, 800)
+        assertTrue("loading tile first", cb.loading is ColorDrawable)
+        assertTrue("then unavailable tile", cb.loaded is ColorDrawable)
+        assertEquals(800, cb.loaded!!.bounds.width())
+        assertEquals(450, cb.loaded!!.bounds.height()) // 16:9 without a Room row
     }
 
     private class NoDbDao : NoteImageDao {

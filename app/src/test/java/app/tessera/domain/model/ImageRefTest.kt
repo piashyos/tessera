@@ -1,4 +1,4 @@
-package app.tessera.ui.editor.components
+package app.tessera.domain.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
