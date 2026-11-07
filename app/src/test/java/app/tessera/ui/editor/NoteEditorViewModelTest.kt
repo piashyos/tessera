@@ -367,7 +367,7 @@ class NoteEditorViewModelTest {
     }
 
     @Test
-    fun `flush with blank content permanently deletes the note everywhere`() =
+    fun `leaving with blank content permanently deletes the note everywhere`() =
         runTest(dispatcher.scheduler) {
             // Emptying an existing note must remove it everywhere (cloud + local), not persist a
             // blank draft. A local-only delete leaves the remote copy, which the next pull
@@ -378,7 +378,7 @@ class NoteEditorViewModelTest {
             runCurrent()
 
             vm.onContentChange("")
-            vm.flush()
+            vm.flushAndLeave()
             runCurrent()
 
             assertEquals(
@@ -391,6 +391,99 @@ class NoteEditorViewModelTest {
                 "blank content must NOT be persisted as a draft via updateNote",
             )
         }
+
+    // --- A note emptied on the way is deleted only when the screen is left (Т6) ---
+
+    private class Emptied(val repo: FakeEditorRepository, val vm: NoteEditorViewModel, val store: androidx.lifecycle.ViewModelStore)
+
+    private fun kotlinx.coroutines.test.TestScope.emptied(native: Boolean): Emptied {
+        val prefs = FakeUserPreferences().apply { useNativeEditor.value = native }
+        val repo = FakeEditorRepository(notes = listOf(sampleNote("t6", content = "old content")))
+        val created = repo.createViewModel("t6", currentUser = "me", prefs = prefs)
+        val store = androidx.lifecycle.ViewModelStore()
+        val vm = androidx.lifecycle.ViewModelProvider(store, object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T = created as T
+        })[NoteEditorViewModel::class.java]
+        runCurrent()
+        vm.onContentChange("") // select all, Delete
+        return Emptied(repo, vm, store)
+    }
+
+    private fun Emptied.assertUntouched() {
+        assertEquals(emptyList<NoteId>(), repo.permanentDeleteEverywhereCalls)
+        assertEquals(emptyList<NoteId>(), repo.deleteCalls)
+        assertEquals(emptyList<String>(), repo.updateCalls.map { it.content })
+    }
+
+    @Test
+    fun `emptied then autosave then typed then Back saves the new text and deletes nothing`() = runTest(dispatcher.scheduler) {
+        for (native in listOf(true, false)) {
+            val e = emptied(native)
+            advanceTimeBy(2_000) // the autosave sees the empty text
+            runCurrent()
+            e.assertUntouched()
+
+            e.vm.onContentChange("new content")
+            advanceTimeBy(2_000) // the ordinary autosave goes over the old baseline
+            runCurrent()
+            e.vm.flushAndLeave() // Back
+            runCurrent()
+
+            assertEquals(listOf("new content"), e.repo.updateCalls.map { it.content }, "native=$native")
+            assertEquals(emptyList<NoteId>(), e.repo.permanentDeleteEverywhereCalls, "native=$native")
+            assertEquals(emptyList<NoteId>(), e.repo.deleteCalls, "native=$native")
+        }
+    }
+
+    @Test
+    fun `emptied then ON_STOP writes and deletes nothing`() = runTest(dispatcher.scheduler) {
+        for (native in listOf(true, false)) {
+            val e = emptied(native)
+            e.vm.flush() // ON_STOP
+            runCurrent()
+            e.assertUntouched()
+        }
+    }
+
+    @Test
+    fun `emptied then Back deletes the note`() = runTest(dispatcher.scheduler) {
+        for (native in listOf(true, false)) {
+            val e = emptied(native)
+            advanceTimeBy(2_000)
+            runCurrent()
+            e.vm.flushAndLeave()
+            runCurrent()
+            assertEquals(listOf(NoteId("t6")), e.repo.permanentDeleteEverywhereCalls, "native=$native")
+            assertEquals(emptyList<String>(), e.repo.updateCalls.map { it.content }, "native=$native")
+        }
+    }
+
+    @Test
+    fun `emptied then cleared without Back deletes on the native engine and leaves the Aztec note alone`() = runTest(dispatcher.scheduler) {
+        val nativeCase = emptied(native = true)
+        nativeCase.store.clear()
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertEquals(listOf(NoteId("t6")), nativeCase.repo.permanentDeleteEverywhereCalls)
+
+        // The native one after its autosave already saw the empty text: onCleared still deletes it.
+        val settled = emptied(native = true)
+        advanceTimeBy(2_000)
+        runCurrent()
+        settled.assertUntouched()
+        settled.store.clear()
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertEquals(listOf(NoteId("t6")), settled.repo.permanentDeleteEverywhereCalls)
+
+        // Aztec: onCleared saves nothing (its dispose hands over a rewritten text), as before.
+        val aztec = emptied(native = false)
+        aztec.store.clear()
+        advanceTimeBy(2_000)
+        runCurrent()
+        aztec.assertUntouched()
+    }
 
     @Test
     fun `availableTags is all note tags minus loaded note tags`() =

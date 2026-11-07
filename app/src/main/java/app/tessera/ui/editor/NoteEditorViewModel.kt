@@ -268,11 +268,20 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
+    /** Intermediate save (ON_STOP): never deletes, a blank text is left alone (see [persist]). */
     fun flush() {
         autosaveJob?.cancel()
         autosaveJob = null
         autosavePending = false
         viewModelScope.launch { persist() }
+    }
+
+    /** Back (arrow or system): the last save of the visit; a note left blank is deleted. */
+    fun flushAndLeave() {
+        autosaveJob?.cancel()
+        autosaveJob = null
+        autosavePending = false
+        viewModelScope.launch { persist(leaving = true) }
     }
 
     fun delete() {
@@ -474,14 +483,19 @@ class NoteEditorViewModel @Inject constructor(
      * visit must not become a save (it never did: that autosave died with the scope).
      */
     override fun onCleared() {
-        if (autosavePending && _state.value.useNativeEditor == true) lastSaveScope.launch { persist() }
+        // A blank text counts as pending too: the autosave that saw it wrote nothing (see [persist]), so a note emptied and
+        // left without Back is deleted here, as it is on Back.
+        if ((autosavePending || _state.value.content.isBlank()) && _state.value.useNativeEditor == true) {
+            lastSaveScope.launch { persist(leaving = true) }
+        }
     }
 
     // NonCancellable: a write that was started (or is next in line) is finished even when the back stack entry takes
     // viewModelScope with it; a cancelled one would leave the store with a text that `baselineNote` does not know about.
-    private suspend fun persist() = withContext(NonCancellable) { persistLocked() }
+    private suspend fun persist(leaving: Boolean = false) = withContext(NonCancellable) { persistLocked(leaving) }
 
-    private suspend fun persistLocked() = persistMutex.withLock {
+    /** [leaving]: the screen is being left (Back, onCleared); only then does a blank text delete the note. */
+    private suspend fun persistLocked(leaving: Boolean) = persistMutex.withLock {
         // Read inside the lock: the text of the moment the write starts, against what the write before it left behind.
         if (closed) return@withLock
         val current = _state.value
@@ -495,7 +509,11 @@ class NoteEditorViewModel @Inject constructor(
         val tagsUnchanged = current.tags == baselineTags
         if (contentUnchanged && pinUnchanged && tagsUnchanged) return@withLock
 
-        // A note edited down to blank is removed everywhere (cloud + local), not kept as a draft.
+        // Blank on the way (autosave, ON_STOP): the user may be about to type again (select all, Delete, new text). Writing
+        // or deleting now would lose the note under them; the baseline stays, and the next non-blank save goes over it.
+        if (current.content.isBlank() && !leaving) return@withLock
+
+        // A note edited down to blank and left is removed everywhere (cloud + local), not kept as a draft.
         // A local-only hard delete would leave the remote document intact, and the next remote pull
         // would resurrect the note with its old title. Routing through the permanent-delete use case
         // deletes the cloud doc first (when signed in) so it can't come back. Clear the baseline so a

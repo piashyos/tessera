@@ -210,7 +210,7 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
             val backAction: () -> Unit = remember(viewModel, navController, view) {
                 {
                     hideKeyboard()
-                    viewModel.flush()
+                    viewModel.flushAndLeave()
                     navController.popBackStack()
                 }
             }
