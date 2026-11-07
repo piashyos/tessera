@@ -53,6 +53,7 @@
   sealed interface ImageResult { data class Loaded(val drawable: Drawable) : ImageResult; data object Unavailable : ImageResult }
   interface ObjectImageSource {
       fun peek(src: String, maxWidthPx: Int): Drawable?                    // синхронно, только кэш в памяти
+      fun size(src: String, maxWidthPx: Int): Size?                        // синхронно, кэш размеров (prefetch)
       fun load(src: String, maxWidthPx: Int, onResult: (ImageResult) -> Unit): () -> Unit  // возвращает отмену
   }
   ```
@@ -70,10 +71,11 @@
 - **Размер известен заранее, без прыжка.** Aztec декодирует локальные картинки синхронно, поэтому при
   открытии ничего не прыгает (общая спека §11). Мы тоже не прыгаем:
   - ViewModel при загрузке заметки, до выдачи `content` в state, вызывает у декодера
-    `prefetchSizes(srcs, maxWidthPx)`. Это чтение только границ (`inJustDecodeBounds`) на IO для локальных
-    файлов и кэша; итоговый размер с учётом `w`/`rot` кладётся в кэш размеров.
-  - `ObjectImageSource.size(src, maxWidthPx): Size?` синхронно отдаёт размер из этого кэша. Плейсхолдер
-    сразу получает точный размер, и полный декод не сдвигает текст.
+    `prefetchSizes(srcs)`. Это чтение только границ (`inJustDecodeBounds`) на IO для локальных файлов и
+    кэша; в кэш по id кладутся сырые границы. Ширину текста ViewModel не знает и не передаёт.
+  - `ObjectImageSource.size(src, maxWidthPx): Size?` синхронно считает итоговый размер из сырых границ
+    той же формулой, что и декод (sample, `rot`, `w`, `maxWidth`). Плейсхолдер сразу получает точный
+    размер, и полный декод не сдвигает текст.
   - Если размера нет (картинка ещё на Drive, или ширина поменялась), плейсхолдер — 160dp
     (`EditorStyle.imagePlaceholderHeightPx`), и по приходе результата текст сдвинется. Это допустимо.
   - Robolectric маскирует `inJustDecodeBounds` (memory `robolectric_bitmapfactory_bounds_mode`), поэтому

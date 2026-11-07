@@ -3,10 +3,12 @@ package app.tessera.data.images
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.util.Size
 import androidx.test.core.app.ApplicationProvider
 import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.entity.ImageStatus
 import app.tessera.data.local.entity.NoteImageEntity
+import app.tessera.domain.model.parseImageRef
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -235,9 +237,10 @@ class NoteImageDecoderTest {
     // (no pixel decode) and matches the on-device decode size is a QA case, see the P2-1a report.
 
     @Test
-    fun `cachedSize is null before prefetch`() {
+    fun `no entry gives null`() {
         stored("ps-0")
         assertNull(decoder().cachedSize("tessera-img://ps-0", 800))
+        assertNull(decoder().cachedSize("https://x/y.png", 800))
     }
 
     @Test
@@ -254,9 +257,14 @@ class NoteImageDecoderTest {
         for ((src, max, dim) in cases) {
             stored(src.substringAfter("://").substringBefore('?'), dim.first, dim.second)
             val d = decoder()
-            d.prefetchSizes(listOf(src), max)
+            d.prefetchSizes(listOf(src))
             val predicted = d.cachedSize(src, max)
             assertNotNull("no size for $src", predicted)
+            val ref = parseImageRef(src)!!
+            assertEquals(
+                "$src: cachedSize uses the shared formula",
+                NoteImageDecoder.finalSize(dim.first, dim.second, ref, max), predicted,
+            )
             val bmp = decoder().bitmap(src, max)
             assertEquals("$src width", bmp.width, predicted!!.width)
             assertEquals("$src height", bmp.height, predicted.height)
@@ -264,18 +272,31 @@ class NoteImageDecoderTest {
     }
 
     @Test
-    fun `cachedSize is keyed by maxWidth`() = runTest {
+    fun `one prefetch serves any maxWidth`() = runTest {
         stored("ps-k", 1000, 500)
         val d = decoder()
-        d.prefetchSizes(listOf("tessera-img://ps-k"), 400)
-        assertEquals(400, d.cachedSize("tessera-img://ps-k", 400)!!.width)
-        assertNull(d.cachedSize("tessera-img://ps-k", 300))
+        d.prefetchSizes(listOf("tessera-img://ps-k"))
+        assertEquals(Size(400, 200), d.cachedSize("tessera-img://ps-k", 400))
+        assertEquals(Size(300, 150), d.cachedSize("tessera-img://ps-k", 300))
+        assertEquals(Size(1000, 500), d.cachedSize("tessera-img://ps-k", 1080))
+        assertEquals(Size(1000, 500), d.cachedSize("tessera-img://ps-k", 0)) // 0 → default 1080
+    }
+
+    @Test
+    fun `w and rot from src change the result without a new prefetch`() = runTest {
+        stored("ps-v", 120, 200)
+        val d = decoder()
+        d.prefetchSizes(listOf("tessera-img://ps-v"))
+        assertEquals(Size(120, 200), d.cachedSize("tessera-img://ps-v", 800))
+        assertEquals(Size(60, 100), d.cachedSize("tessera-img://ps-v?w=50", 800))
+        assertEquals(Size(200, 120), d.cachedSize("tessera-img://ps-v?rot=90", 800))
+        assertEquals(Size(100, 60), d.cachedSize("tessera-img://ps-v?w=50&rot=270", 800))
     }
 
     @Test
     fun `prefetch skips Drive-only invalid and missing sources and never downloads`() = runTest {
         val d = decoder()
-        d.prefetchSizes(listOf("tessera-img://on-drive", "https://x/y.png", "tessera-img://"), 800)
+        d.prefetchSizes(listOf("tessera-img://on-drive", "https://x/y.png", "tessera-img://"))
         assertNull(d.cachedSize("tessera-img://on-drive", 800))
         assertEquals(0, downloads)
     }
@@ -285,16 +306,17 @@ class NoteImageDecoderTest {
         val custom = writeImage(File(context.cacheDir, "custom/p.webp"), 70, 70)
         row = entity("ps-lp", custom.absolutePath)
         val d = decoder()
-        d.prefetchSizes(listOf("tessera-img://ps-lp"), 800)
+        d.prefetchSizes(listOf("tessera-img://ps-lp"))
         assertEquals(70, d.cachedSize("tessera-img://ps-lp", 800)!!.width)
     }
 
     @Test
-    fun `a finished decode also fills the size cache`() = runTest {
+    fun `a finished decode leaves raw bounds for any later src and width`() = runTest {
         stored("ps-dec")
         val d = decoder()
         d.decode("tessera-img://ps-dec?w=50", 800)
-        assertEquals(60, d.cachedSize("tessera-img://ps-dec?w=50", 800)!!.width)
+        assertEquals(Size(60, 100), d.cachedSize("tessera-img://ps-dec?w=50", 800))
+        assertEquals(Size(120, 200), d.cachedSize("tessera-img://ps-dec", 800)) // other w, no new decode
     }
 
     // --- cancellation ---

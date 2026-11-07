@@ -29,7 +29,8 @@ class NoteImageDecoder(
     private val cacheDir: File,
     private val downloader: ImageDownloader,
 ) {
-    private val sizes = ConcurrentHashMap<String, Size>()
+    /** Raw file bounds by image id (w/rot/maxWidth are applied on read). */
+    private val rawSizes = ConcurrentHashMap<String, Size>()
 
     sealed interface Result {
         data class Loaded(val bitmap: Bitmap) : Result
@@ -48,56 +49,41 @@ class NoteImageDecoder(
             ?: if (download) attempt { downloader.download(ref.id) } else null
         file ?: return Result.Unavailable
         val bitmap = withContext(Dispatchers.IO) { decodeFile(file, maxWidthPx, row, ref) }
-        bitmap?.let { sizes[sizeKey(src, maxWidthPx)] = Size(it.width, it.height) }
         return bitmap?.let { Result.Loaded(it) } ?: Result.Unavailable
     }
 
     /**
      * Reads ONLY the bounds (`inJustDecodeBounds`) of the local/cached files behind [srcs] and stores
-     * the final baked size (w/rot/maxWidth, same formula as [decode]) for [cachedSize]. Never touches
-     * Drive; sources without a local file or readable bounds get no entry. Runs on IO.
+     * the RAW (outWidth, outHeight) by image id, so no layout width is needed yet; `w`/`rot` and
+     * maxWidth are applied by [cachedSize]. Never touches Drive; sources without a local file or
+     * readable bounds get no entry. Runs on IO.
      */
-    suspend fun prefetchSizes(srcs: List<String>, maxWidthPx: Int) {
+    suspend fun prefetchSizes(srcs: List<String>) {
         for (src in srcs) {
             val ref = parseImageRef(src) ?: continue
             val row = attempt { noteImageDao.byId(ref.id) }
             val file = localFile(ref.id, row) ?: continue
-            val size = withContext(Dispatchers.IO) { boundsSize(file, maxWidthPx, ref) } ?: continue
-            sizes[sizeKey(src, maxWidthPx)] = size
+            val raw = withContext(Dispatchers.IO) { rawBounds(file) } ?: continue
+            rawSizes[ref.id] = raw
         }
     }
 
-    /** Baked size of [src] at [maxWidthPx] from [prefetchSizes] or a previous [decode]; no IO. */
-    fun cachedSize(src: String, maxWidthPx: Int): Size? = sizes[sizeKey(src, maxWidthPx)]
-
-    private fun sizeKey(src: String, maxWidthPx: Int) = "${effectiveWidth(maxWidthPx)}|$src"
+    /**
+     * Baked size of [src] at [maxWidthPx] from raw bounds left by [prefetchSizes] or a previous
+     * decode (same formula as [decode], via [finalSize]); null without an entry. No IO.
+     */
+    fun cachedSize(src: String, maxWidthPx: Int): Size? {
+        val ref = parseImageRef(src) ?: return null
+        val raw = rawSizes[ref.id] ?: return null
+        return finalSize(raw.width, raw.height, ref, effectiveWidth(maxWidthPx))
+    }
 
     private fun effectiveWidth(maxWidth: Int) = maxWidth.takeIf { it > 0 } ?: DEFAULT_MAX_WIDTH
 
-    private fun boundsSize(file: File, maxWidth: Int, ref: ImageRef): Size? {
+    private fun rawBounds(file: File): Size? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        val width = effectiveWidth(maxWidth)
-        val sample = sampleSize(bounds.outWidth, width)
-        // decodeFile rotates/scales the SAMPLED bitmap, so mirror its dimensions (ceil like the codecs).
-        val w = (bounds.outWidth + sample - 1) / sample
-        val h = (bounds.outHeight + sample - 1) / sample
-        val swap = ref.rotDegrees == 90 || ref.rotDegrees == 270
-        return bakedSize(if (swap) h else w, if (swap) w else h, width, ref.wPercent)
-    }
-
-    private fun sampleSize(srcW: Int, width: Int): Int {
-        var sample = 1
-        while (srcW / (sample * 2) >= width) sample *= 2
-        return sample
-    }
-
-    /** Final size: width = min(rotated width, maxWidth) × w%, height keeps the rotated aspect. */
-    private fun bakedSize(rotatedW: Int, rotatedH: Int, maxWidth: Int, wPercent: Int): Size {
-        val targetWidth = Math.round(wPercent / 100f * minOf(rotatedW, maxWidth)).coerceAtLeast(1)
-        val targetHeight = Math.round(targetWidth * rotatedH.toFloat() / rotatedW).coerceAtLeast(1)
-        return Size(targetWidth, targetHeight)
+        return if (bounds.outWidth > 0 && bounds.outHeight > 0) Size(bounds.outWidth, bounds.outHeight) else null
     }
 
     /**
@@ -142,6 +128,7 @@ class NoteImageDecoder(
         val width = effectiveWidth(maxWidth)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
+        if (bounds.outWidth > 0 && bounds.outHeight > 0) rawSizes[ref.id] = Size(bounds.outWidth, bounds.outHeight)
         val srcW = bounds.outWidth.takeIf { it > 0 } ?: row?.width ?: return null
         val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(srcW, width) }
         var bitmap = BitmapFactory.decodeFile(file.absolutePath, opts) ?: return null
@@ -159,8 +146,34 @@ class NoteImageDecoder(
         return bitmap
     }
 
-    private companion object {
-        const val IMAGES_DIR = "images"
-        const val DEFAULT_MAX_WIDTH = 1080
+    internal companion object {
+        private const val IMAGES_DIR = "images"
+        private const val DEFAULT_MAX_WIDTH = 1080
+
+        private fun sampleSize(srcW: Int, width: Int): Int {
+            var sample = 1
+            while (srcW / (sample * 2) >= width) sample *= 2
+            return sample
+        }
+
+        /**
+         * THE size formula: raw file bounds + [ref] + [maxWidth] → baked size. Mirrors decodeFile:
+         * sample, rotate the sampled bitmap (dimensions are ceil like the codecs), then
+         * width = min(rotated width, maxWidth) × w%, height keeps the rotated aspect.
+         */
+        fun finalSize(rawW: Int, rawH: Int, ref: ImageRef, maxWidth: Int): Size {
+            val sample = sampleSize(rawW, maxWidth)
+            val w = (rawW + sample - 1) / sample
+            val h = (rawH + sample - 1) / sample
+            val swap = ref.rotDegrees == 90 || ref.rotDegrees == 270
+            return bakedSize(if (swap) h else w, if (swap) w else h, maxWidth, ref.wPercent)
+        }
+
+        /** Width = min(rotated width, maxWidth) × w%, height keeps the rotated aspect. */
+        fun bakedSize(rotatedW: Int, rotatedH: Int, maxWidth: Int, wPercent: Int): Size {
+            val targetWidth = Math.round(wPercent / 100f * minOf(rotatedW, maxWidth)).coerceAtLeast(1)
+            val targetHeight = Math.round(targetWidth * rotatedH.toFloat() / rotatedW).coerceAtLeast(1)
+            return Size(targetWidth, targetHeight)
+        }
     }
 }
