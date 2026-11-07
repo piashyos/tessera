@@ -21,12 +21,15 @@ object ClipboardBridge {
 
     @Volatile private var memory: Entry? = null
 
+    /** The label of the clips this bridge puts on the clipboard: what carries it is ours. */
+    private const val LABEL = "tessera-fragment"
+
     /** Puts the text of [start]..[end] on the clipboard. False for an empty range (nothing is copied). */
     fun copy(context: Context, text: Spanned, start: Int, end: Int): Boolean {
         if (end <= start) return false
         val doc = fragmentOf(text, start, end)
         val plain = plainOf(doc)
-        context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(null, plain))
+        context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(LABEL, plain))
         memory = Entry(plain, NoteMarkdown.serialize(doc))
         return true
     }
@@ -34,6 +37,9 @@ object ClipboardBridge {
     /** The fragment to paste: remembered, and still what the clipboard holds. `null` — paste the clipboard as plain text. */
     fun fragment(context: Context): NoteDoc? {
         val m = memory ?: return null
+        // our own clip only: the plain text of a fragment can be empty (a cut image), and an empty clip of another app would paste it
+        val clip = context.getSystemService(ClipboardManager::class.java).primaryClip
+        if (clip?.description?.label != LABEL) return null
         return if (plainText(context) == m.plain) NoteMarkdown.parse(m.markdown) else null
     }
 

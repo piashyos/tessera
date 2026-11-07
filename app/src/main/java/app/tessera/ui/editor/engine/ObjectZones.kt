@@ -1,6 +1,7 @@
 package app.tessera.ui.editor.engine
 
 import android.graphics.Rect
+import app.tessera.core.text.markdownblocks.TableGrid
 import app.tessera.core.text.notedoc.NoteBlock
 import app.tessera.ui.editor.engine.spans.ObjectSpan
 
@@ -17,11 +18,27 @@ internal fun TesseraEditText.objectRect(ps: Int): Rect? {
     val span = t.getSpans(ps, minOf(ps + 1, t.length), ObjectSpan::class.java).firstOrNull { t.getSpanStart(it) == ps } ?: return null
     val line = l.getLineForOffset(ps)
     val left = totalPaddingLeft - scrollX
-    val box = span.imageBox()
+    val box = span.objectBox()
     val w = box?.width ?: if (span.widthPx > 0) span.widthPx else (width - totalPaddingLeft - totalPaddingRight).coerceAtLeast(0)
     val top = totalPaddingTop - scrollY + l.getLineTop(line) + (span.baked?.gapTop ?: 0)
     val bottom = if (box != null) top + box.height else totalPaddingTop - scrollY + l.getLineBottom(line) - (span.baked?.gapBottom ?: 0)
     return Rect(left, top, left + w, maxOf(bottom, top))
+}
+
+/** A table of the text: its paragraph, its grid and where it is in the view (it may be off screen: the host keeps an overlay for each). */
+internal class TableZone(val ps: Int, val grid: TableGrid, val rect: Rect)
+
+/** Every table of the text in document order. [TableZone.rect] is what the span reserves, the one place the host's overlay sits at. */
+internal fun TesseraEditText.tableZones(): List<TableZone> {
+    val t = text ?: return emptyList()
+    if (layout == null || t.isEmpty()) return emptyList()
+    return t.getSpans(0, t.length, ObjectSpan::class.java)
+        .filter { it.block is NoteBlock.Table }
+        .sortedBy { t.getSpanStart(it) }
+        .mapNotNull { span ->
+            val ps = t.getSpanStart(span)
+            objectRect(ps)?.let { TableZone(ps, (span.block as NoteBlock.Table).grid, it) }
+        }
 }
 
 /** The images on screen (and a little beyond it): the objects TalkBack announces. */

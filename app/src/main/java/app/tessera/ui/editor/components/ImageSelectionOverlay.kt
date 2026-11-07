@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -61,6 +62,8 @@ fun ImageSelectionOverlay(
     val rotatePx = with(density) { RotateButtonSize.toPx() }
     val primary = MaterialTheme.colorScheme.primary
     val onPrimary = MaterialTheme.colorScheme.onPrimary
+    // a gesture block lives through recompositions: it must call the callbacks of the latest one (the image, its src and its size change under it)
+    val currentOnRotate by rememberUpdatedState(onRotate)
 
     Box(modifier.fillMaxSize()) {
         // Outline
@@ -104,7 +107,7 @@ fun ImageSelectionOverlay(
                     contentDescription = rotateContentDescription
                     onClick { onRotate(); true }
                 }
-                .pointerInput(Unit) { detectTapGestures { onRotate() } },
+                .pointerInput(Unit) { detectTapGestures { currentOnRotate() } },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -130,6 +133,8 @@ private fun ResizeHandle(
 ) {
     val density = LocalDensity.current
     var accum by remember { mutableStateOf(0f) }
+    val currentOnResizeDelta by rememberUpdatedState(onResizeDelta)
+    val currentOnResizeCommit by rememberUpdatedState(onResizeCommit)
     Box(
         Modifier
             .offset {
@@ -145,12 +150,12 @@ private fun ResizeHandle(
             .pointerInput(sign) {
                 detectDragGestures(
                     onDragStart = { accum = 0f },
-                    onDragEnd = { onResizeCommit() },
-                    onDragCancel = { onResizeCommit() },
+                    onDragEnd = { currentOnResizeCommit() },
+                    onDragCancel = { currentOnResizeCommit() },
                 ) { change, dragAmount ->
                     change.consume()
                     accum += dragAmount.x * sign
-                    onResizeDelta(accum)
+                    currentOnResizeDelta(accum)
                 }
             },
     )

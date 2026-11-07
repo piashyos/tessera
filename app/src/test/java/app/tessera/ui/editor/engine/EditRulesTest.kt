@@ -285,7 +285,11 @@ class EditRulesTest(
             row("P2 Delete | selected object: its paragraph goes", "a\n---\nb", "forwarddelete", "a\nb", "2-3", "2"),
             row("P2 Delete | selected last object", "a\n---", "forwarddelete", "a", "2-3", "1"),
             row("P2 Delete | selected object under a list: the next paragraph keeps its kind", "---\n- b", "forwarddelete", "- b", "0-1", "0"),
-            row("P2 Delete | a caret is not handled here: nothing", "a‸\n---", "forwarddelete", "a‸\n---"),
+            row("P2 Delete | the end of the paragraph before an object: the first Delete selects it", "a‸\n---", "forwarddelete", "a\n---", "1", "2-3"),
+            row("P2 Delete | an empty paragraph before an object: selects it", "a\n\n---", "forwarddelete", "a\n\n---", "2", "3-4"),
+            row("P2 Delete | the middle of a paragraph: not handled", "a‸b\n---", "forwarddelete", "a‸b\n---"),
+            row("P2 Delete | the end of a paragraph before text: not handled", "a‸\nb", "forwarddelete", "a‸\nb"),
+            row("P2 Delete | the end of the last paragraph: not handled", "a\n---\nb‸", "forwarddelete", "a\n---\nb‸"),
         )
     }
 }

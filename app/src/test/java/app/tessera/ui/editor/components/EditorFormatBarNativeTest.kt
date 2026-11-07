@@ -68,10 +68,9 @@ class EditorFormatBarNativeTest {
         }
     }
 
-    @Test fun native_bar_has_image_and_camera_but_no_table_and_has_dash_and_indents() {
+    @Test fun native_bar_has_table_image_and_camera_and_dash_and_indents() {
         bar(FormatState.Empty)
-        rule.onNodeWithContentDescription("Insert table").assertDoesNotExist() // until the native editor can insert one (P2-2)
-        listOf("Insert image", "Take photo", "Dashed list", "Indent", "Outdent", "Bullet list", "Numbered list", "Checklist item", "Divider", "Quote", "Code")
+        listOf("Insert table", "Insert image", "Take photo", "Dashed list", "Indent", "Outdent", "Bullet list", "Numbered list", "Checklist item", "Divider", "Quote", "Code")
             .forEach { rule.onNodeWithContentDescription(it).assertExists() }
     }
 

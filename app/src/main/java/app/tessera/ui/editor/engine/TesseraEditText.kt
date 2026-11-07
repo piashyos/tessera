@@ -33,6 +33,7 @@ import androidx.appcompat.widget.AppCompatEditText
 import androidx.core.view.ContentInfoCompat
 import androidx.core.view.OnReceiveContentListener
 import androidx.core.view.ViewCompat
+import app.tessera.core.text.markdownblocks.TableGrid
 import app.tessera.core.text.notedoc.NoteBlock
 import app.tessera.core.text.notedoc.ListType
 import app.tessera.core.text.notedoc.Mark
@@ -140,22 +141,29 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     /**
      * Images of the keyboard's rich content and of a paste go to [onImageCommitted]; whatever else came with them (text) goes on to the default
-     * handling. The system's grant on the URI lapses when this returns, so the bytes are copied here, into a file of the app.
+     * handling. Here, on the main thread, only the URIs are taken (and the keyboard's grant, if it gave one). The bytes are copied into a file of the
+     * app on [copyExecutor] — a big picture must not stop the screen — and the grant is released after the copy. The host gets the file on the main
+     * thread; a file the host did not take is deleted.
      */
     private val receiveImages =
         OnReceiveContentListener { _, payload ->
-            val handler = onImageCommitted
-            if (handler == null || !editable) return@OnReceiveContentListener payload
-            val split = payload.partition { item -> item.uri?.let { isImage(it) } == true }
+            if (onImageCommitted == null || !editable) return@OnReceiveContentListener payload
+            val clipHasImage = payload.clip.description.hasMimeType("image/*")
+            val split = payload.partition { item -> clipHasImage && item.uri != null }
             val taken = split.first
             if (taken != null) {
-                for (i in 0 until taken.clip.itemCount) {
-                    val uri = taken.clip.getItemAt(i).uri ?: continue
-                    copyToCache(uri)?.let { handler(it) }
+                val uris = (0 until taken.clip.itemCount).mapNotNull { taken.clip.getItemAt(it).uri }
+                val grant = keyboardGrant(taken)
+                copyExecutor.execute {
+                    val files = try { uris.mapNotNull { copyToCache(it) } } finally { grant?.let { runCatching { it.releasePermission() } } }
+                    emitHandler.post { for (f in files) if (disposed || onImageCommitted?.invoke(android.net.Uri.fromFile(f)) != true) f.delete() }
                 }
             }
             split.second
         }
+
+    /** Where the bytes of an image are copied (not the main thread). */
+    internal var copyExecutor: java.util.concurrent.Executor = copyPool
 
     private val images = ImageObjects { span -> deliverImage(span) }
     private val normalizer = Normalizer(style)
@@ -228,6 +236,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     private var tapTarget: Int? = null
     private var imageTapTarget: Int? = null
+    private var tableTapTarget: Int? = null
     private var downX = 0f
     private var downY = 0f
     private var longPressMs = 0L
@@ -457,12 +466,69 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     /** [block] as a paragraph of its own after the caret's (phase 2 §2). A selection is deleted first. */
     fun insertObject(block: NoteBlock) { command { e, s, t -> rules.insertObject(e, s, t, block) } }
 
+    /** An empty 2×2 table as a paragraph of its own after the caret's (phase 2 §4). */
+    fun insertTable() = insertObject(NoteBlock.Table(TableGrid.empty(columns = 2, rows = 2)))
+
+    /**
+     * The table of the paragraph [ps] gets [grid] (a cell committed, a row added): one history step, the selection stays where it was (the table is
+     * not selected by an edit of its cell). `false` when nothing changed.
+     */
+    fun replaceTable(ps: Int, grid: TableGrid): Boolean {
+        val old = (tableSpanAt(ps)?.block as? NoteBlock.Table)?.grid ?: return false
+        if (old == grid) return false
+        return command { e, s, t -> if (rules.replaceObject(e, ps, NoteBlock.Table(grid)) != null) Sel(s, t) else null }
+    }
+
+    /** The object of the paragraph [ps] goes, its paragraph with it (the table's delete button): one step. */
+    fun deleteObjectAt(ps: Int): Boolean = command { e, _, _ -> rules.forwardDelete(e, ps, ps + 1) }
+
+    /** The table of the paragraph [ps] swaps places with the paragraph before it ([delta] −1) or after it (+1): one step. */
+    fun moveTable(ps: Int, delta: Int): Boolean = command { e, _, _ -> rules.moveObject(e, ps, delta) }
+
+    /** The caret goes to the paragraph after the table at [ps] (Enter in its last cell) and the editor takes the focus and the keyboard. */
+    fun focusAfterTable(ps: Int) {
+        val e = text ?: return
+        if (!editable || ps !in 0 until e.length) return
+        val next = (paragraphEnd(e, ps) + 1).coerceAtMost(e.length)
+        requestFocus()
+        setSelection(next)
+        context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showSoftInput(this, 0)
+    }
+
+    private fun tableSpanAt(ps: Int): ObjectSpan? {
+        val t = text ?: return null
+        if (ps !in 0 until t.length) return null
+        return t.getSpans(ps, ps + 1, ObjectSpan::class.java).firstOrNull { t.getSpanStart(it) == ps && it.block is NoteBlock.Table }
+    }
+
+    /**
+     * The overlay of the [index]-th table (document order) measured [heightPx]: the span reserves that much from now on (the same layout pass: the
+     * overlay and the text under it never disagree for a frame). Remembered for the grid, so a table that is rebuilt starts at its height.
+     */
+    internal fun reportTableHeight(index: Int, heightPx: Int) {
+        val t = text as? EngineEditable ?: return
+        if (disposed || heightPx <= 0) return
+        val span = t.getSpans(0, t.length, ObjectSpan::class.java).filter { it.block is NoteBlock.Table }.sortedBy { t.getSpanStart(it) }.getOrNull(index) ?: return
+        tableHeights[(span.block as NoteBlock.Table).grid] = heightPx
+        if (span.tableHeightPx == heightPx) return
+        span.tableHeightPx = heightPx
+        deliverImage(span)
+    }
+
+    private val tableHeights = HashMap<TableGrid, Int>()
+
+    /** What a table takes before its overlay has measured it: the height this grid had, else 40dp for each line and the overlay's padding. */
+    private fun plannedTableHeight(grid: TableGrid): Int =
+        tableHeights[grid] ?: (((grid.rowCount + 1) * 40 + 8) * resources.displayMetrics.density).toInt()
+
     /** The image `tessera-img://<imageId>` at the caret, once the host has stored it. */
     fun insertImage(imageId: String) = insertObject(NoteBlock.Image("tessera-img://$imageId"))
 
     /** The image of the paragraph [ps] gets [src] (a resize, a rotation): one history step; the old picture stays on screen until the new one comes. */
-    fun replaceImageSrc(ps: Int, src: String) {
-        if (imageSpanAt(ps)?.block == NoteBlock.Image(src)) { previewImageWidth(ps, null); return }
+    fun replaceImageSrc(ps: Int, src: String, expected: String? = null) {
+        val current = (imageSpanAt(ps)?.block as? NoteBlock.Image)?.src ?: return
+        if (expected != null && current != expected) return // the handles are of an image that is not here any more: they must not touch what stands there now
+        if (current == src) { previewImageWidth(ps, null); return }
         command { e, _, _ -> rules.replaceObject(e, ps, NoteBlock.Image(src)) }
     }
 
@@ -544,6 +610,16 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         return true
     }
 
+    /** Delete over an object: it is selected (the caret before it) or deleted (it is selected). `true` when the rule handled the key, edit or not. */
+    private fun performForwardDelete(): Boolean {
+        var handled = false
+        command { e, s, t -> rules.forwardDelete(e, s, t)?.also { handled = true } }
+        return handled
+    }
+
+    /** Delete with the caret at the end of the text deletes nothing; the platform's key listener does not take that well (a range before 0). */
+    private fun atEndOfText() = selectionStart == selectionEnd && selectionEnd == length()
+
     internal fun hasCollapsedSelection() = selectionStart == selectionEnd
 
     /** The caret right after the sentinel of an empty last paragraph is the start of that paragraph (autocapitalization, §6.1). */
@@ -608,14 +684,19 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     // ------------------------------------------------------------------ images from the keyboard and the clipboard
 
-    private fun isImage(uri: android.net.Uri): Boolean = runCatching { context.contentResolver.getType(uri)?.startsWith("image/") == true }.getOrDefault(false)
+    /** The keyboard's grant on the URI, which it hands over in the extras of the content; it is released when the bytes are copied. */
+    private fun keyboardGrant(content: ContentInfoCompat): androidx.core.view.inputmethod.InputContentInfoCompat? =
+        runCatching {
+            val info = content.extras?.getParcelable<android.view.inputmethod.InputContentInfo>("androidx.core.view.extra.INPUT_CONTENT_INFO")
+            info?.let { androidx.core.view.inputmethod.InputContentInfoCompat.wrap(it) }
+        }.getOrNull()
 
-    private fun copyToCache(source: android.net.Uri): android.net.Uri? =
+    private fun copyToCache(source: android.net.Uri): File? =
         try {
             val dir = File(context.cacheDir, "camera").apply { mkdirs() }
             val file = File(dir, "clip-${UUID.randomUUID()}")
             val copied = context.contentResolver.openInputStream(source)?.use { input -> file.outputStream().use { input.copyTo(it) }; true } ?: false
-            if (copied) android.net.Uri.fromFile(file) else null
+            if (copied) file else null
         } catch (_: Exception) {
             null
         }
@@ -628,7 +709,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             when (keyCode) {
                 KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> if (plain) return performEnter()
                 KeyEvent.KEYCODE_DEL -> if (plain) return performBackspace()
-                KeyEvent.KEYCODE_FORWARD_DEL -> if (plain && command { e, s, t -> rules.forwardDelete(e, s, t) }) return true
+                KeyEvent.KEYCODE_FORWARD_DEL -> if (plain && (performForwardDelete() || atEndOfText())) return true
                 KeyEvent.KEYCODE_TAB -> if (plain && indentByKey(if (event.isShiftPressed) -1 else +1)) return true
             }
             if (handleShortcut(keyCode, event)) return true
@@ -753,17 +834,28 @@ class TesseraEditText(context: Context, style: EditorStyle) :
                 MotionEvent.ACTION_DOWN -> {
                     tapTarget = checkboxZoneAt(event.x, event.y)?.ps
                     imageTapTarget = if (tapTarget == null) imageZones().firstOrNull { it.rect.contains(event.x.toInt(), event.y.toInt()) }?.ps else null
+                    // what reaches the editor on a table's line is its margin (the overlay takes the table itself): not a place for the caret
+                    tableTapTarget = if (tapTarget == null && imageTapTarget == null) tableLineAt(event.y) else null
                     longPressMs = ViewConfiguration.getLongPressTimeout().toLong()
                     downX = event.x
                     downY = event.y
                 }
-                MotionEvent.ACTION_MOVE -> if (abs(event.x - downX) > touchSlop || abs(event.y - downY) > touchSlop) { tapTarget = null; imageTapTarget = null }
-                MotionEvent.ACTION_CANCEL -> { tapTarget = null; imageTapTarget = null }
+                MotionEvent.ACTION_MOVE -> if (abs(event.x - downX) > touchSlop || abs(event.y - downY) > touchSlop) { tapTarget = null; imageTapTarget = null; tableTapTarget = null }
+                MotionEvent.ACTION_CANCEL -> { tapTarget = null; imageTapTarget = null; tableTapTarget = null }
                 MotionEvent.ACTION_UP -> {
                     val ps = tapTarget
                     tapTarget = null
                     val image = imageTapTarget
                     imageTapTarget = null
+                    val table = tableTapTarget
+                    tableTapTarget = null
+                    if (table != null && event.eventTime - event.downTime < longPressMs) { // a tap in the margin of a table: the caret goes to the paragraph next to it
+                        val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                        super.onTouchEvent(cancel)
+                        cancel.recycle()
+                        caretNextToTable(table, above = event.y < (objectRect(table)?.top ?: 0))
+                        return true
+                    }
                     if (image != null && event.eventTime - event.downTime < longPressMs) { // a tap on an image selects it: no caret, no keyboard
                         val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
                         super.onTouchEvent(cancel)
@@ -782,6 +874,30 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    /** The table paragraph whose line is at [y] (view coordinates), else `null`. */
+    private fun tableLineAt(y: Float): Int? {
+        val l = layout ?: return null
+        val ly = (y - totalPaddingTop + scrollY).toInt()
+        if (ly < 0 || ly > l.height) return null
+        val ps = l.getLineStart(l.getLineForVertical(ly))
+        return if (tableSpanAt(ps) != null) ps else null
+    }
+
+    /** A tap above a table puts the caret at the end of the paragraph before it, below it at the start of the one after (the only one there is: at the other side). */
+    private fun caretNextToTable(ps: Int, above: Boolean) {
+        val e = text ?: return
+        val pe = paragraphEnd(e, ps)
+        val at = when {
+            above && ps > 0 -> ps - 1
+            pe < e.length -> pe + 1
+            ps > 0 -> ps - 1
+            else -> return
+        }
+        requestFocus()
+        setSelection(at)
+        context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showSoftInput(this, 0)
     }
 
     /** The image of the paragraph [ps] is the selection; the keyboard goes away (a tap on an image is not a place to type). */
@@ -891,11 +1007,12 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     private fun currentImageSelection(): ImageSelection? {
-        if (!editable) return null
+        if (!editable || !isFocused) return null // an editor that is not in use (the keyboard went, another field has the focus) has no handles
         val s = selectionStart
         if (selectionEnd - s != 1) return null
         val span = imageSpanAt(s) ?: return null
         val rect = objectRect(s) ?: return null
+        if (!Rect.intersects(rect, Rect(0, 0, width, height))) return null // scrolled out: no frame over the title bar or the tags
         return ImageSelection(s, (span.block as NoteBlock.Image).src, rect)
     }
 
@@ -929,6 +1046,10 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         val spans = t.getSpans(0, t.length, ObjectSpan::class.java)
         val again = ArrayList<ObjectSpan>()
         for (o in spans) if (o.widthPx != w) { o.widthPx = w; again += o }
+        for (o in spans) {
+            val table = o.block as? NoteBlock.Table ?: continue
+            if (o.tableHeightPx == 0) { o.tableHeightPx = plannedTableHeight(table.grid); if (o !in again) again += o }
+        }
         for (o in images.sync(t, spans, w)) if (o !in again) again += o
         if (again.isEmpty()) return
         val reset = { for (o in again) t.setSpan(o, t.getSpanStart(o), t.getSpanEnd(o), t.getSpanFlags(o)) }
@@ -950,6 +1071,11 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     private companion object {
         /** One thread for all editors: the Markdown of the last pending edit is what counts. */
+        /** One thread for the copies of images that arrive from the keyboard and the clipboard. */
+        val copyPool: java.util.concurrent.Executor by lazy {
+            java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "tessera-image-copy").apply { isDaemon = true } }
+        }
+
         val emitPool: java.util.concurrent.Executor by lazy {
             java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "tessera-emit").apply { isDaemon = true } }
         }

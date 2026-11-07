@@ -74,7 +74,7 @@ import androidx.compose.material.icons.rounded.Remove
  *
  * With [nativeEngine] the buttons read [formatState] instead of [activeFormats], undo/redo follow
  * `canUndo`/`canRedo`, a dashed list and the two indent buttons are added, and image and camera are there (phase 2),
- * the table button is hidden until the native editor can insert one.
+ * and so is the table button.
  */
 @Composable
 fun EditorFormatBar(
@@ -149,6 +149,7 @@ fun EditorFormatBar(
         GroupSeparator()
         blocks()
         GroupSeparator()
+        FormatToggle(Icons.Rounded.TableChart, R.string.toolbar_table, active = false, reportsSelected = nativeEngine) { actions?.insertTable() }
         FormatToggle(Icons.Rounded.Image, R.string.toolbar_image, active = false, reportsSelected = nativeEngine) { actions?.onInsertImage() }
         FormatToggle(Icons.Rounded.PhotoCamera, R.string.toolbar_camera, active = false, reportsSelected = nativeEngine) { actions?.onCaptureImage() }
       } else {

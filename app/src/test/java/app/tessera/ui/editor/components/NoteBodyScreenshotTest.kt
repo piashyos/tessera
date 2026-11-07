@@ -5,7 +5,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.unit.dp
 import app.tessera.core.ui.theme.TesseraTheme
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -92,7 +93,8 @@ class NoteBodyScreenshotTest {
             }
         }
         rule.waitForIdle()
-        rule.onRoot().captureRoboImage("ui/editor/note_body_$name.png")
+        // A table brings its own ComposeView (the overlay), so there are two roots: the first is the screen.
+        rule.onAllNodes(isRoot()).onFirst().captureRoboImage("ui/editor/note_body_$name.png")
     }
 
     @Test fun mockupContentLight() = capture("mockup_light", mockup, dark = false)

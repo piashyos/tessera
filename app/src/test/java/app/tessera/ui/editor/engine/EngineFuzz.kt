@@ -34,7 +34,9 @@ internal object EngineFuzz {
         SELECT, CARET, DELETE_SEL, KIND, MARK, INDENT, OUTDENT, HR, CHECK, MARKER, UNDO, REDO,
         COPY_PASTE, CUT_PASTE, PASTE_EXT, PASTE_STYLED, SET_MD, ECHO, STALE, THEME, READ_ONLY, PASS, FLUSH, DISPOSE, UNDO_RUN, UNDO_CMD,
         // phase 2: images — insert, resize, rotate, a load result arrives (also a late one), an image is deleted while its load is in flight
-        IMG_INSERT, IMG_RESIZE, IMG_ROTATE, IMG_RESULT, IMG_CANCEL,
+        IMG_INSERT, IMG_RESIZE, IMG_ROTATE, IMG_RESULT, IMG_CANCEL, FORWARD_DEL,
+        // phase 2: tables — insert, a cell is committed (also a row or a column), a selected table is deleted
+        TABLE_INSERT, TABLE_EDIT, TABLE_DELETE,
     }
 
     data class Step(val a: A, val x: Double = 0.0, val y: Double = 0.0, val z: Double = 0.0, val i: Int = 0, val s: String = "") {
@@ -48,7 +50,8 @@ internal object EngineFuzz {
         A.MARKER to 3, A.UNDO to 3, A.REDO to 2, A.COPY_PASTE to 2, A.CUT_PASTE to 1, A.PASTE_EXT to 2, A.PASTE_STYLED to 1,
         A.SET_MD to 1, A.ECHO to 1, A.STALE to 1, A.THEME to 1, A.READ_ONLY to 1, A.PASS to 4, A.FLUSH to 1, A.DISPOSE to 0,
         A.UNDO_RUN to 1, A.UNDO_CMD to 1,
-        A.IMG_INSERT to 2, A.IMG_RESIZE to 2, A.IMG_ROTATE to 1, A.IMG_RESULT to 3, A.IMG_CANCEL to 1,
+        A.IMG_INSERT to 2, A.IMG_RESIZE to 2, A.IMG_ROTATE to 1, A.IMG_RESULT to 3, A.IMG_CANCEL to 1, A.FORWARD_DEL to 2,
+        A.TABLE_INSERT to 2, A.TABLE_EDIT to 3, A.TABLE_DELETE to 1,
     )
     private val total = weights.sumOf { it.second }
     private val words = listOf("при", "привет", "hello", "wor", "мир", "ok", "x", "é", "😀", "שלום", "مر")
@@ -128,6 +131,15 @@ internal object EngineFuzz {
             return if (starts.isEmpty()) -1 else starts[n % starts.size]
         }
         private fun imagesAt(i: Int) = h.text.getSpans(i, i + 1, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).any { it.block is NoteBlock.Image }
+        private fun tablesOf(doc: app.tessera.core.text.notedoc.NoteDoc = DocBinder.read(h.text)) = doc.blocks.filterIsInstance<NoteBlock.Table>()
+
+        /** Paragraph start of the [n]-th table of the text (modulo their number), or -1. */
+        private fun tablePs(n: Int): Int {
+            val t = h.text
+            val starts = t.getSpans(0, t.length, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).filter { it.block is NoteBlock.Table }.map { t.getSpanStart(it) }.sorted()
+            return if (starts.isEmpty()) -1 else starts[n % starts.size]
+        }
+        private fun e0() = h.text
         private fun composing() = BaseInputConnection.getComposingSpanStart(h.text) >= 0
 
         fun run(step: Step) {
@@ -142,19 +154,30 @@ internal object EngineFuzz {
                     if (editable) assertEquals("an insert adds one image", n + 1, imagesOf().size)
                 }
                 A.IMG_RESIZE, A.IMG_ROTATE -> {
+                    if (editable) h.pass(600) // the typing run before is closed: the command is a step of its own (and an update that waited is applied: the paragraphs are read after it)
                     val ps = imagePs(step.i)
                     if (ps < 0) return
                     val old = (h.text.getSpans(ps, ps + 1, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).first().block as NoteBlock.Image).src
                     val ref = app.tessera.domain.model.parseImageRef(old) ?: return
+                    val m0 = md()
                     h.select(ps, ps + 1)
                     val src = if (step.a == A.IMG_RESIZE) {
                         val percent = 10 + (step.i / 7) % 91
+                        val v = (h.text as EngineEditable).version
                         h.view.previewImageWidth(ps, percent) // the drag
+                        assertEquals("the preview of a drag is no edit", v, (h.text as EngineEditable).version)
+                        assertEquals("nor does it reach the Markdown", m0, md())
                         canonicalImageSrc(ref.id, percent, ref.rotDegrees)
                     } else canonicalImageSrc(ref.id, ref.wPercent, (ref.rotDegrees + 90) % 360)
                     h.view.replaceImageSrc(ps, src)
-                    if (editable) assertTrue("the image has its new src", imagesOf().any { it.src == src })
-                    else assertEquals("a read-only editor does not change", before, md())
+                    if (editable) {
+                        assertTrue("the image has its new src", imagesOf().any { it.src == src })
+                        val m1 = md()
+                        if (m1 != m0) {
+                            h.view.undo(); assertEquals("one undo gives the old src back, byte for byte", m0, md())
+                            h.view.redo(); assertEquals("redo", m1, md())
+                        }
+                    } else assertEquals("a read-only editor does not change", before, md())
                 }
                 A.IMG_RESULT -> {
                     if (images.requests.isEmpty()) return
@@ -167,6 +190,20 @@ internal object EngineFuzz {
                     assertEquals("nor a step of the history", canUndo, h.view.formatState().canUndo)
                     assertEquals("nor of the Markdown", before, md())
                 }
+                A.FORWARD_DEL -> { // next to an object only: anywhere else the key is the platform's, which the Robolectric text stack cannot run
+                    val ps = imagePs(step.i)
+                    if (ps < 0) return
+                    val n = imagesOf().size
+                    val whole = step.x < 0.5 || ps == 0
+                    if (whole) h.select(ps, ps + 1) else h.caret(ps - 1)
+                    key(KeyEvent.KEYCODE_FORWARD_DEL)
+                    if (!editable) assertEquals("a read-only editor does not change", before, md())
+                    else if (whole) assertEquals("Delete over a selected image deletes it", n - 1, imagesOf().size)
+                    else {
+                        assertEquals("the first Delete before an image selects it", ps to ps + 1, h.view.selectionStart to h.view.selectionEnd)
+                        assertEquals("and changes nothing", before, md())
+                    }
+                }
                 A.IMG_CANCEL -> {
                     val ps = imagePs(step.i)
                     if (ps < 0 || !editable) return
@@ -174,6 +211,40 @@ internal object EngineFuzz {
                     h.select(ps, ps + 1)
                     key(KeyEvent.KEYCODE_DEL)
                     assertEquals("the selected image is deleted", n - 1, imagesOf().size)
+                }
+                A.TABLE_INSERT -> {
+                    h.caret(pos(step.x))
+                    val n = tablesOf().size
+                    h.view.insertTable()
+                    if (editable) assertEquals("an insert adds one table", n + 1, tablesOf().size)
+                }
+                A.TABLE_EDIT -> { // the overlay commits a cell, or the bar adds a row or a column
+                    val ps = tablePs(step.i)
+                    if (ps < 0) return
+                    val old = (h.text.getSpans(ps, ps + 1, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).first { h.text.getSpanStart(it) == ps }.block as NoteBlock.Table).grid
+                    val grid = when (step.i / 5 % 4) {
+                        0 -> old.setHeader(step.i % old.columnCount, step.s.replace("\u0000", "").replace('\n', ' '))
+                        1 -> if (old.rowCount > 0) old.setCell(step.i % old.rowCount, step.i % old.columnCount, step.s.replace("\u0000", "")) else old.addRow()
+                        2 -> old.addRow()
+                        else -> old.addColumn()
+                    }
+                    val sel = h.view.selectionStart to h.view.selectionEnd
+                    val v = (h.text as EngineEditable).version
+                    h.view.replaceTable(ps, grid)
+                    if (editable) {
+                        assertEquals("the selection stays where it was", sel, h.view.selectionStart to h.view.selectionEnd)
+                        val canon = (normalize(app.tessera.core.text.notedoc.NoteDoc(listOf(NoteBlock.Table(grid)))).blocks.first() as NoteBlock.Table).grid
+                        assertTrue("the table has the grid", tablesOf().any { it.grid == canon })
+                    } else assertEquals("a read-only editor does not change", before, md())
+                    if (!editable || old == grid) assertEquals("nothing changed", v, (h.text as EngineEditable).version)
+                }
+                A.TABLE_DELETE -> {
+                    val ps = tablePs(step.i)
+                    if (ps < 0 || !editable) return
+                    val n = tablesOf().size
+                    h.select(ps, ps + 1)
+                    key(KeyEvent.KEYCODE_DEL)
+                    assertEquals("the selected table is deleted", n - 1, tablesOf().size)
                 }
                 A.TYPE -> {
                     val c = ic() ?: return
@@ -286,7 +357,7 @@ internal object EngineFuzz {
                 }
             }
             if (h.emitted.size > emits) {
-                assertTrue("an emit happens only at a pause, a flush or a dispose", step.a in listOf(A.PASS, A.FLUSH, A.DISPOSE, A.UNDO_RUN, A.UNDO_CMD))
+                assertTrue("an emit happens only at a pause, a flush or a dispose", step.a in listOf(A.PASS, A.FLUSH, A.DISPOSE, A.UNDO_RUN, A.UNDO_CMD, A.IMG_RESIZE, A.IMG_ROTATE))
                 if (step.a == A.PASS || step.a == A.FLUSH || step.a == A.DISPOSE) assertEquals("what is emitted is the document", md(), h.emitted.last())
                 externalSinceEmit = false
             }
@@ -299,6 +370,16 @@ internal object EngineFuzz {
             HostFixture.releaseNatives()
             val srcs = imagesOf().map { it.src }.toSet()
             for (r in images.pending) assertTrue("$label: a load is alive for an image that is not in the text: ${r.src}", r.src in srcs)
+            // every image of a laid-out text has its picture, or an answer that it has none, or a load that is on its way
+            for (o in e0().getSpans(0, e0().length, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java)) {
+                val st = o.image ?: continue
+                if (o.widthPx <= 0) continue
+                val b = o.block as NoteBlock.Image
+                val ref = app.tessera.domain.model.parseImageRef(b.src)
+                val picture = st.drawable != null && st.bakedPercent == ref?.wPercent
+                val asked = images.pending.any { it.src == b.src && it.maxWidthPx == o.widthPx }
+                assertTrue("$label: the image ${b.src} has no picture, no answer and no load in flight", picture || st.failed || asked)
+            }
             val e = h.text
             EngineAssertions.assertInvariant1(e, label)
             for (sp in e.getSpans(0, e.length, Any::class.java)) {
@@ -343,6 +424,11 @@ internal object EngineFuzz {
         /** A fresh build has no pictures: it gets the ones the live spans show (what is drawn is part of the layout), in document order. */
         private fun carryPictures(fresh: HostFixture) {
             fun spans(t: android.text.Spanned) = t.getSpans(0, t.length, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).filter { it.image != null }.sortedBy { t.getSpanStart(it) }
+            // a table's height is what its overlay measured: the live spans keep it, a fresh build gets the same (what is reserved is part of the layout)
+            fun tables(t: android.text.Spanned) = t.getSpans(0, t.length, app.tessera.ui.editor.engine.spans.ObjectSpan::class.java).filter { it.block is NoteBlock.Table }.sortedBy { t.getSpanStart(it) }
+            for ((l, f) in tables(h.text).zip(tables(fresh.text))) f.tableHeightPx = l.tableHeightPx
+            val tt = fresh.text as EngineEditable
+            tt.quietly { for (f in tables(fresh.text)) tt.setSpan(f, tt.getSpanStart(f), tt.getSpanEnd(f), tt.getSpanFlags(f)) }
             val live = spans(h.text)
             val again = spans(fresh.text)
             assertEquals("the same images", live.size, again.size)

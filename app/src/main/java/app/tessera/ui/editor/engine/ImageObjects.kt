@@ -15,12 +15,17 @@ import app.tessera.ui.editor.engine.spans.ObjectSpan
  *   the text had before a rebuild, [carryOver]); then it gets the size the decode will give ([ObjectImageSource.size]) and the load starts.
  * - A result goes to the span only if the span is still in the text and still asks for that `src` and width; anything else is thrown away.
  *   [deliver] then sets the span again, quietly, so the layout measures it.
- * - A load is cancelled when its span leaves the text (a deletion, an undo), when the span wants another `src`, and in [cancelAll].
+ * - A load is cancelled when its span leaves the text (a deletion), when the span wants another `src`, and in [cancelAll]. A rebuild of the text
+ *   (undo, an update from outside) does not cancel the loads of the old spans: the new spans of the same `src` and width take them over
+ *   ([carryOver], [sync]); what no new span took is cancelled at the end of the first [sync].
  */
 internal class ImageObjects(private val deliver: (ObjectSpan) -> Unit) {
     private var source: ObjectImageSource? = null
     private val inflight = LinkedHashSet<ImageState>()
     private var carry: Map<String, Drawable>? = null
+
+    /** Loads of the spans of the text that was replaced, by `src@width`, waiting for a span of the new text to take them over. */
+    private val carriedLoads = HashMap<String, ImageState>()
 
     /** The new source: what was asked of the old one is asked again. */
     fun setSource(value: ObjectImageSource?) {
@@ -29,7 +34,10 @@ internal class ImageObjects(private val deliver: (ObjectSpan) -> Unit) {
         source = value
     }
 
-    /** The pictures the spans of [old] show, for the spans of the text that replaces it (undo, an update from outside). Cancels its loads. */
+    /**
+     * The text is replaced (undo, an update from outside): the pictures its spans show, and the loads they wait for, are offered to the spans of the
+     * new text. Nothing is cancelled yet.
+     */
     fun carryOver(old: Spanned?) {
         val kept = HashMap<String, Drawable>()
         if (old != null) for (o in old.getSpans(0, old.length, ObjectSpan::class.java)) {
@@ -38,13 +46,17 @@ internal class ImageObjects(private val deliver: (ObjectSpan) -> Unit) {
             val b = o.block as? NoteBlock.Image ?: continue
             if (!st.failed && st.bakedPercent == parseImageRef(b.src)?.wPercent && o.widthPx > 0) kept["${b.src}@${o.widthPx}"] = d
         }
-        cancelAll()
+        for (key in carriedLoads.keys.toList()) carriedLoads.remove(key)?.let { it.cancel?.invoke(); it.cancel = null; it.requested = null }
+        for (st in inflight) st.requested?.let { carriedLoads.putIfAbsent(it, st) }
+        for (st in carriedLoads.values) inflight.remove(st)
         carry = kept.takeIf { it.isNotEmpty() }
     }
 
     fun cancelAll() {
-        for (st in inflight) st.cancel?.invoke()
+        for (st in inflight) { st.cancel?.invoke(); st.cancel = null; st.requested = null }
+        for (st in carriedLoads.values) { st.cancel?.invoke(); st.cancel = null; st.requested = null }
         inflight.clear()
+        carriedLoads.clear()
         carry = null
     }
 
@@ -55,6 +67,7 @@ internal class ImageObjects(private val deliver: (ObjectSpan) -> Unit) {
             for (st in gone) { st.cancel?.invoke(); st.cancel = null; st.requested = null; inflight.remove(st) }
         }
         var changed: ArrayList<ObjectSpan>? = null
+        val asked = source != null && widthPx > 0 // a sync that could ask for the pictures of the text: what was carried over and not taken is dropped
         for (o in spans) {
             val st = o.image ?: continue
             val b = o.block as? NoteBlock.Image ?: continue
@@ -75,28 +88,41 @@ internal class ImageObjects(private val deliver: (ObjectSpan) -> Unit) {
             } else {
                 val planned = src.size(b.src, w)
                 if (planned != st.planned) st.planned = planned
-                start(st, src, b.src, w, key)
+                val taken = carriedLoads.remove(key)
+                if (taken != null) { // the same image at the same width was loading in the old text: that load is this span's
+                    taken.forward = st
+                    st.cancel = taken.cancel
+                    taken.cancel = null
+                    inflight += st
+                } else {
+                    start(st, src, b.src, w, key)
+                }
             }
             (changed ?: ArrayList<ObjectSpan>().also { changed = it }) += o
         }
-        if (inflight.isEmpty()) carry = null
+        if (asked) { // what no span of the new text took over is not wanted any more
+            for (st in carriedLoads.values) { st.cancel?.invoke(); st.cancel = null; st.requested = null }
+            carriedLoads.clear()
+            if (inflight.isEmpty()) carry = null
+        }
         return changed ?: emptyList()
     }
 
     private fun start(st: ImageState, src: ObjectImageSource, url: String, w: Int, key: String) {
         inflight += st
         st.cancel = src.load(url, w) { result ->
-            inflight.remove(st)
-            st.cancel = null
-            if (st.requested != key) return@load // another picture was asked for since
-            val span = st.span ?: return@load
+            val dest = st.resolve() // the state that waits for this load now (a rebuild may have passed it on)
+            inflight.remove(dest)
+            dest.cancel = null
+            if (dest.requested != key) return@load // another picture was asked for since
+            val span = dest.span ?: return@load
             when (result) {
                 is ImageResult.Loaded -> {
-                    st.drawable = result.drawable
-                    st.bakedPercent = parseImageRef(url)?.wPercent ?: 100
-                    st.failed = false
+                    dest.drawable = result.drawable
+                    dest.bakedPercent = parseImageRef(url)?.wPercent ?: 100
+                    dest.failed = false
                 }
-                ImageResult.Unavailable -> { st.failed = true; st.drawable = null }
+                ImageResult.Unavailable -> { dest.failed = true; dest.drawable = null }
             }
             deliver(span)
         }

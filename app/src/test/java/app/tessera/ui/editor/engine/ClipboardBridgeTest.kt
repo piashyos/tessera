@@ -149,4 +149,21 @@ class ClipboardBridgeTest {
         h.pass(1000)
         assertTrue(h.emitted.isEmpty())
     }
+
+    @Test
+    fun anEmptyClipOfAnotherAppDoesNotBringBackACutImage() {
+        val h = HostFixture("a\n![](tessera-img://x)\nb")
+        val o = h.at("\uFFFC")
+        h.select(o, o + 1)
+        h.view.onTextContextMenuItem(android.R.id.cut) // the plain text of an image is empty
+        assertEquals("a\nb", h.md())
+        h.caret(h.text.length)
+        h.view.onTextContextMenuItem(android.R.id.paste)
+        assertEquals("our own clip: the image is back", "a\nb\n![](tessera-img://x)", h.md().trimEnd())
+        h.view.setClip("") // another app puts an empty text on the clipboard
+        h.caret(0)
+        val before = h.md()
+        h.view.onTextContextMenuItem(android.R.id.paste)
+        assertEquals("it is pasted as the plain text it is: nothing", before, h.md())
+    }
 }

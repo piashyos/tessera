@@ -77,6 +77,8 @@ fun NoteBody(
     imageSource: ObjectImageSource? = null,
     /** An image from the keyboard or the clipboard (a file in the app's cache); `true` when the screen takes it. */
     onImageCommitted: (Uri) -> Boolean = { false },
+    /** While a cell of a table has the focus: what the contextual table bar shows and does; `null` when none has it. */
+    onTableBarChanged: (TableBarState?) -> Unit = {},
 ) {
     if (LocalInspectionMode.current) return // the View cannot be instantiated in a Compose preview
 
@@ -95,6 +97,9 @@ fun NoteBody(
     val currentOnFormatStateChanged by rememberUpdatedState(onFormatStateChanged)
     val currentOnFocusChanged by rememberUpdatedState(onFocusChanged)
     val currentOnImageCommitted by rememberUpdatedState(onImageCommitted)
+    val currentOnTableBarChanged by rememberUpdatedState(onTableBarChanged)
+    val overlayTheme = OverlayTheme(MaterialTheme.colorScheme, MaterialTheme.typography, MaterialTheme.shapes)
+    val hostRef = remember { mutableStateOf<TableOverlayHost?>(null) }
     val imageSelection = remember { mutableStateOf<ImageSelection?>(null) }
     val editorRef = remember { mutableStateOf<TesseraEditText?>(null) }
 
@@ -121,12 +126,13 @@ fun NoteBody(
 
     val currentOnStopFlushed by rememberUpdatedState(onStopFlushed)
     OnStop {
+        hostRef.value?.commitCells() // a cell edit that waits for its pause is part of the note
         editorRef.value?.flushPendingEdit() // the debounced emit would not survive a kill
         currentOnStopFlushed()
     }
 
     DisposableEffect(Unit) {
-        onDispose { editorRef.value?.dispose() } // emits a pending user edit, nothing else
+        onDispose { hostRef.value?.commitCells(); editorRef.value?.dispose() } // emits a pending user edit, nothing else
     }
 
     Box(modifier) {
@@ -135,8 +141,13 @@ fun NoteBody(
         factory = { context ->
             // The Material3 XML theme is applied explicitly: the host context is not guaranteed to carry it
             // (Compose test rules use a bare ComponentActivity).
-            val editor = TesseraEditText(ContextThemeWrapper(context, R.style.Theme_Tessera), style)
-            editor.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            val themed = ContextThemeWrapper(context, R.style.Theme_Tessera)
+            val editor = TesseraEditText(themed, style)
+            val host = TableOverlayHost(themed, editor)
+            host.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            host.theme = overlayTheme
+            host.onTableBar = { bar -> currentOnTableBarChanged(bar) }
+            hostRef.value = host
             editor.isVerticalScrollBarEnabled = true
             editor.isVerticalFadingEdgeEnabled = false
             // The host's explicit padding (the editTextStyle one stays after `background = null`); the screen pads the sides.
@@ -192,10 +203,12 @@ fun NoteBody(
                 }
             })
             editorRef.value = editor
-            onActionsReady(NoteBodyActions(editor))
-            editor
+            onActionsReady(NoteBodyActions(editor, host::commitCells))
+            host
         },
-        update = { editor ->
+        update = { host ->
+            val editor = host.editor
+            host.theme = overlayTheme
             if (editor.editorStyle != style) editor.editorStyle = style
             if (editor.editable != editable) editor.editable = editable
             if (editor.imageSource !== imageSource) editor.imageSource = imageSource
@@ -214,7 +227,7 @@ fun NoteBody(
  * image: the editor tells where it is after every draw.
  */
 @Composable
-private fun ImageHandles(sel: ImageSelection, editor: TesseraEditText?) {
+internal fun ImageHandles(sel: ImageSelection, editor: TesseraEditText?) {
     val ref = parseImageRef(sel.src) ?: return
     // what the drag began with: the percent, and the width the image has at 100% (its own width follows the preview)
     val drag = remember(sel.ps, sel.src) { IntArray(3) { -1 } } // start percent, width at 100%, last percent
@@ -230,11 +243,11 @@ private fun ImageHandles(sel: ImageSelection, editor: TesseraEditText?) {
             val start = drag[0]
             drag.fill(-1)
             if (editor != null && start >= 0) {
-                if (percent in 10..100 && percent != start) editor.replaceImageSrc(sel.ps, withWidthPercent(sel.src, percent))
+                if (percent in 10..100 && percent != start) editor.replaceImageSrc(sel.ps, withWidthPercent(sel.src, percent), expected = sel.src)
                 else editor.previewImageWidth(sel.ps, null)
             }
         },
-        onRotate = { editor?.replaceImageSrc(sel.ps, withRotation(sel.src, (ref.rotDegrees + 90) % 360)) },
+        onRotate = { editor?.replaceImageSrc(sel.ps, withRotation(sel.src, (ref.rotDegrees + 90) % 360), expected = sel.src) },
         resizeContentDescription = stringResource(R.string.image_resize_handle_description),
         rotateContentDescription = stringResource(R.string.image_rotate_button_description),
     )
@@ -244,7 +257,7 @@ private fun ImageHandles(sel: ImageSelection, editor: TesseraEditText?) {
 private class CaretSnapshot(val start: Int, val end: Int, val focused: Boolean)
 
 /** The toolbar's commands over the native engine (spec §7): the `RichBodyActions` mapping. */
-internal class NoteBodyActions(private val editor: TesseraEditText) : RichBodyActions {
+internal class NoteBodyActions(private val editor: TesseraEditText, private val commitCells: () -> Unit = {}) : RichBodyActions {
     override fun toggleBold() = editor.toggleMark(Mark.Bold)
     override fun toggleItalic() = editor.toggleMark(Mark.Italic)
     override fun toggleUnderline() = editor.toggleMark(Mark.Underline)
@@ -269,9 +282,10 @@ internal class NoteBodyActions(private val editor: TesseraEditText) : RichBodyAc
     override fun indent() = editor.indent()
     override fun outdent() = editor.outdent()
     override fun insertHorizontalRule() = editor.insertHorizontalRule()
+    override fun insertTable() = editor.insertTable()
     override fun insertImage(imageId: String) = editor.insertImage(imageId)
-    override fun undo() = editor.undo()
-    override fun redo() = editor.redo()
+    override fun undo() { commitCells(); editor.undo() }
+    override fun redo() { commitCells(); editor.redo() }
 
     override fun focusBody() {
         // A viewer's editor: never grab focus or surface the keyboard for it.
@@ -287,7 +301,7 @@ internal class NoteBodyActions(private val editor: TesseraEditText) : RichBodyAc
 
     override fun formatState(): FormatState = editor.formatState()
 
-    override fun flushPendingEdit() = editor.flushPendingEdit()
+    override fun flushPendingEdit() { commitCells(); editor.flushPendingEdit() }
 }
 
 /**

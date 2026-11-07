@@ -233,7 +233,7 @@ class TesseraEditTextImageTest {
 
     @Test
     fun aResizeShowsTheOldPictureScaledAtOnceAndIsOneStepOfTheHistory() {
-        val (h, src) = host()
+        val (h, src) = host(source = FakeImageSource(remembersResults = true))
         src.deliver(src.requests.single(), loaded)
         h.layout()
         val ps = h.ps()
@@ -247,8 +247,16 @@ class TesseraEditTextImageTest {
         h.layout()
         assertEquals("the new picture is as big as the scaled one: nothing moves", 150 to 50, h.rect().let { it.width() to it.height() })
         h.view.undo()
+        h.layout()
         assertEquals("a\n![](tessera-img://x)\nb", h.md())
         assertFalse("one step", h.view.formatState().canUndo)
+        assertEquals("the picture the undo brings back is the one that was loaded", 300 to 100, h.rect().let { it.width() to it.height() })
+        assertEquals("and it was not asked for again", 2, src.requests.size)
+        h.view.redo()
+        h.layout()
+        assertEquals("a\n![](tessera-img://x?w=50)\nb", h.md())
+        assertEquals(150 to 50, h.rect().let { it.width() to it.height() })
+        assertEquals("nor was this one", 2, src.requests.size)
     }
 
     @Test
@@ -277,6 +285,91 @@ class TesseraEditTextImageTest {
         h.layout()
         assertEquals(300 to 100, h.rect().let { it.width() to it.height() })
         assertEquals(emptyList<String>(), h.emitted)
+    }
+
+    @Test
+    fun aRebuildDoesNotRestartALoadOfTheSameImageAndItsResultArrives() {
+        val (h, src) = host()
+        val req = src.requests.single()
+        h.view.setMarkdown("a\n![](tessera-img://x)\nb\nc") // an update from outside while the image is loading
+        h.layout()
+        assertEquals("no second load", 1, src.requests.size)
+        assertFalse("and the first is not cancelled", req.cancelled)
+        src.deliver(req, loaded)
+        h.layout()
+        assertEquals("its result reached the new span", 300 to 100, h.rect().let { it.width() to it.height() })
+    }
+
+    @Test
+    fun anUndoWhileAnImageLoadsKeepsTheLoad() {
+        val (h, src) = host()
+        h.caret(0)
+        h.ic().commitText("z", 1)
+        h.pass(600)
+        h.view.undo()
+        h.layout()
+        assertEquals(md, h.md())
+        assertEquals(1, src.requests.size)
+        assertFalse(src.requests.single().cancelled)
+        src.deliver(src.requests.single(), loaded)
+        h.layout()
+        assertEquals(100, h.rect().height())
+    }
+
+    @Test
+    fun aLoadForAnImageThatLeftTheTextIsStillCancelledAfterARebuild() {
+        val (h, src) = host()
+        h.view.setMarkdown("a\nb") // the image is gone from the text
+        h.layout()
+        assertTrue(src.requests.single().cancelled)
+    }
+
+    @Test
+    fun theHandlesAreTakenAwayWithTheFocusAndWhenTheImageIsScrolledOut() {
+        val long = (1..60).joinToString("\n") { "line $it" }
+        val (h, src) = host("![](tessera-img://x)\n$long")
+        src.deliver(src.requests.single(), loaded)
+        h.layout()
+        val told = ArrayList<ImageSelection?>()
+        h.view.onImageSelectionChanged = { told += it }
+        val canvas = Canvas(Bitmap.createBitmap(400, 800, Bitmap.Config.ARGB_8888))
+        fun draw() { h.view.draw(canvas); shadowOf(android.os.Looper.getMainLooper()).idle() }
+        h.view.requestFocus()
+        h.select(0, 1)
+        draw()
+        assertNotNull("in view and focused", told.lastOrNull())
+        h.view.scrollTo(0, 400)
+        draw()
+        assertNull("scrolled out of the view: no frame over the bar above", told.last())
+        h.view.scrollTo(0, 0)
+        draw()
+        assertNotNull(told.last())
+        h.view.clearFocus()
+        draw()
+        assertNull("without the focus: no handles", told.last())
+    }
+
+    @Test
+    fun theHandlesOfAnImageThatIsNotThereAnyMoreTouchNothing() {
+        val (h, _) = host("![](tessera-img://x)\n![](tessera-img://y)")
+        val ps = 0
+        h.view.replaceImageSrc(ps, "tessera-img://x?rot=90", expected = "tessera-img://other")
+        assertEquals("![](tessera-img://x)\n![](tessera-img://y)", h.md())
+        h.view.replaceImageSrc(ps, "tessera-img://x?rot=90", expected = "tessera-img://x")
+        assertEquals("![](tessera-img://x?rot=90)\n![](tessera-img://y)", h.md())
+        h.view.replaceImageSrc(5, "tessera-img://z") // a paragraph that is not an image
+        assertEquals("![](tessera-img://x?rot=90)\n![](tessera-img://y)", h.md())
+    }
+
+    @Test
+    fun theFirstDeleteBeforeAnObjectSelectsItTheSecondDeletesIt() {
+        val (h, _) = host()
+        h.caret(1) // the end of "a"
+        assertTrue(h.key(KeyEvent.KEYCODE_FORWARD_DEL))
+        assertEquals(h.ps() to h.ps() + 1, h.view.selectionStart to h.view.selectionEnd)
+        assertEquals("selecting is no edit", md, h.md())
+        assertTrue(h.key(KeyEvent.KEYCODE_FORWARD_DEL))
+        assertEquals("a\nb", h.md())
     }
 
     // ------------------------------------------------------------ tap, selection, keys
@@ -343,6 +436,7 @@ class TesseraEditTextImageTest {
         val told = ArrayList<ImageSelection?>()
         h.view.onImageSelectionChanged = { told += it }
         val ps = h.ps()
+        h.view.requestFocus()
         h.select(ps, ps + 1)
         val canvas = Canvas(Bitmap.createBitmap(400, 800, Bitmap.Config.ARGB_8888))
         h.view.draw(canvas)
@@ -404,8 +498,15 @@ class TesseraEditTextImageTest {
         val (h, _) = host("ab")
         val got = ArrayList<Uri>()
         h.view.onImageCommitted = { got += it; true }
+        val copies = ArrayList<Runnable>()
+        h.view.copyExecutor = java.util.concurrent.Executor { copies += it } // not the main thread: the test runs the copy by hand
         val (_, payload) = imageContent(h, ContentInfoCompat.SOURCE_INPUT_METHOD)
         assertNull("all of it was taken", ViewCompat.performReceiveContent(h.view, payload))
+        assertEquals("nothing is read on the main thread", 1, copies.size)
+        assertTrue(got.isEmpty())
+        copies.single().run()
+        assertTrue("the host gets the file on the main thread, not from the copy", got.isEmpty())
+        shadowOf(android.os.Looper.getMainLooper()).idle()
         val copy = got.single()
         assertEquals("file", copy.scheme)
         assertEquals(listOf<Byte>(1, 2, 3), java.io.File(copy.path!!).readBytes().toList())
@@ -413,13 +514,45 @@ class TesseraEditTextImageTest {
     }
 
     @Test
+    fun aFileTheHostDidNotTakeIsDeleted() {
+        val (h, _) = host("ab")
+        val got = ArrayList<Uri>()
+        h.view.onImageCommitted = { got += it; false }
+        h.view.copyExecutor = java.util.concurrent.Executor { it.run() }
+        val (_, payload) = imageContent(h, ContentInfoCompat.SOURCE_INPUT_METHOD)
+        ViewCompat.performReceiveContent(h.view, payload)
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(1, got.size)
+        assertFalse("the copy is gone", java.io.File(got.single().path!!).exists())
+    }
+
+    @Test
+    fun aKeyboardsGrantInTheExtrasDoesNotStopTheCopy() {
+        // `InputContentInfo` is final and its release goes to the IME's token, which a unit test has none of: this runs the release path
+        // (`releasePermission` in a finally after the copy) and checks that the image still gets to the host; the real release is for the device
+        val (h, _) = host("ab")
+        val got = ArrayList<Uri>()
+        h.view.onImageCommitted = { got += it; true }
+        h.view.copyExecutor = java.util.concurrent.Executor { it.run() }
+        val (uri, _) = imageContent(h, ContentInfoCompat.SOURCE_INPUT_METHOD)
+        val info = android.view.inputmethod.InputContentInfo(uri, android.content.ClipDescription("pic", arrayOf("image/png")))
+        val extras = android.os.Bundle().apply { putParcelable("androidx.core.view.extra.INPUT_CONTENT_INFO", info) }
+        val clip = ClipData.newUri(h.view.context.contentResolver, "pic", uri)
+        ViewCompat.performReceiveContent(h.view, ContentInfoCompat.Builder(clip, ContentInfoCompat.SOURCE_INPUT_METHOD).setExtras(extras).build())
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(1, got.size)
+    }
+
+    @Test
     fun anImageOnTheClipboardIsPastedThroughTheSameDoor() {
         val (h, _) = host("ab")
         val got = ArrayList<Uri>()
         h.view.onImageCommitted = { got += it; true }
+        h.view.copyExecutor = java.util.concurrent.Executor { it.run() }
         val (uri, _) = imageContent(h, ContentInfoCompat.SOURCE_CLIPBOARD)
         h.view.context.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(ClipData.newUri(h.view.context.contentResolver, "pic", uri))
         h.view.onTextContextMenuItem(android.R.id.paste)
+        shadowOf(android.os.Looper.getMainLooper()).idle()
         assertEquals(1, got.size)
         assertEquals("ab", h.md())
     }

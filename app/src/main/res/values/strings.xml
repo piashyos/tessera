@@ -275,5 +275,14 @@
     <string name="editor_object_image_a11y">Image</string>
     <string name="editor_object_image_unavailable">Image unavailable</string>
     <string name="editor_object_table">Table</string>
+    <plurals name="editor_table_rows">
+        <item quantity="one">%d row</item>
+        <item quantity="other">%d rows</item>
+    </plurals>
+    <plurals name="editor_table_columns">
+        <item quantity="one">%d column</item>
+        <item quantity="other">%d columns</item>
+    </plurals>
+    <string name="editor_object_table_a11y">Table, %1$s, %2$s</string>
     <string name="settings_native_editor">New editor (beta)</string>
 </resources>

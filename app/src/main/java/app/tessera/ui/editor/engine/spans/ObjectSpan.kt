@@ -48,6 +48,11 @@ internal class ImageState {
     var requested: String? = null
     var cancel: (() -> Unit)? = null
     var span: ObjectSpan? = null
+
+    /** The state that took over this one's load after a rebuild of the text; the result goes there. */
+    var forward: ImageState? = null
+
+    fun resolve(): ImageState { var s = this; while (true) s = s.forward ?: return s }
 }
 
 /**
@@ -66,6 +71,12 @@ class ObjectSpan internal constructor(val block: NoteBlock, val style: EditorSty
 
     /** Width the host gives the object (the text area); until set, the placeholder is as wide as its caption. */
     @Volatile var widthPx: Int = 0
+
+    /**
+     * Height the table's overlay takes (phase 2 spec §4, variant A): the span reserves it and draws nothing, the host's overlay sits on it. `0`:
+     * not known yet, the editor gives a first value (the height this grid had, or an estimate). Set by the host, quietly.
+     */
+    @Volatile var tableHeightPx: Int = 0
 
     /** The caption of a frame (a placeholder, an image that is loading or unavailable, a table); `null` for the divider. */
     private val label: String?
@@ -118,8 +129,15 @@ class ObjectSpan internal constructor(val block: NoteBlock, val style: EditorSty
         return Size(w, h)
     }
 
+    /** The size a table takes: the text width and the height the overlay measured; `null` for the other objects. */
+    internal fun tableBox(): Size? =
+        if (block is NoteBlock.Table) Size(if (widthPx > 0) widthPx else 1, tableHeightPx.coerceAtLeast(1)) else null
+
+    /** The box of an object whose size its content sets (an image, a table); `null` for a divider. */
+    internal fun objectBox(): Size? = imageBox() ?: tableBox()
+
     override fun getSize(p: Paint, text: CharSequence?, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {
-        val box = imageBox()
+        val box = objectBox()
         if (fm != null && box != null) { // the line is as high as the picture: nothing of the text font is in it
             fm.ascent = -box.height; fm.top = -box.height
             fm.descent = 0; fm.bottom = 0
@@ -132,10 +150,11 @@ class ObjectSpan internal constructor(val block: NoteBlock, val style: EditorSty
     }
 
     private fun width(p: Paint): Float =
-        if (widthPx > 0) widthPx.toFloat() else imageBox()?.width?.toFloat() ?: (p.measureText(label ?: "") + 2 * style.placeholderPaddingPx)
+        if (widthPx > 0) widthPx.toFloat() else objectBox()?.width?.toFloat() ?: (p.measureText(label ?: "") + 2 * style.placeholderPaddingPx)
 
     override fun draw(c: Canvas, text: CharSequence?, start: Int, end: Int, x: Float, lineTop: Int, y: Int, lineBottom: Int, p: Paint) {
         val top = lineTop + (baked?.gapTop ?: 0) // the margins are not part of the object
+        if (block is NoteBlock.Table) return // the overlay of the host is drawn there
         val box = imageBox()
         if (box != null) return drawImage(c, box, x, top, p)
         val bottom = lineBottom - (baked?.gapBottom ?: 0)
@@ -182,13 +201,14 @@ class ObjectSpan internal constructor(val block: NoteBlock, val style: EditorSty
     }
 
     /** The same object with the colors of [style]; an image keeps its state (and its load in flight). */
-    fun restyled(style: EditorStyle) = ObjectSpan(block, style, image).also { it.widthPx = widthPx }
+    fun restyled(style: EditorStyle) = ObjectSpan(block, style, image).also { it.widthPx = widthPx; it.tableHeightPx = tableHeightPx }
 
     /**
      * The span of a block that replaces this one on the same character (a resized or rotated image): until its own decode comes, it shows the picture
      * of the old one, scaled by the new `w` percent over the one that picture was baked at (a rotation shows it as it was).
      */
     internal fun replacedBy(block: NoteBlock, style: EditorStyle): ObjectSpan = ObjectSpan(block, style, null).also {
+        it.tableHeightPx = tableHeightPx // an edited table keeps its height until its overlay measures the new grid
         val from = image ?: return@also
         val to = it.image ?: return@also
         to.drawable = from.drawable

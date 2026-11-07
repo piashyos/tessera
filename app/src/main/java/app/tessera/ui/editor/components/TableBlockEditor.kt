@@ -28,7 +28,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -60,9 +62,22 @@ fun TableBlockEditor(
     onGridChange: (TableGrid) -> Unit,
     modifier: Modifier = Modifier,
     onCellFocusChanged: (Boolean) -> Unit = {},
+    /** The native editor's overlay (phase 2 §4): the cells are not editable and have no resize strip; the table still scrolls sideways. */
+    readOnly: Boolean = false,
+    /**
+     * Enter in a cell. `false` (the Aztec path): the cell takes a line break. `true`: Enter goes to the next cell and never into the text (a
+     * line break in a cell is lost in GFM); in the last cell it calls [onEnterInLastCell].
+     */
+    enterMovesOn: Boolean = false,
+    onEnterInLastCell: () -> Unit = {},
 ) {
     val density = LocalDensity.current
+    val focus = LocalFocusManager.current
     val widths = grid.colWidths ?: List(grid.columnCount) { TableGrid.DEFAULT_COL_WIDTH }
+    // the cell after [row] / [col]: the focus moves in reading order; the last cell hands the caret on
+    fun enter(row: Int, col: Int) {
+        if (row == grid.rowCount && col == grid.columnCount - 1) onEnterInLastCell() else focus.moveFocus(FocusDirection.Next)
+    }
 
     // The grid scrolls horizontally so adding columns grows the table sideways
     // (fixed/min column widths) instead of cramming columns into the screen width.
@@ -80,6 +95,8 @@ fun TableBlockEditor(
                 onGridChange(grid.withColWidth(c, widths[c] + with(density) { dxPx.toDp().value }))
             },
             onCellFocusChanged = onCellFocusChanged,
+            readOnly = readOnly,
+            onEnter = if (enterMovesOn) { c -> enter(0, c) } else null,
         )
         grid.rows.forEachIndexed { rowIdx, row ->
             TableRow(
@@ -91,6 +108,8 @@ fun TableBlockEditor(
                     onGridChange(grid.withColWidth(c, widths[c] + with(density) { dxPx.toDp().value }))
                 },
                 onCellFocusChanged = onCellFocusChanged,
+                readOnly = readOnly,
+                onEnter = if (enterMovesOn) { c -> enter(rowIdx + 1, c) } else null,
             )
         }
     }
@@ -201,6 +220,8 @@ private fun TableRow(
     onCellChange: (Int, String) -> Unit,
     onColResize: (Int, Float) -> Unit,
     onCellFocusChanged: (Boolean) -> Unit,
+    readOnly: Boolean,
+    onEnter: ((Int) -> Unit)?,
 ) {
     val outline = MaterialTheme.colorScheme.outlineVariant
     // IntrinsicSize.Min lets the tallest cell set the row height — every cell then fills
@@ -220,7 +241,14 @@ private fun TableRow(
             ) {
                 BasicTextField(
                     value = value,
-                    onValueChange = { onCellChange(idx, it) },
+                    onValueChange = { v ->
+                        if (onEnter == null || '\n' !in v) onCellChange(idx, v)
+                        // one line break typed at the caret is Enter; a paste with line breaks is flattened (a cell is one line of GFM)
+                        else if (v.length == value.length + 1 && v.replace("\n", "") == value) onEnter(idx)
+                        else onCellChange(idx, v.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' '))
+                    },
+                    readOnly = readOnly,
+                    enabled = !readOnly,
                     textStyle = LocalTextStyle.current.merge(
                         MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSurface,
@@ -234,7 +262,7 @@ private fun TableRow(
                         .onFocusChanged { onCellFocusChanged(it.isFocused) },
                 )
                 // Right-edge handle: drag horizontally to resize this column.
-                ResizeHandle(
+                if (!readOnly) ResizeHandle(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .width(14.dp)

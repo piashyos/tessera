@@ -440,11 +440,40 @@ class EditRules(style: EditorStyle) {
     }
 
     /**
-     * Delete (the forward key) over a selected object: its paragraph goes whole, as with Backspace. Anything else is not handled here (`null`):
-     * the platform deletes the character, and the normalizer repairs what that leaves.
+     * The object paragraph at [ps] swaps places with the paragraph before it ([delta] −1) or after it (+1) — the table's up / down buttons. The
+     * document is read and bound again (one change). `null` at the ends of the text or when [ps] is no object. The object ends up selected.
      */
-    fun forwardDelete(e: Editable, selStart: Int, selEnd: Int): Sel? =
-        if (selEnd - selStart == 1 && isObjectParagraph(e, selStart)) Sel(deleteObjectParagraph(e, selStart)) else null
+    fun moveObject(e: Editable, ps: Int, delta: Int): Sel? {
+        if (!isObjectParagraph(e, ps)) return null
+        val blocks = DocBinder.read(e).blocks.toMutableList()
+        var index = 0
+        for (i in 0 until ps) if (e[i] == '\n') index++
+        val to = index + delta
+        if (to !in blocks.indices) return null
+        val moved = blocks[index]
+        blocks[index] = blocks[to]
+        blocks[to] = moved
+        if (blocks.last() !is NoteBlock.Text) blocks += NoteBlock.Text(ParagraphKind.Body, app.tessera.core.text.notedoc.Inline("")) // the caret needs a paragraph after an object
+        DocBinder.bind(NoteDoc(blocks), e, style)
+        var start = 0
+        var k = 0
+        while (k < to) { start = paragraphEnd(e, start) + 1; k++ }
+        return Sel(start, start + 1)
+    }
+
+    /**
+     * Delete (the forward key) next to an object: over a selected object its paragraph goes whole, as with Backspace; with the caret at the end of the
+     * paragraph before an object the first Delete selects it (as Backspace does from the other side, [backspaceAtObject]). Anything else is not
+     * handled here (`null`): the platform deletes the character, and the normalizer repairs what that leaves.
+     */
+    fun forwardDelete(e: Editable, selStart: Int, selEnd: Int): Sel? {
+        if (selEnd - selStart == 1 && isObjectParagraph(e, selStart)) return Sel(deleteObjectParagraph(e, selStart))
+        if (selEnd != selStart) return null
+        val pe = paragraphEnd(e, paragraphStart(e, selStart))
+        if (selStart != pe || pe >= e.length) return null
+        val next = pe + 1
+        return if (isObjectParagraph(e, next)) Sel(next, next + 1) else null
+    }
 
     /** Deletes a selection as typing would; a selection of one whole object takes its paragraph with it. Returns the caret. */
     private fun deleteSelection(e: Editable, s: Int, t: Int): Int =

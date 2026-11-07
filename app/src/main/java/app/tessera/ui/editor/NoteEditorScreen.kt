@@ -83,6 +83,7 @@ import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.engine.ObjectImageSource
 import app.tessera.ui.editor.components.RichNoteBody
 import app.tessera.ui.editor.components.TableActionsBar
+import app.tessera.ui.editor.components.TableBarState
 import app.tessera.ui.editor.components.TableBlockEditor
 import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
@@ -147,6 +148,8 @@ fun NoteEditorScreen(
     // Index of the TABLE block whose cell currently holds focus (null = none). While set, the
     // bottom pill shows the contextual TableActionsBar instead of the text format bar.
     var focusedTableIdx by remember { mutableStateOf<Int?>(null) }
+    // The native engine table: the bar of the cell that has the focus (the engine does the edits).
+    var nativeTableBar by remember { mutableStateOf<TableBarState?>(null) }
     val currentFocusedBlock by rememberUpdatedState(lastFocusedBlock)
     // The native engine takes the whole Markdown itself: no HTML round-trip, no block split (a table is its placeholder).
     // `null` = the engine is not known yet (the VM sets it together with the content): no body is drawn, so Aztec never
@@ -217,6 +220,7 @@ fun NoteEditorScreen(
             override fun onInsertImage() = onInsertImageClick()
             override fun onCaptureImage() = onCaptureImageClick()
             override fun insertTable() {
+                if (native) return base.insertTable() // the engine inserts the table as a paragraph of its own
                 val existing = splitMarkdownIntoBlocks(currentContent).toMutableList()
                 // Insert the table right after the text block that currently holds the
                 // cursor, followed by an empty text block so the user can keep typing
@@ -451,7 +455,22 @@ fun NoteEditorScreen(
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                             shadowElevation = 3.dp,
                         ) {
-                            if (focusedTableGrid != null) {
+                            val tableBar = nativeTableBar.takeIf { native }
+                            if (tableBar != null) {
+                                TableActionsBar(
+                                    canRemoveRow = tableBar.canRemoveRow,
+                                    canRemoveColumn = tableBar.canRemoveColumn,
+                                    canMoveUp = tableBar.canMoveUp,
+                                    canMoveDown = tableBar.canMoveDown,
+                                    onAddRow = tableBar.onAddRow,
+                                    onRemoveRow = tableBar.onRemoveRow,
+                                    onAddColumn = tableBar.onAddColumn,
+                                    onRemoveColumn = tableBar.onRemoveColumn,
+                                    onMoveUp = tableBar.onMoveUp,
+                                    onMoveDown = tableBar.onMoveDown,
+                                    onDeleteTable = tableBar.onDeleteTable,
+                                )
+                            } else if (focusedTableGrid != null) {
                                 val updateTable: ((app.tessera.core.text.markdownblocks.TableGrid) -> app.tessera.core.text.markdownblocks.TableGrid) -> Unit = { transform ->
                                     val idx = focusedTableIdx
                                     val block = idx?.let { blocks.getOrNull(it) as? Block.Table }
@@ -509,7 +528,7 @@ fun NoteEditorScreen(
                                 )
                             }
                         }
-                        if (currentActions != null && focusedTableGrid == null) {
+                        if (currentActions != null && focusedTableGrid == null && nativeTableBar == null) {
                             MarkdownFormatMenu(
                                 expanded = formatMenuExpanded,
                                 activeFormats = activeFormats,
@@ -569,6 +588,7 @@ fun NoteEditorScreen(
                         onStopFlushed = onFlush,
                         imageSource = imageSource,
                         onImageCommitted = onImageCommitted,
+                        onTableBarChanged = { nativeTableBar = it },
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
