@@ -110,6 +110,9 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
         for (o in free) { o.commit(); o.release(); removeView(o) }
         overlays = ArrayList(claimed.map { it!! })
         zones.forEachIndexed { i, z -> overlays[i].place(i, z) }
+        // the screen's bar follows the overlay that has the focus, whatever order the focus callbacks came in
+        val active = overlays.firstOrNull { it.cellFocused }
+        if (active !== focusedOverlay) { focusedOverlay = active; editor.handlesHidden = active != null; publish() }
         // an overlay that was just added is measured now, so its height is the span's in this pass and not only after the next frame
         for (o in overlays) if (o.height == 0 && o.isAttachedToWindow) {
             val w = o.layoutParams.width.coerceAtLeast(1)
@@ -209,6 +212,7 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
         var dirty = false
             private set
         private var anyCellFocused = false
+        private var focusedCells = 0 // cells that have the focus (a move from a cell to the next one is a loss and a gain in either order)
         var cellFocused by mutableStateOf(false)
             private set
         private var readOnly by mutableStateOf(false)
@@ -258,8 +262,7 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
                     shown = z.grid
                     fromDocument = true
                     if (cellFocused) compose.clearFocus() // the table under the focus is another one now
-                    // the accessibility tree learns the new text of the cells (an undo or a redo of an edit)
-                    compose.post { compose.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) }
+                    announceContentChange() // the accessibility tree learns the new text of the cells (an undo or a redo of an edit)
                 }
             }
             if (fromDocument && focusedOverlay === this) publish() // what the bar can do (move up, move down) depends on where the table is
@@ -270,7 +273,27 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
             // the note's area clips the table as it clips the text: what is above or below the host is not drawn (no table over the screen's header)
             val top = (-z.rect.top).coerceAtLeast(0)
             val bottom = (this@TableOverlayHost.height - z.rect.top).coerceAtMost(maxOf(height, 1))
+            // the table moved under the finger's keyboard: Compose is told, or the handle of the cell stays where the cell was (it reads positions on layout)
+            if (cellFocused && translationY != lastTy) compose.requestLayout()
+            lastTy = translationY
             clipBounds = if (bottom > top) Rect(0, top, maxOf(w, width), bottom) else Rect(0, 0, 0, 0)
+        }
+
+        private var lastTy = 0f
+
+        /**
+         * The accessibility client keeps a cache of the nodes: a change of the whole subtree is announced (the cells' text after an undo, the caret
+         * of a cell that has just been focused, which the framework reports late while the keyboard comes up).
+         */
+        fun announceContentChange() {
+            val am = context.getSystemService(android.view.accessibility.AccessibilityManager::class.java) ?: return
+            if (!am.isEnabled) return
+            compose.post {
+                val ev = android.view.accessibility.AccessibilityEvent.obtain(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)
+                ev.contentChangeTypes = android.view.accessibility.AccessibilityEvent.CONTENT_CHANGE_TYPE_SUBTREE
+                ev.setSource(compose)
+                compose.parent?.requestSendAccessibilityEvent(compose, ev)
+            }
         }
 
         fun edit(g: TableGrid) {
@@ -293,7 +316,10 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
         }
 
         private fun onCellFocus(focused: Boolean) {
-            anyCellFocused = focused
+            focusedCells = (focusedCells + if (focused) 1 else -1).coerceAtLeast(0)
+            anyCellFocused = focusedCells > 0
+            if (!focused) commit() // the focus left a cell: its edit is done
+            if (!focused && anyCellFocused) return // another cell of this table still has it
             if (focused) {
                 cellFocused = true
                 // TextView pulls its selection into view whenever the layout changes, focus or not: with the caret on the table's own paragraph that
@@ -302,7 +328,6 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
                 cellFocusChanged(this, true)
                 return
             }
-            commit() // the focus left a cell: its edit is done
             post { // the focus may only be on its way to the next cell
                 if (!anyCellFocused) { cellFocused = false; cellFocusChanged(this, false) }
             }

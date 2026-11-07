@@ -265,6 +265,7 @@ private fun TableRow(
                 // The field keeps its own selection and composition (a `TextFieldValue`), the text is the grid's. A keyboard commits its composing word and the
                 // line break of Enter in one edit, so Enter is read from where the caret stands, not from the text being the old one plus a break.
                 var field by remember { mutableStateOf(TextFieldValue(value)) }
+                var hadFocus by remember { mutableStateOf(false) }
                 val shown = if (field.text == value) field else field.copy(text = value, selection = TextRange(value.length.coerceAtMost(field.selection.end)))
                 BasicTextField(
                     value = shown,
@@ -303,7 +304,9 @@ private fun TableRow(
                         .onFocusChanged {
                             // a cell taken by a tap that the field did not place the caret for starts with it at the end of the text (never at 0)
                             if (it.isFocused && field.selection == TextRange.Zero && field.text.isNotEmpty()) field = field.copy(selection = TextRange(field.text.length))
-                            onCellFocusChanged(it.isFocused)
+                            // a field reports its state when it is first composed: a "lost" from a cell that never had the focus is nothing (a new
+                            // row or column would take the table bar from the cell that does have it). Only a change of this cell's own focus counts.
+                            if (it.isFocused != hadFocus) { hadFocus = it.isFocused; onCellFocusChanged(it.isFocused) }
                         },
                 )
                 // Right-edge handle: drag horizontally to resize this column.
