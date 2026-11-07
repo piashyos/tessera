@@ -34,6 +34,22 @@ class EngineCorpusTest {
         }
     }
 
+    /** Spec §6.1 rule 13 of §4: a placeholder character in the text of a paragraph is not shown, and loading emits nothing. */
+    @Test
+    fun theObjectPlaceholderInTheTextOfAStoredNoteIsNotShownAndNothingIsEmitted() {
+        val style = EngineTestStyle.create()
+        for ((i, doc) in EngineTextCorpus.documents.withIndex()) {
+            assertEquals("doc $i: read(bind(doc)) == normalize(doc)", app.tessera.core.text.notedoc.normalize(doc), DocBinder.read(DocBinder.build(doc, style)))
+        }
+        // stored notes as the storage holds them: raw Markdown with the placeholder inside the text of a paragraph
+        for (md in listOf("a\uFFFCb", "**a\uFFFCb**\n- \uFFFC\n> x\uFFFCy\n```\n\uFFFCm\n```", "\uFFFC\uFFFC")) session(md).use { s ->
+            s.check("placeholder note")
+            assertTrue("the placeholder is shown in ${md.take(40)}", s.h.text.none { it == '\uFFFC' })
+            assertTrue("the placeholder is written back for ${md.take(40)}", s.h.md().none { it == '\uFFFC' })
+            assertTrue("loading emitted something", s.h.emitted.isEmpty())
+        }
+    }
+
     /** Backspace from the end of the text until nothing is left, by `deleteSurroundingText(1, 0)`, the DEL key event and the hardware key. */
     @Test
     fun backspaceFromTheEndEmptiesEveryDocumentByEveryPath() {

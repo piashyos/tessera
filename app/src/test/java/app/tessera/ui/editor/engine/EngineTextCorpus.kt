@@ -92,7 +92,6 @@ object EngineTextCorpus {
     val documents: List<NoteDoc> = buildList {
         add(NoteDoc(listOf(body(""))))
         for (t in texts) {
-            if ('\uFFFC' in t) continue // text that holds U+FFFC is a typed or pasted case: it has no valid stored form (spec §6.2 rule 5), see the report
             add(NoteDoc(listOf(body(t))))
             add(NoteDoc(listOf(body("a"), kinded(ParagraphKind.ListItem(ListType.Bullet, 0), t), kinded(ParagraphKind.Quote, t), kinded(ParagraphKind.Mono, t), kinded(ParagraphKind.Heading, t), body("z"))))
         }

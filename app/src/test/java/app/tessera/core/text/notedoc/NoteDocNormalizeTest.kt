@@ -141,4 +141,23 @@ class NoteDocNormalizeTest {
         assertEquals(listOf(mr(0, 1, Mark.Bold)), (norm(body("a${smile}b", mr(0, 2, Mark.Bold))).single() as NoteBlock.Text).content.marks)
         assertEquals(listOf(mr(1, 4, Mark.Bold)), (norm(body("a${smile}b", mr(2, 4, Mark.Bold))).single() as NoteBlock.Text).content.marks)
     }
+
+    // 13
+    @Test fun `the object placeholder is not text of a paragraph and the marks around it stay whole`() {
+        fun text(b: NoteBlock) = (b as NoteBlock.Text).content
+        assertEquals("ab", text(norm(body("a\uFFFCb")).single()).text)
+        // "ab\uFFFCcdef": bold over "ab", the placeholder and "c"; italic over the placeholder and "cde"
+        val c = text(norm(body("ab\uFFFCcdef", mr(0, 4, Mark.Bold), mr(2, 6, Mark.Italic))).single())
+        assertEquals("abcdef", c.text)
+        assertEquals(listOf(mr(0, 3, Mark.Bold), mr(2, 5, Mark.Italic)), c.marks)
+        // a mark on the placeholder alone is empty and goes; marks on both sides of it join into one range
+        val d = text(norm(body("a\uFFFCb", mr(1, 2, Mark.Bold), mr(0, 1, Mark.Italic), mr(2, 3, Mark.Italic))).single())
+        assertEquals("ab", d.text)
+        assertEquals(listOf(mr(0, 2, Mark.Italic)), d.marks)
+        // a mono line and a list item lose it too
+        assertEquals("x", text(norm(NoteBlock.Text(ParagraphKind.Mono, Inline("\uFFFCx\uFFFC"))).single()).text)
+        assertEquals("", text(norm(NoteBlock.Text(ParagraphKind.ListItem(ListType.Bullet, 0), Inline("\uFFFC"))).single()).text)
+        // an object block is untouched
+        assertEquals(listOf(NoteBlock.Divider), norm(NoteBlock.Divider))
+    }
 }

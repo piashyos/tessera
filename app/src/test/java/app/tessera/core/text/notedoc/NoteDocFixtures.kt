@@ -94,7 +94,7 @@ object NoteDocFixtures {
     private val tokens = listOf(
         "**", "~~", "~~~", "*", "`", "``", "```", "<u>", "</u>", "<b>", "</b>", "<i>", "<s>", "- ", "+ ", "* ",
         "1. ", "2024. ", "3) ", "> ", "# ", "## ", "![](", "<!--", "---", "***", "___", "|", "[ ] ", "[x] ",
-        "\\", "\\*", "**a **b", "** a**", "~~a~~~~b~~", "\n", "\r", "\uD83D\uDE00", "snake_case", "__init__", "<strong>", "a <fake> tag", "\"x\"", "  ", "\t", " ",
+        "\\", "\\*", "**a **b", "** a**", "~~a~~~~b~~", "\n", "\r", "\uD83D\uDE00", "\uFFFC", "a\uFFFCb", "snake_case", "__init__", "<strong>", "a <fake> tag", "\"x\"", "  ", "\t", " ",
     )
 
     fun randomText(rnd: Random, maxPieces: Int = 8): String = buildString {

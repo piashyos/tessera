@@ -80,7 +80,7 @@ class EngineFuzzRegressionTest {
     /** Rule 4: a mono line has no marks, however it became mono (the text typed over a selection took the kind of the first paragraph). Seed 35. */
     @Test
     fun seed35_noMarkInAMonoLineAfterTheSelectionWasReplaced() = replay(
-        35, EngineFuzz.startOf(35),
+        35, "a\n- хвостовые  \n> хвостовые  \n```\nхвостовые  \n```\n## хвостовые  \nz", // literal: the corpus grows, an index into it would not stay the same note
         listOf(
             st(A.CUT_PASTE, 0.265489, 0.970896, 0.596945, 77), st(A.HR, 0.795994, 0.842534, 0.896237, 437),
             st(A.MARK, 0.732053, 0.700214, 0.892181, 144, "sel"),
@@ -124,7 +124,7 @@ class EngineFuzzRegressionTest {
 
     @Test
     fun seed110005_marksOverACodeAreOneMarkEachOrNone() = replay(
-        110005, EngineFuzz.startOfLayout(110005),
+        110005, "\\![](tessera-img://)\n                - <u>8</u> \n                1.  `\"x\"2024.`",
         listOf(
             st(A.TYPE, 0.918193, 0.982763, 0.586959, 748, "\u2764\uFE0F"), st(A.COPY_PASTE, 0.603878, 0.755059, 0.111574, 468),
             st(A.ENTER_KEY, 0.794477, 0.617989, 0.139347, 306), st(A.CUT_PASTE, 0.706942, 0.472959, 0.947682, 670),

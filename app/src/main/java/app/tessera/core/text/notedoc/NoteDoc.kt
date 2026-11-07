@@ -77,9 +77,24 @@ private fun normalizeKind(kind: ParagraphKind): ParagraphKind =
         kind
     }
 
-private fun normalizeContent(block: NoteBlock.Text): Inline =
-    if (block.kind == ParagraphKind.Mono) Inline(oneLine(block.content.text)) // rule 4
-    else normalizeInline(block.content.copy(text = oneLine(block.content.text)))
+private fun normalizeContent(block: NoteBlock.Text): Inline {
+    val content = withoutObjectChar(block.content)
+    return if (block.kind == ParagraphKind.Mono) Inline(oneLine(content.text)) // rule 4
+    else normalizeInline(content.copy(text = oneLine(content.text)))
+}
+
+/** Rule 13: U+FFFC is the editor's placeholder of an object, it has no place in the text of a paragraph; the marks around it stay whole. */
+private fun withoutObjectChar(inline: Inline): Inline {
+    val t = inline.text
+    if ('\uFFFC' !in t) return inline
+    val kept = IntArray(t.length + 1) // kept[i]: how many characters before index i stay
+    for (i in t.indices) kept[i + 1] = kept[i] + if (t[i] == '\uFFFC') 0 else 1
+    fun at(i: Int) = kept[i.coerceIn(0, t.length)]
+    return Inline(
+        t.replace("\uFFFC", ""),
+        inline.marks.map { MarkRange(at(it.start), at(it.end), it.mark) }.filter { it.start < it.end },
+    )
+}
 
 /** Rule 11: one line is one paragraph; a line break in a paragraph, source or table cell becomes a space. */
 private fun oneLine(s: String) = if ('\n' in s || '\r' in s) s.replace('\n', ' ').replace('\r', ' ') else s
