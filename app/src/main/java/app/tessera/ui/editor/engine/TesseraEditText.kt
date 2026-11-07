@@ -83,6 +83,9 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     /** Called with the Markdown of the document, 300 ms after a user edit (and at once by [flushPendingEdit] / [dispose]). */
     var onMarkdownChange: ((String) -> Unit)? = null
 
+    /** Called before a new value from outside is looked at (not for an echo): the host commits what it holds outside the text (a table cell being edited). */
+    var onBeforeExternalUpdate: (() -> Unit)? = null
+
     /** Called when what the format bar shows changes; the current state is delivered when the callback is set. */
     var onFormatStateChanged: ((FormatState) -> Unit)? = null
         set(value) {
@@ -269,6 +272,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
                     autoReplace.tryApply(s, inserted, typed)?.let { setSelection(it.caret.coerceAtMost(s.length)) }
                 }
                 applyObjectWidth()
+                healLayout()
             }
             commitUserEdit()
         }
@@ -307,6 +311,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         if (markdown == lastIncoming) return
         lastIncoming = markdown
         if (markdown == lastLoadedMarkdown) return
+        onBeforeExternalUpdate?.invoke() // a cell edit that waits for its pause becomes a pending user edit now: it wins over this value (§6.9)
         if (hasPendingUserEdit) { skippedIncoming = markdown; return } // the pending emit reconciles; if it has nothing to say, this value is applied then
         val s = selectionStart.coerceAtLeast(0)
         val t = selectionEnd.coerceAtLeast(0)
@@ -406,6 +411,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         onImageCommitted = null
         onMarkdownChange = null
         onFormatStateChanged = null
+        onBeforeExternalUpdate = null
     }
 
     private fun commitUserEdit() {
@@ -485,6 +491,9 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     /** The table of the paragraph [ps] swaps places with the paragraph before it ([delta] −1) or after it (+1): one step. */
     fun moveTable(ps: Int, delta: Int): Boolean = command { e, _, _ -> rules.moveObject(e, ps, delta) }
 
+    /** Whether [moveTable] with [delta] has somewhere to go (the bar's up and down buttons). */
+    fun canMoveTable(ps: Int, delta: Int): Boolean { val e = text ?: return false; return editable && rules.canMoveObject(e, ps, delta) }
+
     /** The caret goes to the paragraph after the table at [ps] (Enter in its last cell) and the editor takes the focus and the keyboard. */
     fun focusAfterTable(ps: Int) {
         val e = text ?: return
@@ -509,17 +518,17 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         val t = text as? EngineEditable ?: return
         if (disposed || heightPx <= 0) return
         val span = t.getSpans(0, t.length, ObjectSpan::class.java).filter { it.block is NoteBlock.Table }.sortedBy { t.getSpanStart(it) }.getOrNull(index) ?: return
-        tableHeights[(span.block as NoteBlock.Table).grid] = heightPx
+        tableHeights.put((span.block as NoteBlock.Table).grid, heightPx)
         if (span.tableHeightPx == heightPx) return
         span.tableHeightPx = heightPx
         deliverImage(span)
     }
 
-    private val tableHeights = HashMap<TableGrid, Int>()
+    private val tableHeights = android.util.LruCache<TableGrid, Int>(32)
 
     /** What a table takes before its overlay has measured it: the height this grid had, else 40dp for each line and the overlay's padding. */
     private fun plannedTableHeight(grid: TableGrid): Int =
-        tableHeights[grid] ?: (((grid.rowCount + 1) * 40 + 8) * resources.displayMetrics.density).toInt()
+        tableHeights.get(grid) ?: (((grid.rowCount + 1) * 40 + 8) * resources.displayMetrics.density).toInt()
 
     /** The image `tessera-img://<imageId>` at the caret, once the host has stored it. */
     fun insertImage(imageId: String) = insertObject(NoteBlock.Image("tessera-img://$imageId"))
@@ -652,6 +661,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             inCommand = true
             try { sel = op(e, s, t) } finally { inCommand = false }
             applyObjectWidth()
+            healLayout()
         }
         sel?.let { setSelection(it.start.coerceAtMost(e.length), it.end.coerceAtMost(e.length)) }
         val changed = sel != null && changedSince(e, v0)
@@ -911,9 +921,30 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     // ------------------------------------------------------------------ view
 
+    // A selected object is shown by its own frame (the image's handles): the system highlight of its U+FFFC would paint the margins of the
+    // line above and below it. The colour the host set is kept and comes back with any other selection.
+    private var userHighlight = 0
+    private var highlightOff = false
+
+    override fun setHighlightColor(color: Int) {
+        if (!ready) { super.setHighlightColor(color); return }
+        userHighlight = color
+        super.setHighlightColor(if (highlightOff) android.graphics.Color.TRANSPARENT else color)
+    }
+
+    private fun updateHighlight(selStart: Int, selEnd: Int) {
+        val t = text ?: return
+        val off = selEnd - selStart == 1 && isObjectParagraph(t, selStart)
+        if (off == highlightOff) return
+        if (!highlightOff) userHighlight = highlightColor
+        highlightOff = off
+        super.setHighlightColor(if (off) android.graphics.Color.TRANSPARENT else userHighlight)
+    }
+
     override fun onSelectionChanged(selStart: Int, selEnd: Int) {
         super.onSelectionChanged(selStart, selEnd)
         if (!ready) return // the TextView constructor gets here before this class is built
+        updateHighlight(selStart, selEnd)
         typing.onSelectionChanged(selStart, selEnd)
         trackSelectedObject(selStart, selEnd)
         val t = text
@@ -1056,6 +1087,21 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         if (t is EngineEditable) t.quietly(reset) else reset()
     }
 
+    /**
+     * The layout must end where the text does. A `DynamicLayout` that missed part of a change (seen after a command inserted text in front of an
+     * object: the line table kept the old length and the next key crashed in `bringPointIntoView`, fuzz seed 100098; a plain `EditText` shows
+     * it under Robolectric too, so the root is in the framework's reflow) is thrown away: a poke at the paragraphs cannot repair a line table that
+     * is off, so the view makes a new layout at its next measure. One comparison when it is fine.
+     */
+    private fun healLayout() {
+        val l = layout ?: return
+        val t = text ?: return
+        if (t.isEmpty() || l.getLineEnd(l.lineCount - 1) == t.length) return
+        val padding = includeFontPadding
+        includeFontPadding = !padding // the setter drops the layout when the value changes; the second call makes the view ask for a new one
+        includeFontPadding = padding
+    }
+
     private fun applyViewStyle() {
         setTextColor(editorStyle.textColor)
         setTextSize(TypedValue.COMPLEX_UNIT_PX, editorStyle.bodyTextSizePx)
@@ -1070,12 +1116,12 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     private companion object {
-        /** One thread for all editors: the Markdown of the last pending edit is what counts. */
         /** One thread for the copies of images that arrive from the keyboard and the clipboard. */
         val copyPool: java.util.concurrent.Executor by lazy {
             java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "tessera-image-copy").apply { isDaemon = true } }
         }
 
+        /** One thread for all editors: the Markdown of the last pending edit is what counts. */
         val emitPool: java.util.concurrent.Executor by lazy {
             java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "tessera-emit").apply { isDaemon = true } }
         }

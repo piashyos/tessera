@@ -98,7 +98,10 @@ fun NoteBody(
     val currentOnFocusChanged by rememberUpdatedState(onFocusChanged)
     val currentOnImageCommitted by rememberUpdatedState(onImageCommitted)
     val currentOnTableBarChanged by rememberUpdatedState(onTableBarChanged)
-    val overlayTheme = OverlayTheme(MaterialTheme.colorScheme, MaterialTheme.typography, MaterialTheme.shapes)
+    val colorScheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val shapes = MaterialTheme.shapes
+    val overlayTheme = remember(colorScheme, typography, shapes) { OverlayTheme(colorScheme, typography, shapes) } // NoteBody recomposes on every frame of the keyboard's animation
     val hostRef = remember { mutableStateOf<TableOverlayHost?>(null) }
     val imageSelection = remember { mutableStateOf<ImageSelection?>(null) }
     val editorRef = remember { mutableStateOf<TesseraEditText?>(null) }
@@ -147,6 +150,7 @@ fun NoteBody(
             host.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             host.theme = overlayTheme
             host.onTableBar = { bar -> currentOnTableBarChanged(bar) }
+            editor.onBeforeExternalUpdate = host::commitCells
             hostRef.value = host
             editor.isVerticalScrollBarEnabled = true
             editor.isVerticalFadingEdgeEnabled = false

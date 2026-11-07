@@ -440,24 +440,49 @@ class EditRules(style: EditorStyle) {
     }
 
     /**
-     * The object paragraph at [ps] swaps places with the paragraph before it ([delta] −1) or after it (+1) — the table's up / down buttons. The
-     * document is read and bound again (one change). `null` at the ends of the text or when [ps] is no object. The object ends up selected.
+     * Where the object at [index] of [blocks] goes when it moves by [delta]: the neighbour's place, but over the empty paragraph that stands between
+     * two objects (a table next to a table keeps one, spec §4 rule 9) to the object behind it; `null` at the ends, and under the table there is only
+     * the empty paragraph that ends the text.
+     */
+    private fun moveTarget(blocks: List<NoteBlock>, index: Int, delta: Int): Int? =
+        moveTargetRaw(blocks, index, delta)?.takeIf { blocks[it] != blocks[index] } // swapping two equal blocks changes nothing
+
+    private fun moveTargetRaw(blocks: List<NoteBlock>, index: Int, delta: Int): Int? {
+        val to = index + delta
+        val next = blocks.getOrNull(to) ?: return null
+        val empty = (next as? NoteBlock.Text)?.let { it.kind == ParagraphKind.Body && it.content.text.isEmpty() } == true
+        if (!empty) return to
+        val behind = blocks.getOrNull(to + delta) ?: return if (delta < 0) to else null
+        return if (behind !is NoteBlock.Text) to + delta else to
+    }
+
+    private fun paragraphIndex(e: Editable, ps: Int): Int { var n = 0; for (i in 0 until ps) if (e[i] == '\n') n++; return n }
+
+    /** Whether [moveObject] has somewhere to go. */
+    fun canMoveObject(e: Editable, ps: Int, delta: Int): Boolean =
+        isObjectParagraph(e, ps) && moveTarget(DocBinder.read(e).blocks, paragraphIndex(e, ps), delta) != null
+
+    /**
+     * The object paragraph at [ps] swaps places with the paragraph before it ([delta] −1) or after it (+1) — the table's up / down buttons — or with
+     * the object behind an empty paragraph that separates two. The document is read and bound again (one change). `null` when there is nowhere
+     * to go or [ps] is no object. The object ends up selected.
      */
     fun moveObject(e: Editable, ps: Int, delta: Int): Sel? {
         if (!isObjectParagraph(e, ps)) return null
         val blocks = DocBinder.read(e).blocks.toMutableList()
-        var index = 0
-        for (i in 0 until ps) if (e[i] == '\n') index++
-        val to = index + delta
-        if (to !in blocks.indices) return null
+        val index = paragraphIndex(e, ps)
+        val to = moveTarget(blocks, index, delta) ?: return null
         val moved = blocks[index]
+        val endedWithObject = blocks.last() !is NoteBlock.Text
+        val same = (0 until to).count { blocks[it] == moved } // which of equal blocks it is, to find it again after the binding
         blocks[index] = blocks[to]
         blocks[to] = moved
-        if (blocks.last() !is NoteBlock.Text) blocks += NoteBlock.Text(ParagraphKind.Body, app.tessera.core.text.notedoc.Inline("")) // the caret needs a paragraph after an object
+        if (!endedWithObject && blocks.last() !is NoteBlock.Text) blocks += NoteBlock.Text(ParagraphKind.Body, app.tessera.core.text.notedoc.Inline("")) // the caret needs a paragraph after an object
         DocBinder.bind(NoteDoc(blocks), e, style)
+        val now = DocBinder.read(e).blocks
+        val at = now.indices.filter { now[it] == moved }.let { it.getOrNull(same) ?: it.firstOrNull() } ?: return null
         var start = 0
-        var k = 0
-        while (k < to) { start = paragraphEnd(e, start) + 1; k++ }
+        repeat(at) { start = paragraphEnd(e, start) + 1 }
         return Sel(start, start + 1)
     }
 

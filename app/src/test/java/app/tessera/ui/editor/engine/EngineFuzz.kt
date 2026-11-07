@@ -36,7 +36,7 @@ internal object EngineFuzz {
         // phase 2: images — insert, resize, rotate, a load result arrives (also a late one), an image is deleted while its load is in flight
         IMG_INSERT, IMG_RESIZE, IMG_ROTATE, IMG_RESULT, IMG_CANCEL, FORWARD_DEL,
         // phase 2: tables — insert, a cell is committed (also a row or a column), a selected table is deleted
-        TABLE_INSERT, TABLE_EDIT, TABLE_DELETE,
+        TABLE_INSERT, TABLE_EDIT, TABLE_DELETE, TABLE_MOVE,
     }
 
     data class Step(val a: A, val x: Double = 0.0, val y: Double = 0.0, val z: Double = 0.0, val i: Int = 0, val s: String = "") {
@@ -51,7 +51,7 @@ internal object EngineFuzz {
         A.SET_MD to 1, A.ECHO to 1, A.STALE to 1, A.THEME to 1, A.READ_ONLY to 1, A.PASS to 4, A.FLUSH to 1, A.DISPOSE to 0,
         A.UNDO_RUN to 1, A.UNDO_CMD to 1,
         A.IMG_INSERT to 2, A.IMG_RESIZE to 2, A.IMG_ROTATE to 1, A.IMG_RESULT to 3, A.IMG_CANCEL to 1, A.FORWARD_DEL to 2,
-        A.TABLE_INSERT to 2, A.TABLE_EDIT to 3, A.TABLE_DELETE to 1,
+        A.TABLE_INSERT to 2, A.TABLE_EDIT to 3, A.TABLE_DELETE to 1, A.TABLE_MOVE to 2,
     )
     private val total = weights.sumOf { it.second }
     private val words = listOf("при", "привет", "hello", "wor", "мир", "ok", "x", "é", "😀", "שלום", "مر")
@@ -230,13 +230,38 @@ internal object EngineFuzz {
                     }
                     val sel = h.view.selectionStart to h.view.selectionEnd
                     val v = (h.text as EngineEditable).version
-                    h.view.replaceTable(ps, grid)
+                    val changed = h.view.replaceTable(ps, grid)
+                    if (editable && changed) { // one commit, one step: a single undo gives the table back and a redo the edit
+                        val after = md()
+                        h.view.undo()
+                        assertEquals("one undo is one commit", before, md())
+                        h.view.redo()
+                        assertEquals("and a redo gives it back", after, md())
+                    }
                     if (editable) {
                         assertEquals("the selection stays where it was", sel, h.view.selectionStart to h.view.selectionEnd)
                         val canon = (normalize(app.tessera.core.text.notedoc.NoteDoc(listOf(NoteBlock.Table(grid)))).blocks.first() as NoteBlock.Table).grid
                         assertTrue("the table has the grid", tablesOf().any { it.grid == canon })
                     } else assertEquals("a read-only editor does not change", before, md())
                     if (!editable || old == grid) assertEquals("nothing changed", v, (h.text as EngineEditable).version)
+                }
+                A.TABLE_MOVE -> {
+                    val ps = tablePs(step.i)
+                    if (ps < 0) return
+                    val delta = if (step.i % 2 == 0) -1 else 1
+                    val can = h.view.canMoveTable(ps, delta)
+                    val n = tablesOf().size
+                    val moved = h.view.moveTable(ps, delta)
+                    assertEquals("a table moves exactly when the bar says it can", can && editable, moved)
+                    assertEquals("a move loses no table", n, tablesOf().size)
+                    if (moved) {
+                        assertTrue("the move changed the note", md() != before)
+                        val after = md()
+                        h.view.undo()
+                        assertEquals("one undo is one move", before, md())
+                        h.view.redo()
+                        assertEquals(after, md())
+                    }
                 }
                 A.TABLE_DELETE -> {
                     val ps = tablePs(step.i)

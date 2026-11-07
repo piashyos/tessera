@@ -22,7 +22,6 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import app.tessera.core.text.markdownblocks.TableGrid
 import app.tessera.ui.editor.engine.TableZone
 import app.tessera.ui.editor.engine.TesseraEditText
-import app.tessera.ui.editor.engine.paragraphEnd
 import app.tessera.ui.editor.engine.tableZones
 import kotlin.math.abs
 
@@ -62,7 +61,7 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
     /** The contextual bar of the screen: the state while a cell has the focus, `null` otherwise. */
     var onTableBar: ((TableBarState?) -> Unit)? = null
 
-    private val overlays = ArrayList<Overlay>()
+    private var overlays = ArrayList<Overlay>()
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
     private var downX = 0f
     private var downY = 0f
@@ -91,11 +90,27 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
         for (o in overlays) o.commit()
     }
 
+    /**
+     * An overlay belongs to a table, not to a place in the list: one that shows a grid keeps it when the text is rebuilt around it (a collaborator
+     * inserted a table above), so the cell that has the focus stays in its own table. First by the grid (the nearest to where the overlay was), then
+     * what is left by order; an overlay left without a table goes.
+     */
     private fun place() {
         val zones = editor.tableZones()
-        while (overlays.size < zones.size) overlays += Overlay(overlays.size).also { addView(it, LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT)) }
-        while (overlays.size > zones.size) removeView(overlays.removeAt(overlays.lastIndex).also { it.commit(); it.release() })
-        zones.forEachIndexed { i, z -> overlays[i].place(z) }
+        val claimed = arrayOfNulls<Overlay>(zones.size)
+        val free = ArrayList(overlays)
+        for (o in overlays) {
+            val g = o.committed ?: continue
+            val zi = zones.indices.filter { claimed[it] == null && zones[it].grid == g }.minByOrNull { abs(it - o.index) } ?: continue
+            claimed[zi] = o
+            free -= o
+        }
+        for (zi in zones.indices) if (claimed[zi] == null) {
+            claimed[zi] = if (free.isNotEmpty()) free.removeAt(0) else Overlay().also { addView(it, LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT)) }
+        }
+        for (o in free) { o.commit(); o.release(); removeView(o) }
+        overlays = ArrayList(claimed.map { it!! })
+        zones.forEachIndexed { i, z -> overlays[i].place(i, z) }
     }
 
     // ------------------------------------------------------------------ touch
@@ -154,19 +169,20 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
             else -> 0
         }
         val target = (editor.scrollY + delta).coerceIn(0, maxScroll)
-        android.util.Log.i("GATE", "reveal rect=$rect ty=${child.translationY} hostH=$height delta=$delta scrollY=${editor.scrollY} max=$maxScroll -> $target")
         if (target != editor.scrollY) editor.scrollTo(0, target)
         return true
     }
 
     // ------------------------------------------------------------------ the overlay of one table
 
-    private inner class Overlay(val index: Int) : FrameLayout(context) {
+    private inner class Overlay : FrameLayout(context) {
+        var index = 0
         private val compose = ComposeView(context)
         var ps = -1
-        private var committed: TableGrid? = null
+        var committed: TableGrid? = null
         private var shown by mutableStateOf<TableGrid?>(null)
-        private var dirty = false
+        var dirty = false
+            private set
         private var anyCellFocused = false
         var cellFocused by mutableStateOf(false)
             private set
@@ -205,12 +221,17 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
             visibility == VISIBLE && x >= translationX && x <= translationX + width && y >= translationY && y <= translationY + height
 
         /** Puts the overlay on the table's rect and brings what it shows up to the document (an undo, an update from outside). */
-        fun place(z: TableZone) {
+        fun place(i: Int, z: TableZone) {
+            index = i
             ps = z.ps
             readOnly = !editor.editable
-            if (z.grid != committed) { // the document's table is not the one last seen: it wins over what is shown, unless an edit waits
-                committed = z.grid
-                if (!dirty) shown = z.grid else { dirty = false; removeCallbacks(commitRunnable); shown = z.grid }
+            if (z.grid != committed) { // the document's table is not the one last seen
+                if (dirty) commit() // an edit that waits is the user's and wins (spec §6.9); the host has committed it before any update from outside
+                else {
+                    committed = z.grid
+                    shown = z.grid
+                    if (cellFocused) compose.clearFocus() // the table under the focus is another one now
+                }
             }
             val w = z.rect.width().coerceAtLeast(1)
             if (layoutParams.width != w) layoutParams = layoutParams.also { it.width = w }
@@ -259,15 +280,12 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
             val cb = onTableBar ?: return
             val g = shown
             if (!cellFocused || g == null) { cb(null); return }
-            val t = editor.text
-            val len = t?.length ?: 0
-            val pe = if (t == null) ps else paragraphEnd(t, ps)
             cb(
                 TableBarState(
                     canRemoveRow = g.rowCount > 0,
                     canRemoveColumn = g.columnCount > 1,
-                    canMoveUp = ps > 0,
-                    canMoveDown = pe + 1 < len, // under the table there is more than the empty paragraph that always ends the text
+                    canMoveUp = editor.canMoveTable(ps, -1),
+                    canMoveDown = editor.canMoveTable(ps, +1),
                     onAddRow = { structure { it.addRow() } },
                     onRemoveRow = { structure { it.removeRow(it.rowCount - 1) } },
                     onAddColumn = { structure { it.addColumn() } },
