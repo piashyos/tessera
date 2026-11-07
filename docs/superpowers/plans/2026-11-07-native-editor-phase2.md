@@ -22,7 +22,9 @@
 
 - **E1. Таблицы — по итогам спайка P2-0** (§4). Решение и замеры вписываются сюда.
 - **E2. Слои картинок.** Чтение файлов, Room и Drive уезжают в `data/images` (новый класс рядом с
-  `ImageDownloader`, наружу — `suspend fun decode(src, maxWidthPx): Bitmap?` без DAO в UI). Адаптер
+  `ImageDownloader`, наружу — `suspend fun decode(src, maxWidthPx)` (Loaded | Unavailable) и
+  `prefetchSizes` + синхронный размер из кэша для плейсхолдера без прыжка, §3.1; без DAO в UI).
+  `ImageRef`/`parseImageRef` — в `domain/model`. Адаптер
   `ObjectImageSource` с `LruCache` живёт в `ui/editor/components`. Интерфейс `ObjectImageSource` — в
   `ui/editor/engine`.
 - **E3. «Тихая» перемера после загрузки** (§3.2) — отдельный путь движка без версии, истории и выдачи.
