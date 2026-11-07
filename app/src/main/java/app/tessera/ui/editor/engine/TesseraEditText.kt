@@ -1,7 +1,13 @@
 package app.tessera.ui.editor.engine
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -10,7 +16,9 @@ import android.text.InputType
 import android.text.Spanned
 import android.text.SpannableStringBuilder
 import android.text.TextUtils
+import android.text.TextPaint
 import android.text.TextWatcher
+import android.text.style.MetricAffectingSpan
 import android.text.method.ArrowKeyMovementMethod
 import android.text.method.KeyListener
 import android.util.TypedValue
@@ -101,6 +109,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             applyObjectWidth()
             a11y.invalidateRoot()
             notifyFormatState()
+            restartBlink()
         }
 
     private val normalizer = Normalizer(style)
@@ -117,6 +126,20 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     private var disposed = false
     private val a11y = CheckboxAccessibilityHelper(this)
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+
+    // the caret is ours (see [caretRect]): the platform one stretches over the whole line, margins of a block included
+    private val caretPaint = Paint().apply { this.style = Paint.Style.FILL }
+    private val caretBox = RectF()
+    private val bandPaint = TextPaint()
+    private val blink: Runnable = Runnable {
+        caretOn = !caretOn
+        invalidate()
+        if (caretShown()) emitHandler.postDelayed(blink, CARET_BLINK_MS)
+    }
+
+    /** The blink phase: `true` right after an edit or a move, then every [CARET_BLINK_MS]. */
+    internal var caretOn = true
+        private set
 
     private var ready = false
     private var guarded = false
@@ -173,6 +196,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
         override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
             markdownCache = null // the version of the editable changes when the replace is over; a step taken in afterTextChanged needs the text as it is now
+            restartBlink()
             if (guarded || !ready) return
             changeStart = start
             changeEnd = start + count
@@ -204,6 +228,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         gravity = Gravity.TOP or Gravity.START
         editKeyListener = keyListener
         applyViewStyle()
+        hidePlatformCaret()
         addTextChangedListener(watcher)
         ViewCompat.setAccessibilityDelegate(this, a11y)
         ready = true
@@ -657,6 +682,83 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             if (selStart < cs) setSelection(cs) // a caret never stands before a sentinel (§6.1)
         }
         notifyFormatState()
+        restartBlink()
+    }
+
+    override fun onFocusChanged(focused: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
+        super.onFocusChanged(focused, direction, previouslyFocusedRect)
+        if (ready) restartBlink()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (ready) restartBlink()
+    }
+
+    override fun onDetachedFromWindow() {
+        emitHandler.removeCallbacks(blink)
+        super.onDetachedFromWindow()
+    }
+
+    // ------------------------------------------------------------------ caret
+
+    /**
+     * The platform caret is as tall as the line, and a line carries the margin of its block (quote padding, the gap above a heading, the
+     * padding of a list item) in its height. A caret that draws nothing stays in its place, so the insertion handle (it needs a visible cursor)
+     * keeps working; before API 29 there is no hook for that and the cursor is hidden whole.
+     */
+    private fun hidePlatformCaret() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) textCursorDrawable = NoCaret else isCursorVisible = false
+    }
+
+    private fun caretShown() = ready && !disposed && editable && isFocused && selectionStart >= 0 && selectionStart == selectionEnd
+
+    private fun restartBlink() {
+        emitHandler.removeCallbacks(blink)
+        caretOn = true
+        invalidate()
+        if (caretShown()) emitHandler.postDelayed(blink, CARET_BLINK_MS)
+    }
+
+    /**
+     * The text of [line] without what the block adds around it: from the top of its glyphs (baseline + ascent of the font the caret's
+     * neighbour is set in) to their bottom (baseline + descent), in layout coordinates. Margins, paddings and `lineSpacingExtra` are outside.
+     */
+    internal fun textBand(line: Int): Pair<Int, Int> {
+        val l = layout ?: return 0 to 0
+        val t = text ?: return l.getLineTop(line) to l.getLineBottom(line)
+        val start = l.getLineStart(line)
+        val at = if (selectionStart in start..l.getLineEnd(line) && selectionStart > start) selectionStart - 1 else start
+        bandPaint.set(paint)
+        for (span in t.getSpans(at, minOf(at + 1, t.length), MetricAffectingSpan::class.java)) span.updateMeasureState(bandPaint)
+        val baseline = l.getLineBaseline(line)
+        val fm = bandPaint.fontMetricsInt
+        return (baseline + fm.ascent) to (baseline + fm.descent)
+    }
+
+    /** Where the caret is drawn (view content coordinates), `null` when it is not: no focus, a selection, a read-only note. Ignores the blink phase. */
+    internal fun caretRect(): RectF? {
+        if (!caretShown()) return null
+        val l = layout ?: return null
+        val sel = selectionStart
+        if (sel > (text?.length ?: 0)) return null
+        val (top, bottom) = textBand(l.getLineForOffset(sel))
+        val w = CARET_WIDTH_DP * resources.displayMetrics.density
+        val x = (totalPaddingLeft + l.getPrimaryHorizontal(sel) - 0.5f).coerceIn(0f, (width - w).coerceAtLeast(0f))
+        return caretBox.apply { set(x, (totalPaddingTop + top).toFloat(), x + w, (totalPaddingTop + bottom).toFloat()) }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (caretOn) caretRect()?.let { canvas.drawRect(it, caretPaint) }
+    }
+
+    private object NoCaret : Drawable() {
+        override fun draw(canvas: Canvas) = Unit
+        override fun setAlpha(alpha: Int) = Unit
+        override fun setColorFilter(colorFilter: ColorFilter?) = Unit
+        @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.TRANSPARENT
+        override fun getIntrinsicWidth() = 0
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
@@ -686,6 +788,8 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     private fun applyViewStyle() {
         setTextColor(editorStyle.textColor)
         setTextSize(TypedValue.COMPLEX_UNIT_PX, editorStyle.bodyTextSizePx)
+        caretPaint.color = editorStyle.accentColor
+        invalidate()
     }
 
     private inline fun guard(block: () -> Unit) {
@@ -701,5 +805,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         }
         const val EMIT_DEBOUNCE_MS = 300L
         const val MIN_TOUCH_DP = 48
+        const val CARET_BLINK_MS = 500L
+        const val CARET_WIDTH_DP = 2
     }
 }

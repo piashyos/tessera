@@ -86,7 +86,7 @@ sealed class BlockSpan : MetricAffectingSpan(), LineHeightSpan {
     }
 }
 
-/** Title / Heading (Playfair, as the Aztec path) and Subheading (Inter W600). Absolute sizes: nothing stacks. */
+/** Title / Heading (bold Playfair — synthetic bold of the one regular face, as Aztec sets bold on its heading spans) and Subheading (Inter W600). Absolute sizes: nothing stacks. */
 class HeadingSpan(override val kind: ParagraphKind, override val style: EditorStyle) : BlockSpan() {
     private val size = when (kind) {
         ParagraphKind.Title -> style.titleTextSizePx
@@ -100,7 +100,7 @@ class HeadingSpan(override val kind: ParagraphKind, override val style: EditorSt
 
     private fun apply(p: TextPaint) {
         p.textSize = size
-        p.typeface = if (serif) style.serifTypeface ?: Typeface.SERIF else Weighted.of(p.typeface, 600)
+        p.typeface = if (serif) Weighted.bold(style.serifTypeface ?: Typeface.SERIF) else Weighted.of(p.typeface, 600)
     }
 
     override fun restyled(style: EditorStyle) = HeadingSpan(kind, style)
@@ -259,6 +259,11 @@ class MonoSpan(override val style: EditorStyle) : BlockSpan(), LeadingMarginSpan
  */
 internal object Weighted {
     private val cache = java.util.concurrent.ConcurrentHashMap<Pair<Typeface?, Int>, Typeface>()
+
+    private val bolds = java.util.concurrent.ConcurrentHashMap<Typeface, Typeface>()
+
+    /** [base] with the bold style bit: the platform fakes the weight of a face that has no bold of its own. Made once per face. */
+    fun bold(base: Typeface): Typeface = bolds.getOrPut(base) { Typeface.create(base, Typeface.BOLD) }
 
     fun of(base: Typeface?, weight: Int): Typeface? = cache[base to weight]
         ?: Paint().apply { typeface = base; fontVariationSettings = "'wght' $weight" }.typeface?.also { cache[base to weight] = it }

@@ -9,6 +9,10 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.dp
+import org.junit.Assert.assertTrue
 import app.tessera.core.text.notedoc.ListType
 import app.tessera.core.text.notedoc.Mark
 import app.tessera.core.text.notedoc.ParagraphKind
@@ -71,6 +75,32 @@ class EditorFormatBarNativeTest {
         }
         listOf("Dashed list", "Indent", "Outdent", "Bullet list", "Numbered list", "Checklist item", "Divider", "Quote", "Code")
             .forEach { rule.onNodeWithContentDescription(it).assertExists() }
+    }
+
+    @Config(qualifiers = "w411dp-h800dp")
+    @Test fun native_lists_come_before_the_marks_and_are_in_the_frame_of_a_phone() {
+        rule.setContent {
+            TesseraTheme(darkTheme = false, dynamicColor = false) {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.width(411.dp)) {
+                    EditorFormatBar(actions = Recording(), activeFormats = emptySet(), nativeEngine = true, formatState = FormatState.Empty)
+                }
+            }
+        }
+        fun node(d: String) = rule.onNodeWithContentDescription(d).fetchSemanticsNode()
+        fun left(d: String) = node(d).positionInRoot.x // not clipped by the scroll viewport
+        fun right(d: String) = node(d).positionInRoot.x + node(d).size.width
+        val frame = with(rule.density) { 411.dp.toPx() }
+        val lists = listOf("Checklist item", "Bullet list", "Dashed list", "Numbered list")
+        assertEquals("order of the lists", lists, lists.sortedBy { left(it) })
+        lists.forEach {
+            assertTrue("$it starts before Bold", left(it) < left("Bold"))
+            assertTrue("$it is in the frame: ${right(it)} of $frame", right(it) <= frame)
+            assertTrue("$it is left of the pinned more button", right(it) <= left("More formats"))
+        }
+        // the scrolling groups (⋯ is pinned: the groups that do not fit run behind it in the layout)
+        val order = lists + listOf("Bold", "Italic", "Underline", "Strikethrough", "Heading 1", "Heading 2", "Indent", "Outdent", "Quote", "Code", "Divider")
+        assertEquals("the order of the scrolling groups", order, order.sortedBy { left(it) })
+        assertTrue("Undo and Redo are pinned before the lists", right("Redo") <= left("Checklist item"))
     }
 
     @Test fun native_buttons_take_their_activity_from_the_format_state() {

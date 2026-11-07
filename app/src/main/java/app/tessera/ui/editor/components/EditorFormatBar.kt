@@ -113,35 +113,49 @@ fun EditorFormatBar(
       horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
       // [B][I][U][S]
-      FormatToggle(Icons.Rounded.FormatBold, R.string.toolbar_bold, if (fs != null) marked(Mark.Bold) else AztecTextFormat.FORMAT_BOLD in activeFormats, reportsSelected = nativeEngine) { actions?.toggleBold() }
-      FormatToggle(Icons.Rounded.FormatItalic, R.string.toolbar_italic, if (fs != null) marked(Mark.Italic) else AztecTextFormat.FORMAT_ITALIC in activeFormats, reportsSelected = nativeEngine) { actions?.toggleItalic() }
-      FormatToggle(Icons.Rounded.FormatUnderlined, R.string.toolbar_underline, if (fs != null) marked(Mark.Underline) else AztecTextFormat.FORMAT_UNDERLINE in activeFormats, reportsSelected = nativeEngine) { actions?.toggleUnderline() }
-      FormatToggle(Icons.Rounded.FormatStrikethrough, R.string.toolbar_strikethrough, if (fs != null) marked(Mark.Strike) else AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats, reportsSelected = nativeEngine) { actions?.toggleStrikethrough() }
-
-      GroupSeparator()
-      // [H1][H2]
-      FormatToggle(Lucide.Heading1, R.string.toolbar_h1, if (fs != null) kind == ParagraphKind.Title else AztecTextFormat.FORMAT_HEADING_1 in activeFormats, reportsSelected = nativeEngine) { actions?.toggleHeading1() }
-      FormatToggle(Lucide.Heading2, R.string.toolbar_h2, if (fs != null) kind == ParagraphKind.Heading else AztecTextFormat.FORMAT_HEADING_2 in activeFormats, reportsSelected = nativeEngine) { actions?.toggleHeading2() }
-
-      GroupSeparator()
-      // [•][–][1.][☐] and, natively, [→][←]
-      FormatToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, R.string.toolbar_bullet, if (fs != null) isList(ListType.Bullet) else AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats, reportsSelected = nativeEngine) { actions?.toggleBulletList() }
-      if (fs != null) {
-        FormatToggle(Lucide.ListMinus, R.string.editor_list_dash, isList(ListType.Dash), reportsSelected = nativeEngine) { actions?.toggleDashList() }
+      @Composable fun RowScope.marks() {
+        FormatToggle(Icons.Rounded.FormatBold, R.string.toolbar_bold, if (fs != null) marked(Mark.Bold) else AztecTextFormat.FORMAT_BOLD in activeFormats, reportsSelected = nativeEngine) { actions?.toggleBold() }
+        FormatToggle(Icons.Rounded.FormatItalic, R.string.toolbar_italic, if (fs != null) marked(Mark.Italic) else AztecTextFormat.FORMAT_ITALIC in activeFormats, reportsSelected = nativeEngine) { actions?.toggleItalic() }
+        FormatToggle(Icons.Rounded.FormatUnderlined, R.string.toolbar_underline, if (fs != null) marked(Mark.Underline) else AztecTextFormat.FORMAT_UNDERLINE in activeFormats, reportsSelected = nativeEngine) { actions?.toggleUnderline() }
+        FormatToggle(Icons.Rounded.FormatStrikethrough, R.string.toolbar_strikethrough, if (fs != null) marked(Mark.Strike) else AztecTextFormat.FORMAT_STRIKETHROUGH in activeFormats, reportsSelected = nativeEngine) { actions?.toggleStrikethrough() }
       }
-      FormatToggle(Icons.Rounded.FormatListNumbered, R.string.toolbar_ordered, if (fs != null) isList(ListType.Number) else AztecTextFormat.FORMAT_ORDERED_LIST in activeFormats, reportsSelected = nativeEngine) { actions?.toggleOrderedList() }
-      FormatToggle(Icons.Rounded.Checklist, R.string.toolbar_checklist, if (fs != null) isList(ListType.Check) else AztecTextFormat.FORMAT_TASK_LIST in activeFormats, reportsSelected = nativeEngine) { actions?.toggleTaskList() }
+      // [H1][H2]
+      @Composable fun RowScope.headings() {
+        FormatToggle(Lucide.Heading1, R.string.toolbar_h1, if (fs != null) kind == ParagraphKind.Title else AztecTextFormat.FORMAT_HEADING_1 in activeFormats, reportsSelected = nativeEngine) { actions?.toggleHeading1() }
+        FormatToggle(Lucide.Heading2, R.string.toolbar_h2, if (fs != null) kind == ParagraphKind.Heading else AztecTextFormat.FORMAT_HEADING_2 in activeFormats, reportsSelected = nativeEngine) { actions?.toggleHeading2() }
+      }
+      // [•][1.][☐] on the Aztec path; [☐][•][–][1.] natively
+      @Composable fun RowScope.bullet() = FormatToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, R.string.toolbar_bullet, if (fs != null) isList(ListType.Bullet) else AztecTextFormat.FORMAT_UNORDERED_LIST in activeFormats, reportsSelected = nativeEngine) { actions?.toggleBulletList() }
+      @Composable fun RowScope.ordered() = FormatToggle(Icons.Rounded.FormatListNumbered, R.string.toolbar_ordered, if (fs != null) isList(ListType.Number) else AztecTextFormat.FORMAT_ORDERED_LIST in activeFormats, reportsSelected = nativeEngine) { actions?.toggleOrderedList() }
+      @Composable fun RowScope.checklist() = FormatToggle(Icons.Rounded.Checklist, R.string.toolbar_checklist, if (fs != null) isList(ListType.Check) else AztecTextFormat.FORMAT_TASK_LIST in activeFormats, reportsSelected = nativeEngine) { actions?.toggleTaskList() }
+      @Composable fun RowScope.blocks() {
+        FormatToggle(Icons.Rounded.FormatQuote, R.string.toolbar_quote, if (fs != null) kind == ParagraphKind.Quote else AztecTextFormat.FORMAT_QUOTE in activeFormats, reportsSelected = nativeEngine) { actions?.toggleQuote() }
+        FormatToggle(Icons.Rounded.Code, R.string.toolbar_code, if (fs != null) kind == ParagraphKind.Mono else AztecTextFormat.FORMAT_PREFORMAT in activeFormats, reportsSelected = nativeEngine) { actions?.toggleCode() }
+        FormatToggle(Icons.Rounded.Remove, R.string.toolbar_divider, active = false, reportsSelected = nativeEngine) { actions?.insertHorizontalRule() }
+      }
+
       if (fs != null) {
+        // Native: the lists come first so they are in the frame of a phone, then marks, headings, indents, blocks.
+        checklist(); bullet()
+        FormatToggle(Lucide.ListMinus, R.string.editor_list_dash, isList(ListType.Dash), reportsSelected = nativeEngine) { actions?.toggleDashList() }
+        ordered()
+        GroupSeparator()
+        marks()
+        GroupSeparator()
+        headings()
+        GroupSeparator()
         FormatToggle(Lucide.IndentIncrease, R.string.editor_indent, active = false, enabled = fs.canIndent, reportsSelected = nativeEngine) { actions?.indent() }
         FormatToggle(Lucide.IndentDecrease, R.string.editor_outdent, active = false, enabled = fs.canOutdent, reportsSelected = nativeEngine) { actions?.outdent() }
-      }
-
-      GroupSeparator()
-      // [«][</>][—][⊞]
-      FormatToggle(Icons.Rounded.FormatQuote, R.string.toolbar_quote, if (fs != null) kind == ParagraphKind.Quote else AztecTextFormat.FORMAT_QUOTE in activeFormats, reportsSelected = nativeEngine) { actions?.toggleQuote() }
-      FormatToggle(Icons.Rounded.Code, R.string.toolbar_code, if (fs != null) kind == ParagraphKind.Mono else AztecTextFormat.FORMAT_PREFORMAT in activeFormats, reportsSelected = nativeEngine) { actions?.toggleCode() }
-      FormatToggle(Icons.Rounded.Remove, R.string.toolbar_divider, active = false, reportsSelected = nativeEngine) { actions?.insertHorizontalRule() }
-      if (fs == null) {
+        GroupSeparator()
+        blocks()
+      } else {
+        marks()
+        GroupSeparator()
+        headings()
+        GroupSeparator()
+        bullet(); ordered(); checklist()
+        GroupSeparator()
+        blocks()
         FormatToggle(Icons.Rounded.TableChart, R.string.toolbar_table, active = false, reportsSelected = nativeEngine) { actions?.insertTable() }
 
         GroupSeparator()

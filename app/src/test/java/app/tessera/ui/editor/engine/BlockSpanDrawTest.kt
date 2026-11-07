@@ -7,7 +7,11 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import app.tessera.core.text.notedoc.NoteMarkdown
+import app.tessera.core.text.notedoc.ParagraphKind
+import app.tessera.ui.editor.engine.spans.HeadingSpan
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -121,7 +125,8 @@ class BlockSpanDrawTest {
     @Test
     fun marksInsideAHeadingKeepTheirLookWhateverTheOrderOfTheSpans() {
         fun pixels(md: String) = draw(md).let { d -> IntArray(d.bitmap.width * d.bitmap.height).also { d.bitmap.getPixels(it, 0, d.bitmap.width, 0, 0, d.bitmap.width, d.bitmap.height) } }
-        for ((marked, plain) in listOf("# **Ab** cd" to "# Ab cd", "# *Ab* cd" to "# Ab cd", "# a `c` d" to "# a c d")) {
+        // (no bold here: Title / Heading are bold themselves, as in Aztec, a bold mark changes nothing in them)
+        for ((marked, plain) in listOf("# *Ab* cd" to "# Ab cd", "# a `c` d" to "# a c d")) {
             assertTrue("$marked looks like $plain", !pixels(marked).contentEquals(pixels(plain)))
         }
         // the other order: the block span set first, the marks after it
@@ -251,5 +256,20 @@ class BlockSpanDrawTest {
             val body = draw(wrapped, spacingExtra = LINE_EXTRA).layout
             for (line in first + 1 until last) assertEquals("inner line $line", body.getLineBottom(1) - body.getLineTop(1), l.getLineBottom(line) - l.getLineTop(line))
         }
+    }
+
+    /** Aztec sets bold on its heading spans (the one regular Playfair face is faked bold); the native Title and Heading do the same, Subheading keeps Inter W600. */
+    @Test
+    fun titleAndHeadingPaintBoldSubheadingDoesNot() {
+        for (kind in listOf(ParagraphKind.Title, ParagraphKind.Heading)) {
+            val span = HeadingSpan(kind, style)
+            val measure = TextPaint().also { span.updateMeasureState(it) }
+            val draw = TextPaint().also { span.updateDrawState(it) }
+            assertTrue("$kind measures bold", measure.typeface.isBold)
+            assertTrue("$kind draws bold", draw.typeface.isBold)
+            assertSame("$kind: one cached typeface", measure.typeface, draw.typeface)
+        }
+        val sub = TextPaint().also { HeadingSpan(ParagraphKind.Subheading, style).updateDrawState(it) }
+        assertFalse(sub.typeface?.isBold ?: false)
     }
 }
