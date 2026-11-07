@@ -75,13 +75,14 @@ class NoteBodyActionsTest {
         assertEquals("~~abc~~", h.md())
     }
 
-    @Test fun insertHorizontalRule_adds_a_divider_after_the_caret_paragraph() {
+    @Test fun insertHorizontalRule_splits_the_caret_paragraph_around_a_divider() {
         val h = HostFixture("abc")
         h.caret(1)
         NoteBodyActions(h.view).insertHorizontalRule()
         val blocks = NoteMarkdown.parse(h.md()).blocks
-        assertEquals("abc", (blocks.first() as NoteBlock.Text).content.text)
+        assertEquals("a", (blocks.first() as NoteBlock.Text).content.text)
         assertTrue("a divider follows: $blocks", blocks[1] == NoteBlock.Divider)
+        assertEquals("bc", (blocks[2] as NoteBlock.Text).content.text)
     }
 
     @Test fun indent_and_outdent_move_list_items() {

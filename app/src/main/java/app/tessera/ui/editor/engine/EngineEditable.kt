@@ -15,15 +15,34 @@ import android.text.style.ReplacementSpan
  *   range, and every other watcher, are told as usual. If a platform version asks its watchers another way, this does nothing.
  * - **[version]** counts the changes of the document (text and engine spans, not the selection or the IME's spans), so what is derived from
  *   the whole document (its Markdown) is computed again only after a change.
+ * - **[quietly]** — the one change that is not a change of the document: a span set again as it is, so the layout measures it anew (an
+ *   image that has arrived, spec §3.2).
  */
 internal class EngineEditable(source: CharSequence) : SpannableStringBuilder(source) {
     var version = 0
         private set
 
+    private var quiet = 0
+
+    /**
+     * Runs [block] without a new [version]: for [setSpan] of a span that is set again on its own range with its own flags, which tells the layout
+     * to measure it anew and is no change of the document. Anything else inside (a text change, another range, a new span, a removal) breaks the
+     * promise that nothing was changed: it throws when [strict] (the host turns it off in a release build, where the version just grows).
+     */
+    fun quietly(block: () -> Unit) {
+        quiet++
+        try { block() } finally { quiet-- }
+    }
+
+    private fun breach(what: String) {
+        if (strict) throw IllegalStateException("quietly: $what")
+    }
+
     /** End of the edited range in the new text while a `replace` delivers its notifications, else -1. */
     private var editEnd = -1
 
     override fun replace(start: Int, end: Int, tb: CharSequence, tbstart: Int, tbend: Int): SpannableStringBuilder {
+        if (quiet > 0) breach("text changed")
         version++
         val outer = editEnd
         editEnd = start + (tbend - tbstart)
@@ -38,13 +57,16 @@ internal class EngineEditable(source: CharSequence) : SpannableStringBuilder(sou
     // An explicit change of a span (the normalizer, a command, the auto-replace, all inside the afterTextChanged of a replace) is always told to
     // the layout: only the shifts that `replace` itself sends are quiet.
     override fun setSpan(what: Any?, start: Int, end: Int, flags: Int) {
-        if (what != null && DocBinder.isEngineSpan(what)) version++
+        if (quiet > 0) {
+            if (what == null || getSpanStart(what) != start || getSpanEnd(what) != end || getSpanFlags(what) != flags) breach("a span that is not set again as it is")
+        } else if (what != null && DocBinder.isEngineSpan(what)) version++
         val outer = editEnd
         editEnd = -1
         try { super.setSpan(what, start, end, flags) } finally { editEnd = outer }
     }
 
     override fun removeSpan(what: Any?) {
+        if (quiet > 0) breach("a span removed")
         if (what != null && DocBinder.isEngineSpan(what)) version++
         val outer = editEnd
         editEnd = -1
@@ -69,7 +91,10 @@ internal class EngineEditable(source: CharSequence) : SpannableStringBuilder(sou
         return out
     }
 
-    private companion object {
-        const val LAYOUT_WATCHER = "android.text.DynamicLayout\$ChangeWatcher"
+    companion object {
+        /** See [quietly]. */
+        @Volatile var strict = true
+
+        private const val LAYOUT_WATCHER = "android.text.DynamicLayout\$ChangeWatcher"
     }
 }

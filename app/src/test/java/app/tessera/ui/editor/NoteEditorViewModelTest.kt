@@ -36,7 +36,13 @@ import app.tessera.domain.usecase.RemoveMemberUseCase
 import app.tessera.domain.usecase.ShareNoteUseCase
 import app.tessera.domain.usecase.UnshareNoteUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
+import app.tessera.data.images.ImageDownloader
+import app.tessera.data.images.NoteImageDecoder
+import app.tessera.data.local.dao.NoteImageDao
+import app.tessera.data.local.entity.ImageStatus
+import app.tessera.data.local.entity.NoteImageEntity
 import app.tessera.ui.editor.components.NoteImageLoaderFactory
+import app.tessera.ui.editor.components.NoteObjectImageSourceFactory
 import app.tessera.ui.editor.components.TesseraImageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -111,6 +117,48 @@ class NoteEditorViewModelTest {
         assertEquals(true, vm.state.value.useNativeEditor)
         assertEquals("x", vm.state.value.content)
         job.cancel()
+    }
+
+    private fun waitFor(what: String, cond: () -> Boolean, pump: () -> Unit = {}) {
+        val end = System.currentTimeMillis() + 5_000
+        while (!cond()) {
+            check(System.currentTimeMillis() < end) { "timed out: $what" }
+            pump()
+            Thread.sleep(10)
+        }
+    }
+
+    @Test
+    fun `native open reads the bounds of the note images before the content is shown`() = runTest(dispatcher.scheduler) {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val dao = RecordingImageDao(gate)
+        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
+        val note = sampleNote("n", content = "a\n\n![](tessera-img://abc?w=50)\n\n![](tessera-img://def)")
+        val vm = FakeEditorRepository(notes = listOf(note)).createViewModel("n", prefs = prefs, imageDao = dao)
+        runCurrent()
+        waitFor("the prefetch reached the table", { dao.byIdCalls.isNotEmpty() })
+        assertEquals(listOf("abc"), dao.byIdCalls.toList(), "the first image is being looked up")
+        assertTrue(vm.state.value.isLoading, "no content while the bounds are read")
+        assertEquals("", vm.state.value.content)
+
+        gate.complete(Unit)
+        waitFor("the note is shown", { !vm.state.value.isLoading }, pump = { runCurrent() })
+        assertEquals(listOf("abc", "def"), dao.byIdCalls.toList())
+        assertEquals(note.content, vm.state.value.content)
+    }
+
+    @Test
+    fun `the old engine and a note without images read no bounds`() = runTest(dispatcher.scheduler) {
+        val dao = RecordingImageDao()
+        val withImage = sampleNote("n", content = "![](tessera-img://abc)")
+        val aztec = FakeEditorRepository(notes = listOf(withImage)).createViewModel("n", imageDao = dao)
+        runCurrent()
+        assertFalse(aztec.state.value.isLoading)
+        val native = FakeUserPreferences().apply { useNativeEditor.value = true }
+        val plain = FakeEditorRepository(notes = listOf(sampleNote("p", content = "text"))).createViewModel("p", prefs = native, imageDao = dao)
+        runCurrent()
+        assertFalse(plain.state.value.isLoading)
+        assertEquals(emptyList<String>(), dao.byIdCalls.toList())
     }
 
     @Test
@@ -797,6 +845,7 @@ internal class FakeEditorRepository(
         currentUser: String? = null,
         prefs: FakeUserPreferences = FakeUserPreferences(),
         preferences: UserPreferences = prefs,
+        imageDao: NoteImageDao = RecordingImageDao(),
     ): NoteEditorViewModel {
         val savedState = SavedStateHandle(mapOf("noteId" to noteId))
         val auth = FakeAuthRepository(currentUser?.let(::UserId))
@@ -827,6 +876,9 @@ internal class FakeEditorRepository(
             unshareNoteUseCase = UnshareNoteUseCase(this),
             insertImageUseCase = InsertImageUseCase(imagesRepo),
             imageLoaderFactory = loaderFactory,
+            objectImageSourceFactory = NoteObjectImageSourceFactory(
+                NoteImageDecoder(imageDao, java.io.File("build/tmp/vm-test-files"), java.io.File("build/tmp/vm-test-cache"), ImageDownloader { null }),
+            ),
             driveAuthManager = object : app.tessera.data.drive.DriveAuthManager {
                 override val consentRequests: kotlinx.coroutines.flow.SharedFlow<android.app.PendingIntent> =
                     kotlinx.coroutines.flow.MutableSharedFlow()
@@ -839,6 +891,20 @@ internal class FakeEditorRepository(
             savedStateHandle = savedState,
         )
     }
+}
+
+/** The Room table of images: records which ids were looked up, and can hold a lookup until [gate] opens. */
+internal class RecordingImageDao(private val gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null) : NoteImageDao {
+    val byIdCalls = java.util.concurrent.CopyOnWriteArrayList<String>()
+    override suspend fun byId(imageId: String): NoteImageEntity? { byIdCalls += imageId; gate?.await(); return null }
+    override suspend fun upsert(image: NoteImageEntity) = Unit
+    override suspend fun byNote(noteId: String): List<NoteImageEntity> = emptyList()
+    override suspend fun byOwnerAndStatus(uid: String, status: ImageStatus): List<NoteImageEntity> = emptyList()
+    override suspend fun byOwner(uid: String): List<NoteImageEntity> = emptyList()
+    override suspend fun all(): List<NoteImageEntity> = emptyList()
+    override suspend fun backfillOwner(uid: String) = Unit
+    override suspend fun transition(uid: String, from: ImageStatus, to: ImageStatus) = Unit
+    override suspend fun delete(imageId: String) = Unit
 }
 
 private class FakeSyncRepository(

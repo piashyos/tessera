@@ -284,6 +284,34 @@ class TesseraEditTextTest {
         assertFalse(provider.createAccessibilityNodeInfo(id)!!.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
     }
 
+    @Test
+    fun anImageIsAVirtualNodeThatAClickSelects() {
+        val h = HostFixture("a\n![](tessera-img://x)\nb\n---")
+        val helper = ViewCompat.getAccessibilityDelegate(h.view) as ExploreByTouchHelper
+        val provider = helper.getAccessibilityNodeProvider(h.view)!!
+        assertEquals("one node: the image (a divider is no image)", 1, provider.createAccessibilityNodeInfo(ExploreByTouchHelper.HOST_ID)!!.childCount)
+        val zone = h.view.imageZones().single()
+        assertEquals(h.at("\uFFFC"), zone.ps)
+        assertTrue("the node covers the object", zone.rect.width() > 0 && zone.rect.height() > 0)
+        val node = provider.createAccessibilityNodeInfo(zone.ps)!!
+        assertEquals(h.view.context.getString(app.tessera.R.string.editor_object_image_a11y), node.contentDescription.toString())
+        assertTrue(provider.performAction(zone.ps, AccessibilityNodeInfoCompat.ACTION_CLICK, null))
+        assertEquals(zone.ps to zone.ps + 1, h.view.selectionStart to h.view.selectionEnd)
+        assertEquals("selecting is no edit", "a\n![](tessera-img://x)\nb\n---", h.md())
+    }
+
+    @Test
+    fun anImageNodeIsStateOnlyInAReadOnlyNote() {
+        val h = HostFixture("![](tessera-img://x)")
+        h.view.editable = false
+        val helper = ViewCompat.getAccessibilityDelegate(h.view) as ExploreByTouchHelper
+        val provider = helper.getAccessibilityNodeProvider(h.view)!!
+        val id = h.view.imageZones().single().ps
+        assertFalse(provider.performAction(id, AccessibilityNodeInfoCompat.ACTION_CLICK, null))
+        assertFalse(provider.createAccessibilityNodeInfo(id)!!.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+        assertEquals("the image is still announced", true, provider.createAccessibilityNodeInfo(id)!!.contentDescription != null)
+    }
+
     // ------------------------------------------------------------ objects
 
     @Test
@@ -333,5 +361,44 @@ class TesseraEditTextTest {
         h.caret(h.text.length)
         h.view.onTextContextMenuItem(android.R.id.paste)
         assertEquals("the ordinary paste gets the fragment", "**ab**cdab**ab**", h.md())
+    }
+
+    // ------------------------------------------------------------ typing over a selected object (phase 2 §2)
+
+    @Test
+    fun typingOverASelectedObjectGivesABodyParagraphWithTheText() {
+        for ((md, expected) in listOf(
+            "a\n---\nb" to "a\nx\nb",
+            "- a\n---\n- b" to "- a\nx\n- b",
+            "# a\n---" to "# a\nx",
+            "---" to "x",
+        )) {
+            val h = HostFixture(md)
+            val o = h.at("\uFFFC")
+            h.select(o, o + 1)
+            h.ic().commitText("x", 1)
+            assertEquals("typed over the object of $md", expected, h.md())
+            assertEquals("no object left", 0, h.text.getSpans(0, h.text.length, ObjectSpan::class.java).size)
+        }
+    }
+
+    @Test
+    fun pastingPlainTextOverASelectedObjectGivesABodyParagraph() {
+        val h = HostFixture("# a\n---\nb")
+        ClipboardBridge.forget()
+        h.view.context.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText(null, "xy"))
+        val o = h.at("\uFFFC")
+        h.select(o, o + 1)
+        h.view.onTextContextMenuItem(android.R.id.paste)
+        assertEquals("# a\nxy\nb", h.md())
+    }
+
+    @Test
+    fun cuttingASelectedObjectDeletesItsParagraph() {
+        val h = HostFixture("a\n---\nb")
+        val o = h.at("\uFFFC")
+        h.select(o, o + 1)
+        h.view.onTextContextMenuItem(android.R.id.cut)
+        assertEquals("a\nb", h.md())
     }
 }

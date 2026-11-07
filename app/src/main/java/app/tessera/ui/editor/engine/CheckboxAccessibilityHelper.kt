@@ -1,23 +1,34 @@
 package app.tessera.ui.editor.engine
 
 import android.widget.CheckBox
+import android.widget.ImageView
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.customview.widget.ExploreByTouchHelper
+import app.tessera.R
 
 /**
  * Spec §6.10: every visible check box of the text is a virtual node of the editor — "checkbox, checked / not checked", a double tap
- * toggles it (not in read-only). The text itself is read as by a plain `EditText`: the host node is the view's own. The id of a node
- * is the start offset of its paragraph.
+ * toggles it (not in read-only). Phase 2 §2: so is every image — "Image", a double tap selects it (not in read-only). The text itself is
+ * read as by a plain `EditText`: the host node is the view's own. The id of a node is the start offset of its paragraph.
  */
 internal class CheckboxAccessibilityHelper(private val host: TesseraEditText) : ExploreByTouchHelper(host) {
 
-    override fun getVirtualViewAt(x: Float, y: Float): Int = host.checkboxZoneAt(x, y)?.ps ?: INVALID_ID
+    override fun getVirtualViewAt(x: Float, y: Float): Int =
+        host.checkboxZoneAt(x, y)?.ps ?: host.imageZones().firstOrNull { it.rect.contains(x.toInt(), y.toInt()) }?.ps ?: INVALID_ID
 
     override fun getVisibleVirtualViews(virtualViewIds: MutableList<Int>) {
         host.checkboxZones().forEach { virtualViewIds += it.ps }
+        host.imageZones().forEach { virtualViewIds += it.ps }
     }
 
     override fun onPopulateNodeForVirtualView(virtualViewId: Int, node: AccessibilityNodeInfoCompat) {
+        host.imageZones().firstOrNull { it.ps == virtualViewId }?.let { image ->
+            node.className = ImageView::class.java.name
+            node.contentDescription = host.context.getString(R.string.editor_object_image_a11y)
+            node.setBoundsInParent(image.rect)
+            if (host.editable) node.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_CLICK)
+            return
+        }
         val zone = host.checkboxZones().firstOrNull { it.ps == virtualViewId }
         if (zone == null) { // the node went with a scroll or an edit; the framework wants a valid one anyway
             node.contentDescription = " "
@@ -34,6 +45,10 @@ internal class CheckboxAccessibilityHelper(private val host: TesseraEditText) : 
 
     override fun onPerformActionForVirtualView(virtualViewId: Int, action: Int, arguments: android.os.Bundle?): Boolean {
         if (action != AccessibilityNodeInfoCompat.ACTION_CLICK || !host.editable) return false
+        if (host.imageZones().any { it.ps == virtualViewId }) { // a double tap on an image selects it, as a tap does (no keyboard)
+            host.setSelection(virtualViewId, virtualViewId + 1)
+            return true
+        }
         val done = host.toggleCheckAt(virtualViewId)
         if (done) invalidateVirtualView(virtualViewId)
         return done

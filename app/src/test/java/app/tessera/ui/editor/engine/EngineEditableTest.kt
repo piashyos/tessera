@@ -72,5 +72,40 @@ class EngineEditableTest {
         assertTrue("the layout measures the span that was set again (${probe.measured})", probe.measured > 0)
     }
 
+    @Test
+    fun quietlyMeasuresASpanSetAgainWithoutANewVersion() {
+        val ours = EngineEditable("a\n\uFFFC\nd")
+        val obj = app.tessera.ui.editor.engine.spans.ObjectSpan(app.tessera.core.text.notedoc.NoteBlock.Divider, EngineTestStyle.create())
+        ours.setSpan(obj, 2, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val probe = Probe().also { ours.setSpan(it, 2, 4, Spanned.SPAN_PARAGRAPH) }
+        DynamicLayout.Builder.obtain(ours, TextPaint(), 400).build()
+        probe.measured = 0
+        val v = ours.version
+        ours.quietly { ours.setSpan(probe, 2, 4, Spanned.SPAN_PARAGRAPH); ours.setSpan(obj, 2, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+        assertEquals("no change of the document", v, ours.version)
+        assertTrue("the layout measures the span that was set again (${probe.measured})", probe.measured > 0)
+        ours.setSpan(obj, 2, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        assertEquals("outside quietly it is a change", v + 1, ours.version)
+    }
+
+    @Test
+    fun quietlyRefusesAnythingButTheSameSpanOnTheSameRange() {
+        val ours = EngineEditable("a\n\uFFFC\nd")
+        val style = EngineTestStyle.create()
+        val obj = app.tessera.ui.editor.engine.spans.ObjectSpan(app.tessera.core.text.notedoc.NoteBlock.Divider, style)
+        ours.setSpan(obj, 2, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        fun refused(what: () -> Unit) = try { ours.quietly(what); false } catch (_: IllegalStateException) { true }
+        assertTrue("another range", refused { ours.setSpan(obj, 0, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) })
+        assertTrue("other flags", refused { ours.setSpan(obj, 2, 3, Spanned.SPAN_INCLUSIVE_INCLUSIVE) })
+        assertTrue("another instance", refused { ours.setSpan(app.tessera.ui.editor.engine.spans.ObjectSpan(app.tessera.core.text.notedoc.NoteBlock.Divider, style), 2, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) })
+        assertTrue("a text change", refused { ours.insert(0, "x") })
+        assertTrue("a removal", refused { ours.removeSpan(obj) })
+        assertEquals("the scope is left after a refusal: the next change counts again", true, ours.version.let { v -> ours.insert(0, "y"); ours.version > v })
+        EngineEditable.strict = false
+        try {
+            ours.quietly { ours.insert(0, "z") } // a release build: no crash
+        } finally { EngineEditable.strict = true }
+    }
+
     private fun Editable.addTextChangedListener(w: TextWatcher) = setSpan(w, 0, length, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
 }

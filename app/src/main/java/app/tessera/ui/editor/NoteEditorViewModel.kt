@@ -28,7 +28,10 @@ import app.tessera.domain.usecase.RemoveMemberUseCase
 import app.tessera.domain.usecase.ShareNoteUseCase
 import app.tessera.domain.usecase.UnshareNoteUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
+import app.tessera.core.text.notedoc.NoteBlock
+import app.tessera.core.text.notedoc.NoteMarkdown
 import app.tessera.ui.editor.components.NoteImageLoaderFactory
+import app.tessera.ui.editor.components.NoteObjectImageSourceFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +73,7 @@ class NoteEditorViewModel @Inject constructor(
     private val unshareNoteUseCase: UnshareNoteUseCase,
     private val insertImageUseCase: InsertImageUseCase,
     private val imageLoaderFactory: NoteImageLoaderFactory,
+    private val objectImageSourceFactory: NoteObjectImageSourceFactory,
     private val driveAuthManager: app.tessera.data.drive.DriveAuthManager,
     private val authRepository: AuthRepository,
     private val folderRepository: FolderRepository,
@@ -87,6 +91,9 @@ class NoteEditorViewModel @Inject constructor(
      * decode/download work is cancelled with the ViewModel. The screen hands it to the editor.
      */
     val imageGetter: Html.ImageGetter by lazy { imageLoaderFactory.create(viewModelScope) }
+
+    /** Pictures of the native editor, bound to [viewModelScope] so loads end with the ViewModel. The screen hands it to the editor. */
+    val imageSource by lazy { objectImageSourceFactory.create(viewModelScope) }
 
     /**
      * Consent prompts from the Drive auth flow. A recipient's first image download (or an owner's
@@ -138,6 +145,7 @@ class NoteEditorViewModel @Inject constructor(
             val note = getNoteUseCase(noteId)
             if (note != null) {
                 baselineNote = note
+                if (native) prefetchImageSizes(note.content) // before `content` reaches the state: the placeholders get their exact size, nothing jumps (spec §3.1)
                 val me = authRepository.currentUser.value
                 _state.update { current ->
                     current.copy(
@@ -199,6 +207,20 @@ class NoteEditorViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    /** Reads the bounds of the note's local images off the main thread. A failure only means the placeholders are 160dp: the note opens anyway. */
+    private suspend fun prefetchImageSizes(content: String) {
+        if (!content.contains("tessera-img://")) return
+        try {
+            withContext(Dispatchers.IO) {
+                val srcs = NoteMarkdown.parse(content).blocks.filterIsInstance<NoteBlock.Image>().map { it.src }
+                if (srcs.isNotEmpty()) imageSource.prefetchSizes(srcs)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
         }
     }
 

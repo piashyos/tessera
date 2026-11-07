@@ -2,6 +2,7 @@ package app.tessera.ui.editor.engine
 
 import app.tessera.core.text.notedoc.ListType
 import app.tessera.core.text.notedoc.Mark
+import app.tessera.core.text.notedoc.NoteBlock
 import app.tessera.core.text.notedoc.ParagraphKind
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -49,6 +50,8 @@ class EditRulesTest(
         action == "indent" -> rules.changeLevel(f.e, f.selStart, f.selEnd, +1)
         action == "outdent" -> rules.changeLevel(f.e, f.selStart, f.selEnd, -1)
         action == "hr" -> rules.insertHorizontalRule(f.e, f.selStart)
+        action == "image" -> rules.insertObject(f.e, f.selStart, f.selEnd, NoteBlock.Image(IMG))
+        action == "forwarddelete" -> rules.forwardDelete(f.e, f.selStart, f.selEnd) ?: Sel(f.selStart, f.selEnd)
         action.startsWith("kind:") -> rules.toggleKind(f.e, f.selStart, f.selEnd, kindOf(action.removePrefix("kind:")))
         action.startsWith("mark:") -> rules.toggleMark(f.e, f.selStart, f.selEnd, markOf(action.removePrefix("mark:")))
         else -> error(action)
@@ -77,6 +80,9 @@ class EditRulesTest(
     }
 
     companion object {
+        private const val IMG = "tessera-img://x"
+        private const val MD = "![](tessera-img://x)"
+
         private fun row(name: String, input: String, action: String, expected: String, inSel: String = "", outSel: String = "") =
             arrayOf<Any>(name, input, action, expected, inSel, outSel)
 
@@ -239,12 +245,43 @@ class EditRulesTest(
             row("6.6 Mark | no selection: nothing here (typing attributes)", "ab‸", "mark:bold", "ab‸"),
             // ---- a divider after the paragraph with the caret (§7) ----
             row("7 Divider | after the paragraph, caret in the Body after it", "a‸\nb", "hr", "a\n---\n‸b"),
-            row("7 Divider | in the middle of the paragraph", "a‸b\nc", "hr", "ab\n---\n‸c"),
+            row("7 Divider | in the middle of the paragraph: it is split", "a‸b\nc", "hr", "a\n---\n‸b\nc"),
             row("7 Divider | after the last paragraph: an empty Body follows", "a‸", "hr", "a\n---\n‸"),
             row("7 Divider | after a list item: the numbers below restart", "1. a‸\n2. b", "hr", "1. a\n---\n1. ‸b"),
             row("7 Divider | after the empty last item: the sentinel goes, the item stays", "- a\n- ‸", "hr", "- a\n- \n---\n‸"),
             row("7 Divider | after an object", "a\n---", "hr", "a\n---\n---\n", "3", "6"),
             row("7 Divider | after a title", "# a‸\nb", "hr", "# a\n---\n‸b"),
+            // ---- an object as a paragraph of its own (phase 2 §2) ----
+            row("P2 insertObject | end of a paragraph", "a‸\nb", "image", "a\n$MD\n‸b"),
+            row("P2 insertObject | middle of a paragraph: split", "a‸b\nc", "image", "a\n$MD\n‸b\nc"),
+            row("P2 insertObject | start of a text: before it", "‸ab", "image", "$MD\n‸ab"),
+            row("P2 insertObject | start of a title: before it, the kind stays", "# ‸ab\nc", "image", "$MD\n# ‸ab\nc"),
+            row("P2 insertObject | end of the last paragraph: an empty Body follows", "a‸", "image", "a\n$MD\n‸"),
+            row("P2 insertObject | empty document", "‸", "image", "$MD\n‸"),
+            row("P2 insertObject | empty Body between paragraphs: no empty line above", "a\n‸\nb", "image", "a\n$MD\n‸\nb"),
+            row("P2 insertObject | empty first paragraph", "‸\na", "image", "$MD\n‸\na"),
+            row("P2 insertObject | middle of a list item: both halves keep the item", "- ab‸cd", "image", "- ab\n$MD\n- ‸cd"),
+            row("P2 insertObject | middle of a checked item: the second half is unchecked", "- [x] ab‸cd", "image", "- [x] ab\n$MD\n- [ ] ‸cd"),
+            row("P2 insertObject | end of a list item: the numbers below restart", "1. a‸\n2. b", "image", "1. a\n$MD\n1. ‸b"),
+            row("P2 insertObject | start of a list item", "- ‸ab", "image", "$MD\n- ‸ab"),
+            row("P2 insertObject | after the empty last item: the sentinel goes, the item stays", "- a\n- ‸", "image", "- a\n- \n$MD\n‸"),
+            row("P2 insertObject | middle of a marked word: the marks are cut at the object", "**a‸b**", "image", "**a**\n$MD\n**‸b**"),
+            row("P2 insertObject | selection inside a paragraph is deleted first", "a«bc»d", "image", "a\n$MD\n‸d"),
+            row("P2 insertObject | selection across paragraphs", "# a«b\n- c»d", "image", "# a\n$MD\n# ‸d"),
+            row("P2 insertObject | selected object is replaced", "a\n---\nb", "image", "a\n$MD\n‸b", "2-3", "4"),
+            row("P2 insertObject | after an object (caret at its end)", "a\n---", "image", "a\n---\n$MD\n", "3", "6"),
+            row("P2 insertObject | before an object (caret at its start)", "---", "image", "$MD\n---", "0", "2"),
+            row("P2 insertObject | between two objects", "---\n---", "image", "---\n$MD\n---", "1", "4"),
+            row("P2 insertObject | after the last object, document ends there", "a\n$MD", "image", "a\n$MD\n$MD\n", "3", "6"),
+            // ---- the delete forms over a selected object ----
+            row("P2 Backspace | selected object: its paragraph goes", "a\n---\nb", "backspace", "a\nb", "2-3", "2"),
+            row("P2 Backspace | selected last object: the line break before it goes too", "a\n---", "backspace", "a", "2-3", "1"),
+            row("P2 Backspace | selected only object", "---", "backspace", "", "0-1", "0"),
+            row("P2 Cut | the cut of a selected object is the same deletion", "a\n$MD\nb", "backspace", "a\nb", "2-3", "2"),
+            row("P2 Delete | selected object: its paragraph goes", "a\n---\nb", "forwarddelete", "a\nb", "2-3", "2"),
+            row("P2 Delete | selected last object", "a\n---", "forwarddelete", "a", "2-3", "1"),
+            row("P2 Delete | selected object under a list: the next paragraph keeps its kind", "---\n- b", "forwarddelete", "- b", "0-1", "0"),
+            row("P2 Delete | a caret is not handled here: nothing", "a‸\n---", "forwarddelete", "a‸\n---"),
         )
     }
 }

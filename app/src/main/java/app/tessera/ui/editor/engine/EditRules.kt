@@ -360,18 +360,81 @@ class EditRules(style: EditorStyle) {
         return Sel(afterSentinel(e, minOf(end, e.length)))
     }
 
-    // ------------------------------------------------------------- Divider
+    // ------------------------------------------------------------- Objects
 
-    /** A divider after the paragraph with the caret (spec §7); the caret goes to the paragraph after it (an empty Body at the end). */
-    fun insertHorizontalRule(e: Editable, caret: Int): Sel {
-        val ps = paragraphStart(e, caret)
+    /**
+     * An object as a paragraph of its own (phase 2 spec §2). A selection is deleted first, as typing would. Then, by the place of the caret in its
+     * paragraph: in the middle the paragraph is split and the object goes between the halves; at the end (and in an empty non-Body paragraph, an
+     * object and a list item that waits) after it; at the start of a text, and in an empty Body paragraph, before it — the line the caret
+     * stood in is the one after the object, with no empty line left above. The caret goes to the start of the paragraph after the object
+     * (an empty Body at the end of the document).
+     */
+    fun insertObject(e: Editable, selStart: Int, selEnd: Int, block: NoteBlock): Sel {
+        val c = if (selEnd > selStart) deleteSelection(e, selStart, selEnd) else selStart
+        val ps = paragraphStart(e, c)
         val pe = paragraphEnd(e, ps)
+        val cs = contentStart(e, ps)
+        val obj = ObjectSpan(block, style).also { it.widthPx = objectWidthPx }
+        val kind = kindOf(e, ps)
+        val before = when {
+            isObjectParagraph(e, ps) -> c <= ps
+            cs == pe -> kind == ParagraphKind.Body
+            else -> c <= cs
+        }
+        when {
+            before -> insertObjectBefore(e, ps, obj)
+            cs < pe && c < pe -> { // the middle: the tail is a paragraph of its own, the object goes before it
+                val tail = split(e, c, kind, unchecked(kind))
+                insertObjectBefore(e, tail, obj)
+            }
+            else -> insertObjectAfter(e, pe, obj)
+        }
+        return Sel(e.getSpanStart(obj) + 2) // the paragraph after the object always exists
+    }
+
+    /** A divider (spec §7): [insertObject] of [NoteBlock.Divider]. */
+    fun insertHorizontalRule(e: Editable, caret: Int): Sel = insertObject(e, caret, caret, NoteBlock.Divider)
+
+    private fun insertObjectAfter(e: Editable, pe: Int, obj: ObjectSpan) {
         val tail = if (pe >= e.length) "\n$OBJECT_CHAR\n" else "\n$OBJECT_CHAR"
         e.insert(pe, tail)
-        e.setSpan(ObjectSpan(NoteBlock.Divider, style).also { it.widthPx = objectWidthPx }, pe + 1, pe + 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        e.setSpan(obj, pe + 1, pe + 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         finish(e, pe, pe + tail.length)
-        return Sel(paragraphEnd(e, paragraphEnd(e, ps) + 1) + 1) // the paragraph after the divider (a sentinel before it may have gone)
     }
+
+    private fun insertObjectBefore(e: Editable, ps: Int, obj: ObjectSpan) {
+        if (ps > 0) return insertObjectAfter(e, ps - 1, obj) // the end of the paragraph before
+        val kind = kindOf(e, 0)
+        applyKind(e, 0, ParagraphKind.Body) // the span of the first paragraph must not grow over the object
+        e.insert(0, "$OBJECT_CHAR\n")
+        e.setSpan(obj, 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        applyKind(e, 2, kind)
+        finish(e, 0, 2)
+    }
+
+    /**
+     * The object of the paragraph at [ps] becomes [block] (a resized or rotated image, an edited table): a new span on the same character, so
+     * the layout measures it anew. The object stays selected. `null` when [ps] is not an object paragraph.
+     */
+    fun replaceObject(e: Editable, ps: Int, block: NoteBlock): Sel? {
+        val old = e.getSpans(ps, ps + 1, ObjectSpan::class.java).firstOrNull { e.getSpanStart(it) == ps } ?: return null
+        if (!isObjectParagraph(e, ps)) return null
+        val fresh = ObjectSpan(block, style).also { it.widthPx = maxOf(old.widthPx, objectWidthPx) }
+        e.removeSpan(old)
+        e.setSpan(fresh, ps, ps + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return Sel(ps, ps + 1)
+    }
+
+    /**
+     * Delete (the forward key) over a selected object: its paragraph goes whole, as with Backspace. Anything else is not handled here (`null`):
+     * the platform deletes the character, and the normalizer repairs what that leaves.
+     */
+    fun forwardDelete(e: Editable, selStart: Int, selEnd: Int): Sel? =
+        if (selEnd - selStart == 1 && isObjectParagraph(e, selStart)) Sel(deleteObjectParagraph(e, selStart)) else null
+
+    /** Deletes a selection as typing would; a selection of one whole object takes its paragraph with it. Returns the caret. */
+    private fun deleteSelection(e: Editable, s: Int, t: Int): Int =
+        if (t - s == 1 && isObjectParagraph(e, s)) deleteObjectParagraph(e, s) else deleteRange(e, s, t)
 
     // --------------------------------------------------------------- shared
 
