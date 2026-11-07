@@ -218,6 +218,17 @@ class NativeEditorImeTest {
             assertEquals("$way, the second Backspace deletes the object paragraph with its line break", "body", e.md())
             assertEquals("$way, the caret stays at the start of its paragraph", 0, e.ui { e.view.selectionStart })
         }
+
+        // §6.4 rule 2: a caret put right after the object by a tap or an arrow is not a selected object — Backspace selects it first
+        for (put in listOf("a tap", "the left arrow")) DeviceEditor("---\nbody").use { e ->
+            if (put == "a tap") e.caret(1) else { e.caret(e.at("body")); e.ime { press(KeyEvent.KEYCODE_DPAD_LEFT) } }
+            val at = e.ui { e.view.selectionStart to e.view.selectionEnd }
+            backspace(e, way)
+            assertEquals("$way, caret after the object by $put (at $at): nothing deleted", "---\nbody", e.md())
+            assertEquals("$way, caret after the object by $put (at $at): the object is selected", 0 to 1, e.ui { e.view.selectionStart to e.view.selectionEnd })
+            backspace(e, way)
+            assertEquals("$way, by $put: the second Backspace deletes it", "body", e.md())
+        }
     }
 
     @Test
