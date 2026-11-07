@@ -2,8 +2,11 @@ package app.tessera.data.images
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
+import android.os.Build
 import android.util.Size
+import androidx.annotation.RequiresApi
 import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.entity.NoteImageEntity
 import app.tessera.domain.model.ImageRef
@@ -54,6 +57,13 @@ class NoteImageDecoder(
         }
         return bitmap?.let { Result.Loaded(it) } ?: Result.Unavailable
     }
+
+    /**
+     * Partial-image rejection via [ImageDecoder] (API 28+). Test seam: Robolectric's ImageDecoder shadow
+     * can't decode (returns nothing), so JVM tests turn this off and exercise the BitmapFactory path;
+     * the ImageDecoder path itself is verified on device (NativeImageSizeTest).
+     */
+    internal var strictDecoding: Boolean = Build.VERSION.SDK_INT >= 28
 
     /** Decode seam (file, maxWidth, row, ref → baked bitmap or null); tests swap it to simulate a corrupt file. */
     internal var fileDecoder: (File, Int, NoteImageEntity?, ImageRef) -> Bitmap? = ::decodeFile
@@ -134,41 +144,72 @@ class NoteImageDecoder(
         val width = effectiveWidth(maxWidth)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
-        if (bounds.outWidth > 0 && bounds.outHeight > 0) rawSizes[ref.id] = Size(bounds.outWidth, bounds.outHeight)
-        val srcW = bounds.outWidth.takeIf { it > 0 } ?: row?.width ?: return null
-        val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(srcW, width) }
-        var bitmap = BitmapFactory.decodeFile(file.absolutePath, opts) ?: return null
+        val hasBounds = bounds.outWidth > 0 && bounds.outHeight > 0
+        if (hasBounds) rawSizes[ref.id] = Size(bounds.outWidth, bounds.outHeight)
+        // Bounds unreadable → fall back to the Room row's dimensions (sizing only; the size below is then
+        // taken from the decoded bitmap).
+        val rawW = if (hasBounds) bounds.outWidth else row?.width ?: return null
+        val rawH = if (hasBounds) bounds.outHeight else row?.height ?: return null
+        var bitmap = decodeSampled(file, sampleSize(rawW, rawH, ref, width)) ?: return null
 
         // Rotate first so w% applies to the rotated orientation.
         if (ref.rotDegrees != 0) {
             val matrix = Matrix().apply { postRotate(ref.rotDegrees.toFloat()) }
             bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
         }
-        val target = bakedSize(bitmap.width, bitmap.height, width, ref.wPercent)
-        if (target.width != bitmap.width) {
+        // Size by construction: with bounds, land exactly on finalSize (what prefetch/cachedSize promised)
+        // however the codec rounded the sampled dimensions.
+        val target = if (hasBounds) finalSize(rawW, rawH, ref, width) else bakedSize(bitmap.width, bitmap.height, width, ref.wPercent)
+        if (target.width != bitmap.width || target.height != bitmap.height) {
             bitmap = Bitmap.createScaledBitmap(bitmap, target.width, target.height, true)
         }
         bitmap.density = Bitmap.DENSITY_NONE
         return bitmap
     }
 
+    /**
+     * Decode [file] downsampled by [sample]; null when it can't be decoded. On API 28+ via
+     * [ImageDecoder] with partial results rejected: a truncated file (BitmapFactory would hand back a
+     * half-painted bitmap) counts as undecodable, so the caller falls through to Drive.
+     */
+    private fun decodeSampled(file: File, sample: Int): Bitmap? {
+        if (strictDecoding) return decodeSampledStrict(file, sample)
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        return BitmapFactory.decodeFile(file.absolutePath, opts)
+    }
+
+    @RequiresApi(28)
+    private fun decodeSampledStrict(file: File, sample: Int): Bitmap? =
+        try {
+            ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, _, _ ->
+                // Software: the bitmap is rotated and scaled afterwards, which a HARDWARE bitmap can't be.
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                decoder.setTargetSampleSize(sample)
+                decoder.setOnPartialImageListener { false }
+            }
+        } catch (_: Exception) {
+            null
+        }
+
     internal companion object {
         private const val IMAGES_DIR = "images"
         private const val DEFAULT_MAX_WIDTH = 1080
 
-        private fun sampleSize(srcW: Int, width: Int): Int {
+        /** Power-of-two downsample so the ROTATED width stays >= [width] (rot 90/270 swap raw w/h). */
+        fun sampleSize(rawW: Int, rawH: Int, ref: ImageRef, width: Int): Int {
+            val rotatedW = if (ref.rotDegrees == 90 || ref.rotDegrees == 270) rawH else rawW
             var sample = 1
-            while (srcW / (sample * 2) >= width) sample *= 2
+            while (rotatedW / (sample * 2) >= width) sample *= 2
             return sample
         }
 
         /**
-         * THE size formula: raw file bounds + [ref] + [maxWidth] → baked size. Mirrors decodeFile:
-         * sample, rotate the sampled bitmap (dimensions are ceil like the codecs), then
+         * THE size formula: raw file bounds + [ref] + [maxWidth] → baked size. decodeFile scales its
+         * bitmap to exactly this: sample, rotate (sampled dimensions rounded up), then
          * width = min(rotated width, maxWidth) × w%, height keeps the rotated aspect.
          */
         fun finalSize(rawW: Int, rawH: Int, ref: ImageRef, maxWidth: Int): Size {
-            val sample = sampleSize(rawW, maxWidth)
+            val sample = sampleSize(rawW, rawH, ref, maxWidth)
             val w = (rawW + sample - 1) / sample
             val h = (rawH + sample - 1) / sample
             val swap = ref.rotDegrees == 90 || ref.rotDegrees == 270

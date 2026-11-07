@@ -60,7 +60,7 @@ class NoteImageDecoderTest {
         filesDir = context.filesDir,
         cacheDir = context.cacheDir,
         downloader = { id -> downloads++; downloader.download(id) },
-    )
+    ).apply { strictDecoding = false } // Robolectric can't run ImageDecoder; see NoteImageDecoder.strictDecoding
 
     @Before
     fun setUp() {
@@ -208,7 +208,7 @@ class NoteImageDecoderTest {
         val failing = object : NoteImageDao by dao {
             override suspend fun byId(imageId: String): NoteImageEntity? = error("db closed")
         }
-        val d = NoteImageDecoder(failing, context.filesDir, context.cacheDir) { null }
+        val d = NoteImageDecoder(failing, context.filesDir, context.cacheDir) { null }.apply { strictDecoding = false }
         assertTrue(d.decode("tessera-img://room-bad", 800) is NoteImageDecoder.Result.Loaded)
     }
 
@@ -298,6 +298,8 @@ class NoteImageDecoderTest {
             Triple("tessera-img://ps-e?rot=180", 800, 120 to 200),
             Triple("tessera-img://ps-f", 400, 1000 to 500),
             Triple("tessera-img://ps-g?w=50&rot=90", 200, 100 to 300),
+            Triple("tessera-img://ps-h", 640, 2989 to 1601), // QA Н1: sample 4, codec rounding
+            Triple("tessera-img://ps-i?rot=90", 640, 2047 to 1153), // QA Н2: sample by the turned width
         )
         for ((src, max, dim) in cases) {
             stored(src.substringAfter("://").substringBefore('?'), dim.first, dim.second)
@@ -314,6 +316,25 @@ class NoteImageDecoderTest {
             assertEquals("$src width", bmp.width, predicted!!.width)
             assertEquals("$src height", bmp.height, predicted.height)
         }
+    }
+
+    @Test
+    fun `sample is chosen by the width after rotation`() {
+        val plain = parseImageRef("tessera-img://x")!!
+        val turned = parseImageRef("tessera-img://x?rot=90")!!
+        assertEquals(1, NoteImageDecoder.sampleSize(2047, 1153, turned, 640)) // turned width 1153 → no halving
+        assertEquals(2, NoteImageDecoder.sampleSize(2047, 1153, plain, 640))
+        assertEquals(4, NoteImageDecoder.sampleSize(2989, 1601, plain, 640))
+        assertEquals(2, NoteImageDecoder.sampleSize(2989, 1601, turned, 640)) // turned width 1601
+        assertEquals(NoteImageDecoder.sampleSize(10, 20, turned, 5), NoteImageDecoder.sampleSize(20, 10, plain, 5))
+    }
+
+    @Test
+    fun `a turned photo is as wide as the text allows`() {
+        val turned = parseImageRef("tessera-img://x?rot=90")!!
+        val size = NoteImageDecoder.finalSize(2047, 1153, turned, 640)
+        assertEquals(640, size.width) // was 577 when the sample followed the unturned width
+        assertEquals(1136, size.height)
     }
 
     @Test
