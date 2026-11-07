@@ -25,10 +25,26 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
@@ -75,8 +91,15 @@ fun TableBlockEditor(
     val focus = LocalFocusManager.current
     val widths = grid.colWidths ?: List(grid.columnCount) { TableGrid.DEFAULT_COL_WIDTH }
     // the cell after [row] / [col]: the focus moves in reading order; the last cell hands the caret on
+    // after the edit that brought the break is over (a focus that moves inside the keyboard's own edit is lost): on the next frame
+    val scope = rememberCoroutineScope()
+    val currentGrid by rememberUpdatedState(grid)
     fun enter(row: Int, col: Int) {
-        if (row == grid.rowCount && col == grid.columnCount - 1) onEnterInLastCell() else focus.moveFocus(FocusDirection.Next)
+        scope.launch {
+            withFrameNanos { }
+            val g = currentGrid
+            if (row == g.rowCount && col == g.columnCount - 1) onEnterInLastCell() else focus.moveFocus(FocusDirection.Next)
+        }
     }
 
     // The grid scrolls horizontally so adding columns grows the table sideways
@@ -239,14 +262,29 @@ private fun TableRow(
                     .heightIn(min = 40.dp)
                     .border(0.5.dp, outline),
             ) {
+                // The field keeps its own selection and composition (a `TextFieldValue`), the text is the grid's. A keyboard commits its composing word and the
+                // line break of Enter in one edit, so Enter is read from where the caret stands, not from the text being the old one plus a break.
+                var field by remember { mutableStateOf(TextFieldValue(value)) }
+                val shown = if (field.text == value) field else field.copy(text = value, selection = TextRange(value.length.coerceAtMost(field.selection.end)))
                 BasicTextField(
-                    value = value,
+                    value = shown,
                     onValueChange = { v ->
-                        if (onEnter == null || '\n' !in v) onCellChange(idx, v)
-                        // one line break typed at the caret is Enter; a paste with line breaks is flattened (a cell is one line of GFM)
-                        else if (v.length == value.length + 1 && v.replace("\n", "") == value) onEnter(idx)
-                        else onCellChange(idx, v.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' '))
+                        if (onEnter == null || '\n' !in v.text) {
+                            field = v
+                            if (v.text != value) onCellChange(idx, v.text)
+                        } else {
+                            val caret = v.selection.start
+                            val atBreak = v.selection.collapsed && caret > 0 && v.text[caret - 1] == '\n'
+                            // the break typed at the caret is Enter, any other line break is a paste: flattened (a cell is one line of GFM)
+                            val kept = if (atBreak) v.text.removeRange(caret - 1, caret) else v.text
+                            val flat = kept.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ')
+                            field = TextFieldValue(flat, TextRange((if (atBreak) caret - 1 else v.selection.end).coerceIn(0, flat.length)))
+                            if (flat != value) onCellChange(idx, flat)
+                            if (atBreak) onEnter(idx)
+                        }
                     },
+                    keyboardOptions = KeyboardOptions(imeAction = if (onEnter != null) ImeAction.Next else ImeAction.Default),
+                    keyboardActions = KeyboardActions(onNext = { onEnter?.invoke(idx) }),
                     readOnly = readOnly,
                     enabled = !readOnly,
                     textStyle = LocalTextStyle.current.merge(
@@ -259,7 +297,14 @@ private fun TableRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 8.dp)
-                        .onFocusChanged { onCellFocusChanged(it.isFocused) },
+                        .onPreviewKeyEvent { e -> // a hardware Enter never reaches the text
+                            if (onEnter != null && e.key == Key.Enter && e.type == KeyEventType.KeyDown) { onEnter(idx); true } else false
+                        }
+                        .onFocusChanged {
+                            // a cell taken by a tap that the field did not place the caret for starts with it at the end of the text (never at 0)
+                            if (it.isFocused && field.selection == TextRange.Zero && field.text.isNotEmpty()) field = field.copy(selection = TextRange(field.text.length))
+                            onCellFocusChanged(it.isFocused)
+                        },
                 )
                 // Right-edge handle: drag horizontally to resize this column.
                 if (!readOnly) ResizeHandle(

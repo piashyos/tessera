@@ -1102,6 +1102,18 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         includeFontPadding = padding
     }
 
+    /**
+     * `true` while a cell of a table (the host's overlay) has the focus: the editor shows no handle of its own (the caret of the text is parked on the
+     * table's paragraph, and its drop would show over the keyboard). A cursor that is not visible has no handles; the caret itself is drawn by the
+     * editor, never by the platform.
+     */
+    var handlesHidden: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            isCursorVisible = !value && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
+        }
+
     private fun applyViewStyle() {
         setTextColor(editorStyle.textColor)
         setTextSize(TypedValue.COMPLEX_UNIT_PX, editorStyle.bodyTextSizePx)

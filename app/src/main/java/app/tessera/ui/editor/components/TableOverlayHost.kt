@@ -12,7 +12,6 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -106,11 +105,37 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
             free -= o
         }
         for (zi in zones.indices) if (claimed[zi] == null) {
-            claimed[zi] = if (free.isNotEmpty()) free.removeAt(0) else Overlay().also { addView(it, LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT)) }
+            claimed[zi] = if (free.isNotEmpty()) free.removeAt(0) else Overlay(zones[zi].grid).also { addView(it, LayoutParams(zones[zi].rect.width().coerceAtLeast(1), ViewGroup.LayoutParams.WRAP_CONTENT)) }
         }
         for (o in free) { o.commit(); o.release(); removeView(o) }
         overlays = ArrayList(claimed.map { it!! })
         zones.forEachIndexed { i, z -> overlays[i].place(i, z) }
+        // an overlay that was just added is measured now, so its height is the span's in this pass and not only after the next frame
+        for (o in overlays) if (o.height == 0 && o.isAttachedToWindow) {
+            val w = o.layoutParams.width.coerceAtLeast(1)
+            o.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            if (o.measuredHeight > 0) o.layout(0, 0, w, o.measuredHeight)
+        }
+    }
+
+    /** An overlay is as high as its table: it is measured without a limit (the room of the host is not the table's), the note scrolls with it. */
+    override fun measureChildWithMargins(child: View, parentWidthMeasureSpec: Int, widthUsed: Int, parentHeightMeasureSpec: Int, heightUsed: Int) {
+        if (child !is Overlay) return super.measureChildWithMargins(child, parentWidthMeasureSpec, widthUsed, parentHeightMeasureSpec, heightUsed)
+        val lp = child.layoutParams as MarginLayoutParams
+        val w = getChildMeasureSpec(parentWidthMeasureSpec, paddingLeft + paddingRight + lp.leftMargin + lp.rightMargin + widthUsed, lp.width)
+        child.measure(w, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+    }
+
+    /** What a cell asks of the host while its table is on the screen (the screen's bar shows it): only the overlay that has the focus. */
+    private var focusedOverlay: Overlay? = null
+
+    private fun publish() = onTableBar?.invoke(focusedOverlay?.barState())
+
+    /** The handles of the editor's own caret are not for a cell that has the focus. */
+    private fun cellFocusChanged(o: Overlay, focused: Boolean) {
+        if (focused) focusedOverlay = o else if (focusedOverlay === o) focusedOverlay = null
+        editor.handlesHidden = focusedOverlay != null
+        publish()
     }
 
     // ------------------------------------------------------------------ touch
@@ -175,12 +200,12 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
 
     // ------------------------------------------------------------------ the overlay of one table
 
-    private inner class Overlay : FrameLayout(context) {
+    private inner class Overlay(first: TableGrid) : FrameLayout(context) {
         var index = 0
         private val compose = ComposeView(context)
         var ps = -1
-        var committed: TableGrid? = null
-        private var shown by mutableStateOf<TableGrid?>(null)
+        var committed: TableGrid? = first
+        private var shown by mutableStateOf<TableGrid?>(first)
         var dirty = false
             private set
         private var anyCellFocused = false
@@ -206,14 +231,13 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
                         onEnterInLastCell = { commit(); editor.focusAfterTable(ps) },
                     )
                 }
-                LaunchedEffect(cellFocused, shown, ps) { publishBar() }
             }
             addOnLayoutChangeListener { _, _, t, _, b, _, _, _, _ -> editor.reportTableHeight(index, b - t) }
         }
 
         fun release() {
             removeCallbacks(commitRunnable)
-            if (cellFocused) onTableBar?.invoke(null)
+            if (focusedOverlay === this) cellFocusChanged(this, false)
             compose.disposeComposition()
         }
 
@@ -223,20 +247,30 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
         /** Puts the overlay on the table's rect and brings what it shows up to the document (an undo, an update from outside). */
         fun place(i: Int, z: TableZone) {
             index = i
+            val moved = ps != z.ps
             ps = z.ps
             readOnly = !editor.editable
+            var fromDocument = moved
             if (z.grid != committed) { // the document's table is not the one last seen
                 if (dirty) commit() // an edit that waits is the user's and wins (spec §6.9); the host has committed it before any update from outside
                 else {
                     committed = z.grid
                     shown = z.grid
+                    fromDocument = true
                     if (cellFocused) compose.clearFocus() // the table under the focus is another one now
+                    // the accessibility tree learns the new text of the cells (an undo or a redo of an edit)
+                    compose.post { compose.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) }
                 }
             }
+            if (fromDocument && focusedOverlay === this) publish() // what the bar can do (move up, move down) depends on where the table is
             val w = z.rect.width().coerceAtLeast(1)
             if (layoutParams.width != w) layoutParams = layoutParams.also { it.width = w }
             translationX = z.rect.left.toFloat()
             translationY = z.rect.top.toFloat()
+            // the note's area clips the table as it clips the text: what is above or below the host is not drawn (no table over the screen's header)
+            val top = (-z.rect.top).coerceAtLeast(0)
+            val bottom = (this@TableOverlayHost.height - z.rect.top).coerceAtMost(maxOf(height, 1))
+            clipBounds = if (bottom > top) Rect(0, top, maxOf(w, width), bottom) else Rect(0, 0, 0, 0)
         }
 
         fun edit(g: TableGrid) {
@@ -245,6 +279,7 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
             dirty = true
             removeCallbacks(commitRunnable)
             postDelayed(commitRunnable, COMMIT_PAUSE_MS)
+            if (focusedOverlay === this) publish() // the bar's buttons depend on the grid
         }
 
         /** The edit that waits becomes a step of the history (and the Markdown goes out). */
@@ -264,10 +299,13 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
                 // TextView pulls its selection into view whenever the layout changes, focus or not: with the caret on the table's own paragraph that
                 // keeps the table in view while the keyboard comes and a cell grows (without it the document jumps to the caret, wherever it was)
                 if (editor.selectionStart != ps || editor.selectionEnd != ps) editor.setSelection(ps)
+                cellFocusChanged(this, true)
                 return
             }
             commit() // the focus left a cell: its edit is done
-            post { if (!anyCellFocused) cellFocused = false } // the focus may only be on its way to the next cell
+            post { // the focus may only be on its way to the next cell
+                if (!anyCellFocused) { cellFocused = false; cellFocusChanged(this, false) }
+            }
         }
 
         private fun structure(f: (TableGrid) -> TableGrid) {
@@ -276,24 +314,21 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
             commit()
         }
 
-        private fun publishBar() {
-            val cb = onTableBar ?: return
-            val g = shown
-            if (!cellFocused || g == null) { cb(null); return }
-            cb(
-                TableBarState(
-                    canRemoveRow = g.rowCount > 0,
-                    canRemoveColumn = g.columnCount > 1,
-                    canMoveUp = editor.canMoveTable(ps, -1),
-                    canMoveDown = editor.canMoveTable(ps, +1),
-                    onAddRow = { structure { it.addRow() } },
-                    onRemoveRow = { structure { it.removeRow(it.rowCount - 1) } },
-                    onAddColumn = { structure { it.addColumn() } },
-                    onRemoveColumn = { structure { it.removeColumn(it.columnCount - 1) } },
-                    onMoveUp = { commit(); clearFocus(); editor.moveTable(ps, -1) },
-                    onMoveDown = { commit(); clearFocus(); editor.moveTable(ps, +1) },
-                    onDeleteTable = { dirty = false; removeCallbacks(commitRunnable); clearFocus(); editor.deleteObjectAt(ps) },
-                ),
+        /** What the screen's table bar shows and does for this table. */
+        fun barState(): TableBarState? {
+            val g = shown ?: return null
+            return TableBarState(
+                canRemoveRow = g.rowCount > 0,
+                canRemoveColumn = g.columnCount > 1,
+                canMoveUp = editor.canMoveTable(ps, -1),
+                canMoveDown = editor.canMoveTable(ps, +1),
+                onAddRow = { structure { it.addRow() } },
+                onRemoveRow = { structure { it.removeRow(it.rowCount - 1) } },
+                onAddColumn = { structure { it.addColumn() } },
+                onRemoveColumn = { structure { it.removeColumn(it.columnCount - 1) } },
+                onMoveUp = { commit(); clearFocus(); editor.moveTable(ps, -1) },
+                onMoveDown = { commit(); clearFocus(); editor.moveTable(ps, +1) },
+                onDeleteTable = { dirty = false; removeCallbacks(commitRunnable); clearFocus(); editor.deleteObjectAt(ps) },
             )
         }
     }

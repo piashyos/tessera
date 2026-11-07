@@ -12,8 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import app.tessera.core.ui.theme.TesseraTheme
@@ -196,5 +199,100 @@ class NoteBodyTableTest {
         val md = editor().markdown()
         assertTrue("the text went to the table it was typed into (now the third): $md", md.contains("y1Z") || md.contains("Zy1"))
         assertFalse("not into the first ones", md.substringBefore("| y1").contains("Z"))
+    }
+
+    private var bar by mutableStateOf<TableBarState?>(null)
+    private var fstate by mutableStateOf<app.tessera.ui.editor.engine.FormatState?>(null)
+
+    @Test fun a_tap_past_the_text_puts_the_caret_at_the_end_also_when_the_screen_shows_the_table_bar() {
+        rule.setContent {
+            TesseraTheme(darkTheme = false, dynamicColor = false) {
+                androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+                    NoteBody(
+                        markdown = md, onMarkdownChange = { emitted += it }, onActionsReady = { actions = it }, onFormatStateChanged = { fstate = it },
+                        editable = true, onTableBarChanged = { bar = it }, modifier = Modifier.weight(1f),
+                    )
+                    // what the screen does: the table bar replaces the format bar while a cell has the focus
+                    if (bar != null) androidx.compose.material3.Text("table bar ${bar!!.canRemoveRow}") else androidx.compose.material3.Text("format bar ${fstate?.canUndo}")
+                }
+            }
+        }
+        drawn()
+        rule.onNodeWithText("1").performClick()
+        drawn()
+        rule.onNodeWithText("table bar true").assertExists()
+        rule.onNode(isFocused()).performTextInput("X")
+        rule.waitForIdle()
+        pass(600)
+        assertTrue("the letter went to the end of the cell: ${editor().markdown()}", editor().markdown().contains("| 1X |"))
+    }
+
+    private fun overlay(i: Int = 1) = host().getChildAt(i)
+
+    @Test fun a_table_taller_than_the_note_area_is_not_cut_to_it_and_the_span_reserves_all_of_it() {
+        val rows = (1..14).joinToString("\n") { "| a$it | b$it |" }
+        markdown = "top\n| h1 | h2 |\n| --- | --- |\n$rows\nbottom"
+        rule.setContent {
+            TesseraTheme(darkTheme = false, dynamicColor = false) {
+                NoteBody(markdown = markdown, onMarkdownChange = {}, onActionsReady = {}, onFormatStateChanged = {}, editable = true, modifier = Modifier.height(200.dp))
+            }
+        }
+        drawn()
+        drawn()
+        val area = host().height
+        assertTrue("the overlay is higher than the area it is in (${overlay().height} > $area)", overlay().height > area)
+        assertEquals("the span reserves what the overlay is", overlay().height, editor().tableZones().single().rect.height())
+    }
+
+    @Test fun a_table_that_scrolled_above_the_area_is_clipped_to_it() {
+        val rows = (1..14).joinToString("\n") { "| a$it | b$it |" }
+        markdown = "top\n| h1 | h2 |\n| --- | --- |\n$rows\n" + (1..30).joinToString("\n") { "line $it" }
+        setContent()
+        drawn()
+        rule.runOnUiThread { editor().scrollTo(0, 150) }
+        drawn()
+        val clip = overlay().clipBounds
+        assertTrue("the part above the area is not drawn: $clip", clip != null && clip.top > 0 && clip.bottom > clip.top)
+        rule.runOnUiThread { editor().scrollTo(0, 100000) }
+        drawn()
+        assertTrue("a table that is wholly above the area is not drawn at all", overlay().clipBounds?.isEmpty == true)
+    }
+
+    @Test fun the_table_bar_comes_back_at_every_focus_after_structure_edits_and_undos() {
+        setContent()
+        drawn()
+        repeat(6) { round ->
+            rule.onNodeWithText("1").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus) // a tap would bring the text magnifier, which Robolectric cannot show
+            drawn()
+            assertTrue("round $round: the bar is there while a cell has the focus", bars.lastOrNull() != null)
+            bars.last()!!.onAddRow()
+            rule.runOnUiThread { editor().requestFocus() } // a tap in the text
+            drawn()
+            pass(50)
+            assertTrue("round $round: no bar once the focus is in the text", bars.last() == null)
+            rule.runOnUiThread { actions!!.undo() }
+            drawn()
+        }
+    }
+
+    @Test fun the_editor_shows_no_handle_of_its_own_while_a_cell_has_the_focus() {
+        setContent()
+        drawn()
+        rule.onNodeWithText("1").performClick()
+        drawn()
+        assertTrue(editor().handlesHidden)
+        rule.runOnUiThread { editor().requestFocus() }
+        drawn()
+        pass(50)
+        assertFalse(editor().handlesHidden)
+    }
+
+    @Test fun a_table_on_the_first_layout_of_a_short_note_has_its_height_and_its_cells() {
+        markdown = "Title\n| a | b |\n| --- | --- |\n| 1 | 2 |\nafter"
+        setContent()
+        rule.runOnUiThread { host().viewTreeObserver.dispatchOnPreDraw() } // one pass of the window, no frame after it
+        assertTrue("the overlay is measured in the pass that added it (${overlay().height})", overlay().height > 0)
+        assertEquals(overlay().height, editor().tableZones().single().rect.height())
+        rule.onNodeWithText("a").assertExists()
     }
 }
