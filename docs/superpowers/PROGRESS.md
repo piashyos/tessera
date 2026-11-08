@@ -23,6 +23,7 @@ Resume in a new session by reading this file + the plan, then continuing with th
 | Этап | План | Статус | Заметки |
 |---|---|---|---|
 | 1 «Ядро» | [plans/2026-11-06-native-editor-phase1.md](plans/2026-11-06-native-editor-phase1.md) | ✅ done (2026-11-07) | спека `specs/2026-11-06-native-editor-design.md`; ветка `feature/native-editor` (не влита); за debug-флагом; QA `qa/native-editor-6b.md` |
+| 2 «Объекты и переключение» | [plans/2026-11-07-native-editor-phase2.md](plans/2026-11-07-native-editor-phase2.md) | ✅ done (2026-11-08) | спека `specs/2026-11-07-native-editor-phase2-design.md`; картинки, таблицы, Aztec удалён, флага нет; QA `qa/native-editor-p2-images.md`, `qa/native-editor-p2-tables.md`; ветка не влита |
 
 Legend: ✅ done · ⏳ in progress · ⬜ pending · ⚠️ blocked
 

@@ -161,10 +161,24 @@
 
 ### P2-4 · переключение и удаление Aztec (`feature` + оркестратор)
 
-- [ ] По §5 спеки: флаг, код, ресурсы, тесты.
-- [ ] Gradle — отдельным последним коммитом, после проверки резолва `debug`/`releaseRuntimeClasspath`
+- [x] **Принято 2026-11-08.** Код — 3c2dd64, Gradle — 04ae5bc (апрув пользователя получен напрямую).
+  - Резолв без a8c-libs и jitpack: debug-, release-, debugUnitTest- и debugAndroidTestRuntimeClasspath — все
+    зелёные.
+  - assembleDebug и compileReleaseKotlin — проходят. assembleRelease не собирался: в worktree нет keystore.
+  - Unit: полный прогон — NATIVE-флейк. Упавшие классы перепрогнаны отдельно: 127 тестов, 2 падения, оба
+    существовали до ветки (ShareReceiverViewModelTest; AccessibilityAuditTest — Switch «Film grain» без подписи).
+  - Golden экрана редактора перезаписаны после просмотра.
+  - Остальные красные Roborazzi — старый долг master, не перезаписаны: Settings, MembersSheet, NotesList,
+    SwipeableNoteCard.
+  - Устройство (emulator-5556): NativeEditorOpenCloseTest 1/0, NativeTableOpenCloseTest 4/0,
+    NativeImageOpenCloseTest 2/0, NativeEditorPersistTest 2/0, главный сценарий руками.
+  - После P2-4:
+    - баг пользователя «строки ниже заголовка не сдвигаются» исправлен — 0680fd5, тест на устройстве 8/8;
+    - по просьбе пользователя стекло нижних панелей — 5466c61, 4ad03e4.
+- [x] По §5 спеки: флаг, код, ресурсы, тесты.
+- [x] Gradle — отдельным последним коммитом, после проверки резолва `debug`/`releaseRuntimeClasspath`
   без репозиториев.
-- [ ] Оркестратор:
+- [x] Оркестратор:
   - полный `testDebugUnitTest` и `verifyRoborazziDebug` с сравнением с базой;
   - перезапись golden экрана редактора после просмотра;
   - `assembleDebug` и `assembleRelease` (если подписи нет — `bundleRelease`/lint по возможности);
