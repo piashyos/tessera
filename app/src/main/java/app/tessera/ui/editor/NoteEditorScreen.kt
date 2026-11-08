@@ -27,12 +27,13 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -456,10 +457,7 @@ fun NoteEditorScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
                 )
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                Spacer(Modifier.height(8.dp))
 
                 // One editor for reading and editing: it fills the area and scrolls itself; tables and images are
                 // placeholders in it. Nothing is drawn before the note is loaded.

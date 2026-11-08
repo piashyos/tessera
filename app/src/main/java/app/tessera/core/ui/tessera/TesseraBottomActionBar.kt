@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -26,15 +27,23 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tessera.R
+import app.tessera.core.ui.theme.GlassTintAlpha
 import app.tessera.core.ui.theme.TesseraElevation
 import app.tessera.core.ui.theme.TesseraShape
 import app.tessera.core.ui.theme.TesseraSpacing
 import app.tessera.core.ui.theme.tesseraShadow
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 
 /**
  * Bottom action bar of the notes list: [leadingAction] slot (folders/drawer trigger — thumb-zone
  * access to navigation), the search pill, and the create FAB. The clickable surfaces use
  * `Surface(onClick=)` so TalkBack gets a Button role and the 48dp minimum touch target applies.
+ *
+ * With a [hazeState] (the screen's `hazeSource` is the content behind the bar) each element turns into glass:
+ * a blurred backdrop under a translucent tint of its own theme colour. Without one — the old opaque look.
+ * Below API 31 Haze draws the translucent tint without the blur.
  */
 @Composable
 fun TesseraBottomActionBar(
@@ -46,6 +55,7 @@ fun TesseraBottomActionBar(
   searchPlaceholder: String = stringResource(R.string.search_hint),
   showFab: Boolean = true,
   leadingAction: (@Composable () -> Unit)? = null,
+  hazeState: HazeState? = null,
 ) {
   Row(
     modifier = modifier
@@ -56,21 +66,23 @@ fun TesseraBottomActionBar(
     verticalAlignment = Alignment.CenterVertically,
   ) {
     if (leadingAction != null) {
+      val color = MaterialTheme.colorScheme.surfaceContainerHigh
       Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = color.glassBase(hazeState),
         shape = TesseraShape.pill,
         modifier = Modifier
           .size(52.dp)
           .tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill),
       ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize().glass(hazeState, color), contentAlignment = Alignment.Center) {
           leadingAction()
         }
       }
     }
+    val searchColor = MaterialTheme.colorScheme.surfaceContainerHigh
     Surface(
       onClick = onSearchClick,
-      color = MaterialTheme.colorScheme.surfaceContainerHigh,
+      color = searchColor.glassBase(hazeState),
       shape = TesseraShape.pill,
       modifier = Modifier
         .semantics { role = Role.Button }
@@ -79,7 +91,7 @@ fun TesseraBottomActionBar(
         .tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill),
     ) {
       Box(
-        modifier = Modifier.fillMaxSize().padding(horizontal = TesseraSpacing.xl),
+        modifier = Modifier.fillMaxSize().glass(hazeState, searchColor).padding(horizontal = TesseraSpacing.xl),
         contentAlignment = Alignment.CenterStart,
       ) {
         val (text, color) = if (searchQuery.isBlank()) {
@@ -101,19 +113,36 @@ fun TesseraBottomActionBar(
       enter = fadeIn() + scaleIn(),
       exit = fadeOut() + scaleOut(),
     ) {
+      val fabColor = MaterialTheme.colorScheme.primaryContainer
       Surface(
         onClick = onFabClick,
-        color = MaterialTheme.colorScheme.primaryContainer,
+        color = fabColor.glassBase(hazeState),
         shape = TesseraShape.fab,
         modifier = Modifier
           .semantics { role = Role.Button }
           .size(52.dp)
           .tesseraShadow(TesseraElevation.Level3, shape = TesseraShape.fab),
       ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize().glass(hazeState, fabColor), contentAlignment = Alignment.Center) {
           fabIcon()
         }
       }
     }
+  }
+}
+
+/** The Surface's own fill: transparent when [hazeState] draws the glass inside it. */
+private fun Color.glassBase(hazeState: HazeState?): Color = if (hazeState == null) this else Color.Transparent
+
+/** Blurred backdrop plus the element's own colour at [GlassTintAlpha]; the Surface above clips it to its shape. */
+@Composable
+private fun Modifier.glass(hazeState: HazeState?, color: Color): Modifier {
+  if (hazeState == null) return this
+  val base = MaterialTheme.colorScheme.surface // Haze requires a colour behind the blur
+  return hazeEffect(state = hazeState) {
+    backgroundColor = base
+    val tint = HazeTint(color.copy(alpha = GlassTintAlpha))
+    tints = listOf(tint)
+    fallbackTint = tint
   }
 }

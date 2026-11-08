@@ -88,6 +88,7 @@ import app.tessera.ui.notes.components.SwipeAction
 import app.tessera.ui.notes.components.TesseraNotesDrawer
 import app.tessera.ui.notes.components.TesseraSwipeableNoteCard
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PushPin as PushPinOutlined
@@ -387,6 +388,7 @@ fun NotesListScreen(
             // list scrolls behind the transparent nav bar (no empty band under it); the floating
             // bottom bar and the list's bottom contentPadding handle the nav-bar clearance instead.
             Box(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
+                Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 NotesBody(
                     state = state,
                     onNoteClick = onNoteClick,
@@ -405,6 +407,7 @@ fun NotesListScreen(
                     onToggleSelection = onToggleSelection,
                     currentUserId = currentUserId,
                 )
+                }
                 if (!selectionMode) {
                     TesseraBottomActionBar(
                         modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
@@ -419,6 +422,7 @@ fun NotesListScreen(
                             )
                         },
                         showFab = !state.searchExpanded,
+                        hazeState = hazeState,
                         // Thumb-zone drawer access: folders are the most common top-corner reach.
                         leadingAction = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {

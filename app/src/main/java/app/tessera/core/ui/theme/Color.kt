@@ -375,6 +375,9 @@ object TesseraSageDark : TesseraBrandColors {
 @Deprecated("Use TesseraBrandLight.primary")              val PrimaryLight             = TesseraBrandLight.primary
 @Deprecated("Use TesseraBrandDark.primary")               val PrimaryDark              = TesseraBrandDark.primary
 
+/** Alpha of a theme-colour tint over a Haze backdrop: low enough for the blurred content to read, high enough that the hue stays recognisable. */
+const val GlassTintAlpha = 0.62f
+
 val CapsuleBorder            = Color.White.copy(alpha = 0.20f)
 val CapsuleTintLight         = Color.White.copy(alpha = 0.65f)
 val CapsuleTintDark          = Color(0xFF201F1D).copy(alpha = 0.72f)
