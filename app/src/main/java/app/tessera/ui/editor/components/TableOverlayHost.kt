@@ -192,7 +192,7 @@ internal class TableOverlayHost(context: Context, val editor: TesseraEditText) :
         val l = editor.layout
         val maxScroll = ((l?.height ?: 0) + editor.totalPaddingTop + editor.totalPaddingBottom - editor.height).coerceAtLeast(0)
         val delta = when {
-            bottom > height -> (bottom - height).toInt()
+            bottom > height - editor.bottomInset -> (bottom - (height - editor.bottomInset)).toInt() // above the panel, not just the edge
             top < 0 -> top.toInt()
             else -> 0
         }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -69,12 +70,13 @@ fun TesseraBottomActionBar(
       val color = MaterialTheme.colorScheme.surfaceContainerHigh
       Surface(
         color = color.glassBase(hazeState),
+        contentColor = contentColorFor(color),
         shape = TesseraShape.pill,
         modifier = Modifier
           .size(52.dp)
-          .tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill),
+          .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill) else Modifier) // a shadow would show through the glass as a grey fill,
       ) {
-        Box(modifier = Modifier.fillMaxSize().glass(hazeState, color), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize().tesseraGlass(hazeState, color), contentAlignment = Alignment.Center) {
           leadingAction()
         }
       }
@@ -83,15 +85,16 @@ fun TesseraBottomActionBar(
     Surface(
       onClick = onSearchClick,
       color = searchColor.glassBase(hazeState),
+      contentColor = contentColorFor(searchColor),
       shape = TesseraShape.pill,
       modifier = Modifier
         .semantics { role = Role.Button }
         .weight(1f)
         .height(52.dp)
-        .tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill),
+        .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill) else Modifier) // a shadow would show through the glass as a grey fill,
     ) {
       Box(
-        modifier = Modifier.fillMaxSize().glass(hazeState, searchColor).padding(horizontal = TesseraSpacing.xl),
+        modifier = Modifier.fillMaxSize().tesseraGlass(hazeState, searchColor).padding(horizontal = TesseraSpacing.xl),
         contentAlignment = Alignment.CenterStart,
       ) {
         val (text, color) = if (searchQuery.isBlank()) {
@@ -117,13 +120,14 @@ fun TesseraBottomActionBar(
       Surface(
         onClick = onFabClick,
         color = fabColor.glassBase(hazeState),
+        contentColor = contentColorFor(fabColor),
         shape = TesseraShape.fab,
         modifier = Modifier
           .semantics { role = Role.Button }
           .size(52.dp)
-          .tesseraShadow(TesseraElevation.Level3, shape = TesseraShape.fab),
+          .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level3, shape = TesseraShape.fab) else Modifier) // a shadow would show through the glass as a grey fill,
       ) {
-        Box(modifier = Modifier.fillMaxSize().glass(hazeState, fabColor), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize().tesseraGlass(hazeState, fabColor), contentAlignment = Alignment.Center) {
           fabIcon()
         }
       }
@@ -131,16 +135,20 @@ fun TesseraBottomActionBar(
   }
 }
 
+private val GlassBlurRadius = 16.dp
+
 /** The Surface's own fill: transparent when [hazeState] draws the glass inside it. */
 private fun Color.glassBase(hazeState: HazeState?): Color = if (hazeState == null) this else Color.Transparent
 
 /** Blurred backdrop plus the element's own colour at [GlassTintAlpha]; the Surface above clips it to its shape. */
 @Composable
-private fun Modifier.glass(hazeState: HazeState?, color: Color): Modifier {
+internal fun Modifier.tesseraGlass(hazeState: HazeState?, color: Color): Modifier {
   if (hazeState == null) return this
   val base = MaterialTheme.colorScheme.surface // Haze requires a colour behind the blur
   return hazeEffect(state = hazeState) {
     backgroundColor = base
+    blurEnabled = true
+    blurRadius = GlassBlurRadius // Haze's own default is unspecified: without a radius nothing is blurred
     val tint = HazeTint(color.copy(alpha = GlassTintAlpha))
     tints = listOf(tint)
     fallbackTint = tint

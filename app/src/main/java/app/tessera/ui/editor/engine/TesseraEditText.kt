@@ -1025,8 +1025,31 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         return caretBox.apply { set(x, (totalPaddingTop + top).toFloat(), x + w, (totalPaddingTop + bottom).toFloat()) }
     }
 
+    /**
+     * Pixels at the bottom that a panel floats over (the glass format bar). They are real bottom padding — scrolling to the caret and to the
+     * end of the note stop above them — but the text is also drawn into them, so it shows (blurred) under the panel: `TextView.onDraw` clips
+     * to the padding, so while it runs the padding is reported smaller by this much.
+     */
+    var bottomInset = 0
+        set(value) {
+            if (value == field) return
+            val pad = paddingBottom - field + value
+            field = value
+            setPadding(paddingLeft, paddingTop, paddingRight, pad)
+            invalidate()
+        }
+
+    private var drawingUnderInset = false
+
+    override fun getCompoundPaddingBottom(): Int = super.getCompoundPaddingBottom() - if (drawingUnderInset) bottomInset else 0
+
     override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
+        drawingUnderInset = true
+        try {
+            super.onDraw(canvas)
+        } finally {
+            drawingUnderInset = false
+        }
         if (caretOn) caretRect()?.let { canvas.drawRect(it, caretPaint) }
         pushImageSelection()
     }

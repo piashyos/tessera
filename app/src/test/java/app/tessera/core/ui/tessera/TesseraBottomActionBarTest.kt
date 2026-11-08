@@ -81,6 +81,31 @@ class TesseraBottomActionBarTest {
     rule.onNodeWithContentDescription("Folders").assertIsDisplayed()
   }
 
+  // Below API 31 Haze has no blur: the glass is the translucent tint alone; it must still draw.
+  @Config(sdk = [30])
+  @Test fun glass_variant_below_api_31_draws() {
+    rule.setContent {
+      TesseraTheme(darkTheme = true, dynamicColor = false) {
+        val haze = remember { HazeState() }
+        Box(Modifier.fillMaxSize()) {
+          Box(Modifier.fillMaxSize().hazeSource(haze))
+          TesseraBottomActionBar(
+            searchQuery = "",
+            onSearchClick = {},
+            onFabClick = {},
+            fabIcon = { Icon(Icons.Outlined.Add, contentDescription = "Create note") },
+            searchPlaceholder = "Search notes",
+            leadingAction = { Icon(Icons.Outlined.Add, contentDescription = "Folders") },
+            hazeState = haze,
+          )
+        }
+      }
+    }
+    rule.waitForIdle()
+    rule.onNodeWithText("Search notes").assertIsDisplayed()
+    rule.onNodeWithContentDescription("Folders").assertIsDisplayed()
+  }
+
   @Test fun fab_hidden_when_showFab_false() {
     rule.setContent {
       TesseraTheme(darkTheme = false, dynamicColor = false) {

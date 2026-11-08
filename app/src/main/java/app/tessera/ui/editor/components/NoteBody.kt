@@ -78,6 +78,8 @@ fun NoteBody(
     onImageCommitted: (Uri) -> Boolean = { false },
     /** While a cell of a table has the focus: what the contextual table bar shows and does; `null` when none has it. */
     onTableBarChanged: (TableBarState?) -> Unit = {},
+    /** Pixels at the bottom that a floating panel covers: the text runs under it (and shows blurred through it) but scrolls clear of it. */
+    bottomInsetPx: Int = 0,
 ) {
     if (LocalInspectionMode.current) return // the View cannot be instantiated in a Compose preview
 
@@ -216,6 +218,7 @@ fun NoteBody(
             if (editor.editable != editable) editor.editable = editable
             if (editor.imageSource !== imageSource) editor.imageSource = imageSource
             editor.setMarkdown(markdown)
+            editor.bottomInset = bottomInsetPx
         },
     )
     imageSelection.value?.let { sel ->

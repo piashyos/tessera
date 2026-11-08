@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,6 +51,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -60,6 +62,7 @@ import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.rememberHaptics
 import app.tessera.core.ui.tessera.MembersSheet
 import app.tessera.core.ui.tessera.TesseraTopBar
+import app.tessera.core.ui.tessera.tesseraGlass
 import app.tessera.core.ui.tessera.TesseraTopBarIconButton
 import app.tessera.core.ui.theme.TesseraMotion
 import app.tessera.core.ui.theme.TesseraTheme
@@ -190,6 +193,8 @@ fun NoteEditorScreen(
     // Live formats at the editor's caret: what the bar and the ⋯ menu show.
     var formatState by remember { mutableStateOf(FormatState.Empty) }
     val imeVisible = WindowInsets.isImeVisible
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var barExtentPx by remember { androidx.compose.runtime.mutableIntStateOf(0) } // the floating format bar with its margins
 
     // After the VM stores an image and emits its id, splice the span at the editor caret. Reading
     // `actions` inside the collector picks up the live editor action object once it's ready.
@@ -391,12 +396,15 @@ fun NoteEditorScreen(
                         // Box anchors the ⋯ block-format panel, which overlays ABOVE the pill as a
                         // Popup (see MarkdownFormatMenu) rather than growing the bar and compressing
                         // the editor body above it.
-                        Box {
+                        Box(modifier = Modifier.onSizeChanged { barExtentPx = it.height + with(density) { 16.dp.roundToPx() } }) {
+                        val pillColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            color = Color.Transparent,
+                            contentColor = contentColorFor(pillColor),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                            shadowElevation = 3.dp,
                         ) {
+                            // inside the Surface, which clips to the pill; no shadow — it would show through the glass as a grey fill
+                            Box(Modifier.tesseraGlass(hazeState, pillColor)) {
                             val tableBar = nativeTableBar
                             if (tableBar != null) {
                                 TableActionsBar(
@@ -420,6 +428,7 @@ fun NoteEditorScreen(
                                     formatState = formatState,
                                 )
                             }
+                            }
                         }
                         if (currentActions != null && nativeTableBar == null) {
                             MarkdownFormatMenu(
@@ -434,9 +443,15 @@ fun NoteEditorScreen(
                 }
             },
         ) { padding ->
+            // The note runs under the glass format bar (blurred through it): the Column takes back the part of the bar's height
+            // that is the bar itself; the keyboard's part still resizes it.
+            val barInsetPx = if (imeVisible && !state.isReadOnly) barExtentPx else 0
             Column(
                 modifier = Modifier
-                    .padding(padding)
+                    .padding(
+                        top = padding.calculateTopPadding(),
+                        bottom = (padding.calculateBottomPadding() - with(density) { barInsetPx.toDp() }).coerceAtLeast(0.dp),
+                    )
                     .fillMaxSize()
                     .hazeSource(hazeState),
             ) {
@@ -474,6 +489,7 @@ fun NoteEditorScreen(
                         imageSource = imageSource,
                         onImageCommitted = onImageCommitted,
                         onTableBarChanged = { nativeTableBar = it },
+                        bottomInsetPx = barInsetPx,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
