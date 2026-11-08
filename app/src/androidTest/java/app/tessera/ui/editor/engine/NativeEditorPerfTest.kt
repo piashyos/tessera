@@ -6,10 +6,12 @@ import android.view.ContextThemeWrapper
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatEditText
 import app.tessera.core.text.notedoc.NoteMarkdown
+import app.tessera.core.text.notedoc.ParagraphKind
 import app.tessera.ui.editor.engine.spans.HeadingSpan
 import app.tessera.ui.editor.engine.spans.ListItemSpan
 import app.tessera.ui.editor.engine.spans.MarkSpan
@@ -141,6 +143,62 @@ class NativeEditorPerfTest {
             log("key, first of a run (x$KEYS): commitText [${fmt(first.map { it.first })}] median %.1f ms, max %.1f ms".format(median(first.map { it.first }), first.maxOf { it.first }))
             log("key, first of a run (x$KEYS): to frame [${fmt(first.map { it.second })}] median %.1f ms".format(median(first.map { it.second })))
             log("key, inside a run (x$KEYS): commitText [${fmt(inRun.map { it.first })}] median %.1f ms, max %.1f ms".format(median(inRun.map { it.first }), inRun.maxOf { it.first }))
+
+            // the commands after which `repaintBelow` lays out the lines from the paragraph to the end again (the text got another height):
+            // Enter in a Body paragraph in the middle, Backspace at the start of the paragraph it made (merges them back), a heading on and off
+            /** [op] on the main thread: its time, and up to the next committed frame. */
+            fun command(op: (InputConnection) -> Unit): Pair<Double, Double> {
+                val drawn = CountDownLatch(1)
+                var tFrame = 0L
+                val (t0, t1) = e.ui {
+                    val ic = v.onCreateInputConnection(EditorInfo())!!
+                    val t0 = System.nanoTime()
+                    op(ic)
+                    val t1 = System.nanoTime()
+                    v.viewTreeObserver.registerFrameCommitCallback { tFrame = System.nanoTime(); drawn.countDown() }
+                    t0 to t1
+                }
+                check(drawn.await(5, TimeUnit.SECONDS)) { "no frame after a command" }
+                return ms(t1 - t0) to ms(tFrame - t0)
+            }
+            val enter = ArrayList<Pair<Double, Double>>()
+            val merge = ArrayList<Pair<Double, Double>>()
+            val headingOn = ArrayList<Pair<Double, Double>>()
+            val headingOff = ArrayList<Pair<Double, Double>>()
+            val relayoutOnly = ArrayList<Double>()
+            repeat(RUNS) {
+                Thread.sleep(300)
+                val (before, at) = e.ui {
+                    val t = v.text.toString()
+                    val middle = Regex("Body \\d+ ").findAll(t).minBy { abs(it.range.first - t.length / 2) }
+                    v.setSelection(middle.range.first + 4) // "Body| N with …"
+                    t to middle.range.first
+                }
+                enter += command { it.commitText("\n", 1) }
+                check(e.ui { v.text.toString() } != before) { "Enter did nothing" }
+                Thread.sleep(300)
+                merge += command { it.deleteSurroundingText(1, 0) } // the caret is at the start of the new paragraph
+                check(e.ui { v.text.toString() } == before) { "Backspace did not merge the paragraphs back" }
+                Thread.sleep(300)
+                e.ui { v.setSelection(at + 2) }
+                headingOn += command { v.toggleKind(ParagraphKind.Heading) }
+                check(e.ui { v.formatState().paragraph } == ParagraphFormat.Single(ParagraphKind.Heading)) { "no heading" }
+                Thread.sleep(300)
+                headingOff += command { v.toggleKind(ParagraphKind.Heading) }
+                check(e.ui { v.formatState().paragraph } == ParagraphFormat.Single(ParagraphKind.Body)) { "heading still on" }
+                // the share of `repaintBelow`: the same relayout of the tail on its own
+                relayoutOnly += e.ui {
+                    val t0 = System.nanoTime()
+                    Normalizer.relayout(v.text!!, at, v.text!!.length)
+                    ms(System.nanoTime() - t0)
+                }
+                e.idle()
+            }
+            for ((name, xs) in listOf("Enter" to enter, "Backspace merging two paragraphs" to merge, "heading on" to headingOn, "heading off" to headingOff)) {
+                log("$name in the middle (x$RUNS): command [${fmt(xs.map { it.first })}] median %.1f ms, max %.1f ms; to frame [${fmt(xs.map { it.second })}] median %.1f ms"
+                    .format(median(xs.map { it.first }), xs.maxOf { it.first }, median(xs.map { it.second })))
+            }
+            log("relayout of the tail alone (x$RUNS): [${fmt(relayoutOnly)}] median %.1f ms".format(median(relayoutOnly)))
 
             // where the time of a key goes: the whole-note passes a key may run
             val (serialize, format) = e.ui {
