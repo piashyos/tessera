@@ -120,7 +120,6 @@ dependencies {
 
     implementation(libs.haze)
     implementation(libs.coil.compose)
-    implementation(libs.aztec)
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.datastore.preferences)

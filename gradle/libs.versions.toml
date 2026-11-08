@@ -21,7 +21,6 @@ roborazzi = "1.60.0"
 junit4 = "4.13.2"
 haze = "1.2.2"
 coil = "2.7.0"
-aztec = "v2.1.7"
 datastore = "1.1.1"
 okhttp = "4.12.0"
 playServicesAuth = "21.2.0"
@@ -78,7 +77,6 @@ compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 icons-lucide = { module = "com.composables:icons-lucide-android", version = "1.1.0" }
 material-icons-core = { module = "androidx.compose.material:material-icons-core", version.ref = "material-icons" }
 material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "material-icons" }
-aztec = { module = "org.wordpress:aztec", version.ref = "aztec" }
 appcompat = { module = "androidx.appcompat:appcompat", version = "1.6.1" }
 material = { module = "com.google.android.material:material", version = "1.14.0" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
