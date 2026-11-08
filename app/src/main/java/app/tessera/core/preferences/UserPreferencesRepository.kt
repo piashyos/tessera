@@ -28,7 +28,6 @@ private val KEY_GRAIN_INTENSITY = floatPreferencesKey("grain_intensity")
 private val KEY_LANG = stringPreferencesKey("language_tag")
 private val KEY_VIEW_MODE = stringPreferencesKey("notes_view_mode")
 private val KEY_RECENT_SEARCHES = stringPreferencesKey("recent_searches")
-private val KEY_NATIVE_EDITOR = booleanPreferencesKey("native_editor")
 
 private const val RECENT_SEARCHES_LIMIT = 8
 private const val RECENT_SEARCHES_DELIMITER = "\n"
@@ -108,8 +107,6 @@ class UserPreferencesRepository @Inject constructor(
         p[KEY_VIEW_MODE]?.let { runCatching { NotesViewMode.valueOf(it) }.getOrNull() } ?: NotesViewMode.List
     }
 
-    override val useNativeEditor: Flow<Boolean> = store.data.map { p -> p[KEY_NATIVE_EDITOR] ?: false }
-
     override val recentSearches: Flow<List<String>> = store.data.map { p ->
         p[KEY_RECENT_SEARCHES]
             ?.split(RECENT_SEARCHES_DELIMITER)
@@ -151,10 +148,6 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun setNotesViewMode(mode: NotesViewMode) {
         store.edit { it[KEY_VIEW_MODE] = mode.name }
-    }
-
-    override suspend fun setUseNativeEditor(enabled: Boolean) {
-        store.edit { it[KEY_NATIVE_EDITOR] = enabled }
     }
 
     override suspend fun addRecentSearch(query: String) {

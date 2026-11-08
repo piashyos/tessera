@@ -51,11 +51,10 @@ import app.tessera.ui.editor.engine.EditorStyle
 import app.tessera.ui.editor.engine.FormatState
 import app.tessera.ui.editor.engine.TesseraEditText
 import kotlinx.coroutines.launch
-import org.wordpress.aztec.AztecTextFormat
 
 /**
- * Compose host of the native editor ([TesseraEditText], spec §7): the same contract as [RichNoteBody] on its fast path. It always
- * fills the area it is given and scrolls itself; the caret is lifted above the keyboard like `RichNoteBody` does ([caretRectOf]).
+ * Compose host of the native editor ([TesseraEditText], spec §7). It always fills the area it is given and scrolls itself;
+ * the caret is lifted above the keyboard ([caretRectOf]).
  *
  * `markdown` is the note as the screen knows it: every new value goes to `setMarkdown`, which drops the echo of our own emit and
  * skips an update while a user edit is still pending (§6.9). The engine's output (`onMarkdownChange`) is debounced there. The
@@ -88,7 +87,7 @@ fun NoteBody(
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
     val accentArgb = MaterialTheme.colorScheme.primary.toArgb()
     val density = LocalDensity.current
-    val lineSpacingExtraPx = with(density) { 4.dp.toPx() } // as RichNoteBody: extra leading on top of the font's natural height
+    val lineSpacingExtraPx = with(density) { 4.dp.toPx() } // extra leading on top of the font's natural height
     val padTop = with(density) { TesseraSpacing.sm.roundToPx() }
     val padBottom = with(density) { TesseraSpacing.lg.roundToPx() }
     val hint = stringResource(R.string.editor_body_hint)
@@ -300,9 +299,6 @@ internal class NoteBodyActions(private val editor: TesseraEditText, private val 
         imm.showSoftInput(editor, InputMethodManager.SHOW_IMPLICIT)
     }
 
-    /** Aztec formats do not exist here; the bar reads [formatState] when `nativeEngine = true`. */
-    override fun activeFormats(): Set<AztecTextFormat> = emptySet()
-
     override fun formatState(): FormatState = editor.formatState()
 
     override fun flushPendingEdit() { commitCells(); editor.flushPendingEdit() }
@@ -310,7 +306,7 @@ internal class NoteBodyActions(private val editor: TesseraEditText, private val 
 
 /**
  * The caret line in the editor's own coordinates (what the AndroidView node shows), padding and scroll included, for the Compose
- * bring-into-view machinery. `RichNoteBody` measures the same way; it never has a scrolled editor, this one does.
+ * bring-into-view machinery.
  */
 private fun caretRectOf(editor: TesseraEditText): Rect? {
     val layout = editor.layout ?: return null
@@ -329,8 +325,7 @@ private fun rememberTypeface(fontRes: Int): Typeface? {
 }
 
 /**
- * [EditorStyle] from the live theme: colors are `MaterialTheme.colorScheme` roles (the same ones `RichNoteBody` gives the Aztec
- * spans), text sizes the typography (§6.11), geometry the mockup `editor-content-*` and `TesseraSpacing`.
+ * [EditorStyle] from the live theme: colors are `MaterialTheme.colorScheme` roles (as the rest of the app), text sizes the typography (§6.11), geometry the mockup `editor-content-*` and `TesseraSpacing`.
  */
 @Composable
 internal fun rememberEditorStyle(): EditorStyle {
@@ -352,7 +347,7 @@ internal fun rememberEditorStyle(): EditorStyle {
             serifTypeface = serif,
             accentColor = colors.primary.toArgb(),
             checkboxTickColor = colors.onPrimary.toArgb(),
-            bulletRadiusPx = 5.dp.toPx(), // as RichNoteBody
+            bulletRadiusPx = 5.dp.toPx(),
             checkboxSizePx = 18.dp.toPx(), // mockup .cb
             checkboxCornerPx = 4.dp.toPx(), // mockup .cb radius, as EditorCheckboxTheming
             checkboxStrokePx = 2.dp.toPx(), // mockup .cb border
@@ -402,4 +397,20 @@ internal fun OnStop(block: () -> Unit) {
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
+}
+
+/**
+ * Tint the caret and the three selection handles with the live theme accent. These drawables
+ * resolve from the STATIC XML theme (Theme.Tessera maps colorPrimary to the fixed terracotta
+ * brand), so without this they ignore dynamic color / palette switches. API 29+ exposes the
+ * drawables directly; on 26–28 the platform offers no public hook, so the static tint stays.
+ */
+private fun applyCursorAndHandleTint(editor: android.widget.TextView, accentArgb: Int) {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
+    // The getters may return fresh instances loaded from theme attrs — mutate, tint, and hand
+    // the drawable BACK through the setter so the Editor actually swaps what it renders.
+    editor.textCursorDrawable = editor.textCursorDrawable?.mutate()?.apply { setTint(accentArgb) }
+    editor.textSelectHandle?.let { editor.setTextSelectHandle(it.mutate().apply { setTint(accentArgb) }) }
+    editor.textSelectHandleLeft?.let { editor.setTextSelectHandleLeft(it.mutate().apply { setTint(accentArgb) }) }
+    editor.textSelectHandleRight?.let { editor.setTextSelectHandleRight(it.mutate().apply { setTint(accentArgb) }) }
 }

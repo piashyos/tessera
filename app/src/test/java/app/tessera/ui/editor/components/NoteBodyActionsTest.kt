@@ -116,7 +116,4 @@ class NoteBodyActionsTest {
         assertEquals(FormatState.Empty.marks, a.formatState().marks)
     }
 
-    @Test fun activeFormats_is_empty_because_the_bar_reads_formatState() {
-        assertTrue(NoteBodyActions(HostFixture("abc").view).activeFormats().isEmpty())
-    }
 }

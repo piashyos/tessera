@@ -37,14 +37,13 @@ class EditorFormatBarRenderTest {
     override fun toggleCode() { calls += "code" }
     override fun insertHorizontalRule() { calls += "divider" }
     override fun focusBody() {}
-    override fun activeFormats() = emptySet<org.wordpress.aztec.AztecTextFormat>()
   }
 
   @Test fun renders_all_groups() {
     val actions = RecordingActions()
     rule.setContent {
       TesseraTheme(darkTheme = false, dynamicColor = false) {
-        EditorFormatBar(actions = actions, activeFormats = emptySet())
+        EditorFormatBar(actions = actions)
       }
     }
     listOf("Bold", "Italic", "Underline", "Strikethrough", "Heading 1", "Heading 2",
@@ -56,7 +55,7 @@ class EditorFormatBarRenderTest {
     val actions = RecordingActions()
     rule.setContent {
       TesseraTheme(darkTheme = false, dynamicColor = false) {
-        EditorFormatBar(actions = actions, activeFormats = emptySet())
+        EditorFormatBar(actions = actions)
       }
     }
     rule.onNodeWithContentDescription("Bold").performScrollTo().performClick()
@@ -72,7 +71,6 @@ class EditorFormatBarRenderTest {
       TesseraTheme(darkTheme = false, dynamicColor = false) {
         EditorFormatBar(
           actions = actions,
-          activeFormats = emptySet(),
           menuExpanded = false,
           onToggleMenu = { toggled++ },
         )

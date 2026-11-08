@@ -23,7 +23,6 @@ import app.tessera.data.local.entity.NoteEntity
 import app.tessera.ui.editor.engine.DocBinder
 import app.tessera.ui.editor.engine.TesseraEditText
 import kotlinx.coroutines.runBlocking
-import org.wordpress.aztec.AztecText
 
 /**
  * The whole app on the device, the way a user goes through it: the notes list of [MainActivity], a tap on a note card, the
@@ -74,11 +73,6 @@ internal class AppDriver(private val compose: ComposeTestRule, private val dao: 
             ?.takeIf { it.isAttachedToWindow && it.layout != null }
     }
 
-    fun aztecOrNull(): AztecText? = ui {
-        ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).firstOrNull()
-            ?.window?.decorView?.let { find(it, AztecText::class.java) }
-    }
-
     private fun <V : View> find(v: View, type: Class<V>): V? {
         if (type.isInstance(v)) return type.cast(v)
         if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i), type)?.let { return it }
@@ -112,14 +106,14 @@ internal class AppDriver(private val compose: ComposeTestRule, private val dao: 
     /** The editor's Back arrow; waits until the list is back. */
     fun back() {
         compose.onNodeWithTag(UiTestTags.EditorBack).performClick()
-        compose.waitUntil(15_000) { editorOrNull() == null && aztecOrNull() == null }
+        compose.waitUntil(15_000) { editorOrNull() == null }
         settle()
     }
 
     /** The system Back (gesture / key). */
     fun systemBack() {
         instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-        compose.waitUntil(15_000) { editorOrNull() == null && aztecOrNull() == null }
+        compose.waitUntil(15_000) { editorOrNull() == null }
         settle()
     }
 

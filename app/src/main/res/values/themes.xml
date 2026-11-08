@@ -1,7 +1,6 @@
 <resources>
     <!-- Base theme. Material3 DayNight gives us system attr surfaces that match Compose.
-         Aztec and any XML-inflated views (rich_note_body.xml) tie into ?attr/colorXxx,
-         which we map here to our brand tokens. -->
+         XML-inflated views tie into ?attr/colorXxx, which we map here to our brand tokens. -->
     <style name="Theme.Tessera" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/brand_primary</item>
         <item name="colorOnPrimary">@color/brand_on_primary</item>

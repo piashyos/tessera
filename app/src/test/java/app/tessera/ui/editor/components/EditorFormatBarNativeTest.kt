@@ -26,7 +26,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** `EditorFormatBar` / `MarkdownFormatMenu` with `nativeEngine = true` (spec §7, D15) and the unchanged Aztec default. */
+/** `EditorFormatBar` / `MarkdownFormatMenu` (spec §7, D15). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class EditorFormatBarNativeTest {
@@ -55,16 +55,14 @@ class EditorFormatBarNativeTest {
         override fun undo() { calls += "undo" }
         override fun redo() { calls += "redo" }
         override fun focusBody() {}
-        override fun activeFormats() = emptySet<org.wordpress.aztec.AztecTextFormat>()
     }
 
     private fun bar(
-        fs: FormatState?,
-        native: Boolean = true,
+        fs: FormatState,
         actions: RichBodyActions = Recording(),
     ) = rule.setContent {
         TesseraTheme(darkTheme = false, dynamicColor = false) {
-            EditorFormatBar(actions = actions, activeFormats = emptySet(), nativeEngine = native, formatState = fs)
+            EditorFormatBar(actions = actions, formatState = fs)
         }
     }
 
@@ -79,7 +77,7 @@ class EditorFormatBarNativeTest {
         rule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.width(411.dp)) {
-                    EditorFormatBar(actions = Recording(), activeFormats = emptySet(), nativeEngine = true, formatState = FormatState.Empty)
+                    EditorFormatBar(actions = Recording(), formatState = FormatState.Empty)
                 }
             }
         }
@@ -172,10 +170,8 @@ class EditorFormatBarNativeTest {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
                 MarkdownFormatMenu(
                     expanded = true,
-                    activeFormats = emptySet(),
                     actions = Recording(),
                     onDismiss = {},
-                    nativeEngine = true,
                     formatState = FormatState.Empty,
                 )
             }
@@ -193,10 +189,8 @@ class EditorFormatBarNativeTest {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
                 MarkdownFormatMenu(
                     expanded = true,
-                    activeFormats = emptySet(),
                     actions = actions,
                     onDismiss = { dismissed++ },
-                    nativeEngine = true,
                     formatState = FormatState.Empty,
                 )
             }
@@ -206,28 +200,5 @@ class EditorFormatBarNativeTest {
         }
         assertEquals(listOf("h1", "h2", "subheading", "paragraph", "code", "quote"), actions.calls)
         assertEquals(6, dismissed)
-    }
-
-    @Test fun aztec_default_keeps_the_old_set() {
-        bar(fs = null, native = false)
-        listOf("Insert table", "Insert image", "Take photo", "Bullet list", "Divider").forEach {
-            rule.onNodeWithContentDescription(it).performScrollTo().assertExists()
-        }
-        listOf("Dashed list", "Indent", "Outdent").forEach { rule.onNodeWithContentDescription(it).assertDoesNotExist() }
-        // undo / redo stay enabled on this path (the history lives in Aztec)
-        rule.onNodeWithContentDescription("Undo").assertIsEnabled()
-        rule.onNodeWithContentDescription("Redo").assertIsEnabled()
-    }
-
-    @Test fun aztec_default_menu_keeps_the_old_entries() {
-        rule.setContent {
-            TesseraTheme(darkTheme = false, dynamicColor = false) {
-                MarkdownFormatMenu(expanded = true, activeFormats = emptySet(), actions = Recording(), onDismiss = {})
-            }
-        }
-        listOf("Paragraph", "Heading 1", "Heading 6", "Quote", "Code", "Insert table").forEach {
-            rule.onNodeWithText(it).performScrollTo().assertExists()
-        }
-        rule.onNodeWithText("Monospaced").assertDoesNotExist()
     }
 }

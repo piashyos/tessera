@@ -14,9 +14,8 @@ import org.junit.After
 import org.junit.Test
 
 /**
- * The same notes with pictures in the native editor and in Aztec, light and dark, for the comparison of phase 2 (plan P2-3). Shots go to
- * Downloads/native-editor-qa (`p2-<note>-<engine>-<theme>.png`); `adb pull` and `ffmpeg hstack` put them side by side. The pictures are
- * the app's files of this device, so Aztec decodes them as it always did (synchronously, on its first measure).
+ * Notes with pictures in the native editor, light and dark (plan P2-3). Shots go to Downloads/native-editor-qa
+ * (`p2-<note>-native-<theme>.png`). The pictures are the app's files of this device.
  */
 @HiltAndroidTest
 class NativeImageShotsTest : NativeAppTest() {
@@ -30,7 +29,7 @@ class NativeImageShotsTest : NativeAppTest() {
     @After
     fun clean() {
         ImageFixtures.removeApp(ctx, pictures.map { it.first })
-        runBlocking { prefs.setUseNativeEditor(true); prefs.setThemeMode(ThemeMode.AUTO) }
+        runBlocking { prefs.setThemeMode(ThemeMode.AUTO) }
     }
 
     private fun shot(name: String) {
@@ -59,7 +58,7 @@ class NativeImageShotsTest : NativeAppTest() {
     }
 
     @Test
-    fun picturesInTheNativeEditorAndInAztec() {
+    fun picturesInTheNativeEditor() {
         for ((id, w, h) in pictures) {
             val f = ImageFixtures.webp(ImageFixtures.appFile(ctx, id), w, h)
             runBlocking { imageDao.upsert(ImageFixtures.row(id, f, w, h)) }
@@ -72,24 +71,21 @@ class NativeImageShotsTest : NativeAppTest() {
         theme(ThemeMode.LIGHT)
         app.launch()
         notes.forEachIndexed { i, (key, md) -> app.seed("qa-shot-$key", md, 1_700_000_000_000L + i * 1_000L) }
-        // the theme is chosen before a note is opened: an open Aztec note does not take a new theme
+        // the theme is chosen before a note is opened
         for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
             theme(mode)
             app.settle(1_000)
             val t = mode.name.lowercase()
-            for (engine in listOf("native", "aztec")) {
-                runBlocking { prefs.setUseNativeEditor(engine == "native") }
-                for ((key, _) in notes) {
-                    app.tapCard("qa-shot-$key")
-                    compose.waitUntil(15_000) { app.editorOrNull() != null || app.aztecOrNull() != null }
-                    app.settle(2_000) // past the transition from the card and the pictures
-                    shot("p2-$key-$engine-$t")
-                    if (engine == "native" && key == "a") {
-                        tapCenterOfFirstPicture()
-                        shot("p2-$key-$engine-selected-$t")
-                    }
-                    app.back()
+            for ((key, _) in notes) {
+                app.tapCard("qa-shot-$key")
+                compose.waitUntil(15_000) { app.editorOrNull() != null }
+                app.settle(2_000) // past the transition from the card and the pictures
+                shot("p2-$key-native-$t")
+                if (key == "a") {
+                    tapCenterOfFirstPicture()
+                    shot("p2-$key-native-selected-$t")
                 }
+                app.back()
             }
         }
     }

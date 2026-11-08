@@ -3,7 +3,7 @@ package app.tessera.data.images
 import java.io.File
 
 /**
- * The downloader seam Aztec's image getter (`TesseraImageLoader`) delegates to when an image has no
+ * The downloader seam [NoteImageDecoder] delegates to when an image has no
  * local file yet. The DI-provided implementation is [DriveImageDownloader]; a no-op default (returning
  * `null`) is used where Drive isn't wired, which surfaces the "unavailable" placeholder.
  *

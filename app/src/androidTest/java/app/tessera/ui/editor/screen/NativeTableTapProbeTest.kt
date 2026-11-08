@@ -3,7 +3,6 @@ package app.tessera.ui.editor.screen
 import android.os.SystemClock
 import android.util.Log
 import android.view.MotionEvent
-import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -552,117 +551,39 @@ class NativeTableTapProbeTest : NativeAppTest() {
     }
 
     /**
-     * P2-3e: the same probes on the Aztec path (the flag off): there the table is the same `TableBlockEditor`, but in the screen's own Compose,
-     * without the overlay host. (a) a long press on the middle of "watermelon" three ways (as [aLongPressThreeWays]); (b) a tap, then the cell's
-     * node read fresh at 0, 50, 150, 300, 600 and 1200 ms after UP (T13); (c) `input swipe` long press, then reads 100 to 1200 ms after UP (the
-     * caret at 0 seen in the native path). After each, Z shows where the caret or the selection is. A fresh note each time.
-     */
-    @Test
-    fun onTheAztecPath() {
-        kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(false) }
-        try {
-            app.launch()
-            val rows = ArrayList<String>()
-            val cases = listOf(
-                "a1 long press, input swipe x y x y 1000", "a2 long press, DOWN + MOVE every 5 ms x200 + UP", "a3 long press, DOWN, sleep 1000, UP",
-                "b tap 60 ms, reads 0..1200 ms after UP", "c long press input swipe, reads 100..1200 ms after UP",
-            )
-            for ((k, case) in cases.withIndex()) {
-                val id = "qa-probe-aztec-$k"
-                app.seed(id, md, System.currentTimeMillis())
-                app.tapCard(id)
-                compose.waitUntil(15_000) { app.aztecOrNull() != null }
-                app.settle(1_000)
-                val t = Tables(app)
-                t.awaitCells(5_000) { "watermelon" in it }
-                val (x, y) = middleOfWatermelon(t)
-                val reads = ArrayList<String>()
-                fun inject(action: Int, d: Long) = t.inject(MotionEvent.obtain(d, SystemClock.uptimeMillis(), action, x.toFloat(), y.toFloat(), 0))
-                fun readAt(up: Long, at: List<Long>) = at.forEach { ms ->
-                    SystemClock.sleep((up + ms - SystemClock.uptimeMillis()).coerceAtLeast(0))
-                    reads += "$ms ms: ${t.focused()?.first} ${t.focusedSelection()}"
-                }
-                when (k) {
-                    0, 4 -> {
-                        t.shell("input swipe $x $y $x $y 1000")
-                        if (k == 4) readAt(SystemClock.uptimeMillis(), listOf(100L, 300L, 600L, 1200L))
-                    }
-                    1 -> {
-                        val d = SystemClock.uptimeMillis()
-                        inject(MotionEvent.ACTION_DOWN, d)
-                        repeat(200) { SystemClock.sleep(5); inject(MotionEvent.ACTION_MOVE, d) }
-                        inject(MotionEvent.ACTION_UP, d)
-                    }
-                    2 -> {
-                        val d = SystemClock.uptimeMillis()
-                        inject(MotionEvent.ACTION_DOWN, d)
-                        SystemClock.sleep(1000)
-                        inject(MotionEvent.ACTION_UP, d)
-                    }
-                    3 -> {
-                        val d = SystemClock.uptimeMillis()
-                        inject(MotionEvent.ACTION_DOWN, d)
-                        SystemClock.sleep(60)
-                        inject(MotionEvent.ACTION_UP, d)
-                        readAt(SystemClock.uptimeMillis(), listOf(0L, 50L, 150L, 300L, 600L, 1200L))
-                    }
-                }
-                app.settle(1_200)
-                val sel = t.focusedSelection()
-                t.ua.takeScreenshot()?.let { savePng(ctx, "p2t-aztec-$k", it) }
-                app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
-                app.settle(400)
-                val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
-                rows += "$case at ($x, $y): ${if (reads.isEmpty()) "" else "reads ${reads.joinToString(" | ")}; "}selection after 1.2 s $sel, Z -> \"$cell\""
-                app.back()
-            }
-            rows.forEach { log("aztec: $it") }
-        } finally {
-            kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(true) }
-        }
-    }
-
-    /**
      * P2-3f, the caret at 0 after a long press: what of the pointer probe brings it — the reads of the tree 100 to 1200 ms after UP, the shots at
-     * 100 and 600 ms, or both — on the native path and on Aztec. `input swipe x y x y 1000` on the middle of "watermelon", nothing focused, a fresh
+     * 100 and 600 ms, or both — on the native path. `input swipe x y x y 1000` on the middle of "watermelon", nothing focused, a fresh
      * note each time, Z after it.
      */
     @Test
     fun theCaretAfterALongPressReadsAgainstShots() {
         val rows = ArrayList<String>()
-        try {
-            for (aztec in listOf(false, true)) {
-                kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(!aztec) }
-                app.launch()
-                for ((k, case) in listOf("reads only", "shots only", "reads and shots", "nothing").withIndex()) {
-                    val id = "qa-probe-split-${if (aztec) "a" else "n"}-$k"
-                    app.seed(id, md, System.currentTimeMillis())
-                    app.tapCard(id)
-                    compose.waitUntil(15_000) { app.editorOrNull() != null || app.aztecOrNull() != null }
-                    app.settle(1_000)
-                    val t = Tables(app)
-                    t.awaitCells(5_000) { "watermelon" in it }
-                    val (x, y) = middleOfWatermelon(t)
-                    Log.d("TableBar", "QA split ${if (aztec) "aztec" else "native"} $case: long press")
-                    t.shell("input swipe $x $y $x $y 1000")
-                    val up = SystemClock.uptimeMillis()
-                    val reads = ArrayList<String>()
-                    for (at in listOf(100L, 300L, 600L, 1200L)) {
-                        SystemClock.sleep((up + at - SystemClock.uptimeMillis()).coerceAtLeast(0))
-                        if (k != 0 && k != 3 && (at == 100L || at == 600L)) t.ua.takeScreenshot()?.let { savePng(ctx, "p2t-split-${if (aztec) "a" else "n"}-$k-$at", it) }
-                        if (k == 0 || k == 2) reads += "$at: ${t.focusedSelection()}"
-                    }
-                    app.settle(600)
-                    Log.d("TableBar", "QA split ${if (aztec) "aztec" else "native"} $case: Z")
-                    app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
-                    app.settle(400)
-                    val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
-                    rows += "${if (aztec) "aztec" else "native"}, $case: ${if (reads.isEmpty()) "" else "reads ${reads.joinToString(" ")}; "}Z -> \"$cell\""
-                    app.back()
-                }
+        app.launch()
+        for ((k, case) in listOf("reads only", "shots only", "reads and shots", "nothing").withIndex()) {
+            val id = "qa-probe-split-n-$k"
+            app.seed(id, md, System.currentTimeMillis())
+            app.tapCard(id)
+            compose.waitUntil(15_000) { app.editorOrNull() != null }
+            app.settle(1_000)
+            val t = Tables(app)
+            t.awaitCells(5_000) { "watermelon" in it }
+            val (x, y) = middleOfWatermelon(t)
+            Log.d("TableBar", "QA split native $case: long press")
+            t.shell("input swipe $x $y $x $y 1000")
+            val up = SystemClock.uptimeMillis()
+            val reads = ArrayList<String>()
+            for (at in listOf(100L, 300L, 600L, 1200L)) {
+                SystemClock.sleep((up + at - SystemClock.uptimeMillis()).coerceAtLeast(0))
+                if (k != 0 && k != 3 && (at == 100L || at == 600L)) t.ua.takeScreenshot()?.let { savePng(ctx, "p2t-split-n-$k-$at", it) }
+                if (k == 0 || k == 2) reads += "$at: ${t.focusedSelection()}"
             }
-        } finally {
-            kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(true) }
+            app.settle(600)
+            Log.d("TableBar", "QA split native $case: Z")
+            app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
+            app.settle(400)
+            val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
+            rows += "native, $case: ${if (reads.isEmpty()) "" else "reads ${reads.joinToString(" ")}; "}Z -> \"$cell\""
+            app.back()
         }
         rows.forEach { log("split: $it") }
     }
@@ -712,49 +633,42 @@ class NativeTableTapProbeTest : NativeAppTest() {
     /**
      * P2-3f: the caret at 0 of the pointer probe came with a Z typed right after its last read (~1.25 s after UP); every probe that waited 0.6 s
      * more before Z had the caret at the press point. Here: `input swipe x y x y 1000` on the middle of "watermelon", Z at 0.3, 1.3 and 2.5 s
-     * after UP, with the tree read every 150 ms until then or not, on the native path and on Aztec. A fresh note each time.
+     * after UP, with the tree read every 150 ms until then or not, on the native path. A fresh note each time.
      */
     @Test
     fun theCaretAfterALongPressAndTheTimeOfTheKey() {
         val rows = ArrayList<String>()
-        try {
-            for (aztec in listOf(false, true)) {
-                kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(!aztec) }
-                app.launch()
-                var k = 0
-                for (reads in listOf(false, true)) for (keyAt in listOf(300L, 1300L, 2500L)) {
-                    val path = if (aztec) "aztec" else "native"
-                    val id = "qa-probe-keyat-$path-${k++}"
-                    app.seed(id, md, System.currentTimeMillis())
-                    app.tapCard(id)
-                    compose.waitUntil(15_000) { app.editorOrNull() != null || app.aztecOrNull() != null }
-                    app.settle(1_000)
-                    val t = Tables(app)
-                    t.awaitCells(5_000) { "watermelon" in it }
-                    val (x, y) = middleOfWatermelon(t)
-                    t.shell("input swipe $x $y $x $y 1000")
-                    val up = SystemClock.uptimeMillis()
-                    val seen = ArrayList<String>()
-                    if (reads) {
-                        var at = 100L
-                        while (at < keyAt - 50) {
-                            SystemClock.sleep((up + at - SystemClock.uptimeMillis()).coerceAtLeast(0))
-                            seen += "${SystemClock.uptimeMillis() - up}:${t.focusedSelection()?.first}"
-                            at += 150
-                        }
-                    }
-                    SystemClock.sleep((up + keyAt - SystemClock.uptimeMillis()).coerceAtLeast(0))
-                    val zAt = SystemClock.uptimeMillis() - up
-                    Log.d("TableBar", "QA key time $path reads=$reads: Z at $zAt ms after UP")
-                    app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
-                    app.settle(600)
-                    val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
-                    rows += "$path, reads $reads, Z at $zAt ms: ${if (seen.isEmpty()) "" else "caret read ${seen.joinToString(" ")}; "}Z -> \"$cell\""
-                    app.back()
+        app.launch()
+        var k = 0
+        for (reads in listOf(false, true)) for (keyAt in listOf(300L, 1300L, 2500L)) {
+            val path = "native"
+            val id = "qa-probe-keyat-$path-${k++}"
+            app.seed(id, md, System.currentTimeMillis())
+            app.tapCard(id)
+            compose.waitUntil(15_000) { app.editorOrNull() != null }
+            app.settle(1_000)
+            val t = Tables(app)
+            t.awaitCells(5_000) { "watermelon" in it }
+            val (x, y) = middleOfWatermelon(t)
+            t.shell("input swipe $x $y $x $y 1000")
+            val up = SystemClock.uptimeMillis()
+            val seen = ArrayList<String>()
+            if (reads) {
+                var at = 100L
+                while (at < keyAt - 50) {
+                    SystemClock.sleep((up + at - SystemClock.uptimeMillis()).coerceAtLeast(0))
+                    seen += "${SystemClock.uptimeMillis() - up}:${t.focusedSelection()?.first}"
+                    at += 150
                 }
             }
-        } finally {
-            kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(true) }
+            SystemClock.sleep((up + keyAt - SystemClock.uptimeMillis()).coerceAtLeast(0))
+            val zAt = SystemClock.uptimeMillis() - up
+            Log.d("TableBar", "QA key time $path reads=$reads: Z at $zAt ms after UP")
+            app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
+            app.settle(600)
+            val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
+            rows += "$path, reads $reads, Z at $zAt ms: ${if (seen.isEmpty()) "" else "caret read ${seen.joinToString(" ")}; "}Z -> \"$cell\""
+            app.back()
         }
         rows.forEach { log("key time: $it") }
     }
@@ -762,43 +676,36 @@ class NativeTableTapProbeTest : NativeAppTest() {
     /**
      * P2-3f: the probes that waited for the main thread to be idle (`app.settle`) before Z had the caret at the press point, the ones that only
      * slept had it at 0 even 2.5 s after UP. Here, 2.5 s after the long press (`input swipe x y x y 1000`): only a sleep; a runnable on the main
-     * thread (`runOnMainSync`); `waitForIdleSync` (timed). Then the cell's selection from the tree and Z. Native and Aztec, a fresh note each.
+     * thread (`runOnMainSync`); `waitForIdleSync` (timed). Then the cell's selection from the tree and Z. A fresh note each.
      */
     @Test
     fun theCaretAfterALongPressAndAnIdleMainThread() {
         val rows = ArrayList<String>()
-        try {
-            for (aztec in listOf(false, true)) {
-                kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(!aztec) }
-                app.launch()
-                for ((k, how) in listOf("sleep only", "runOnMainSync", "waitForIdleSync").withIndex()) {
-                    val path = if (aztec) "aztec" else "native"
-                    val id = "qa-probe-idle-$path-$k"
-                    app.seed(id, md, System.currentTimeMillis())
-                    app.tapCard(id)
-                    compose.waitUntil(15_000) { app.editorOrNull() != null || app.aztecOrNull() != null }
-                    app.settle(1_000)
-                    val t = Tables(app)
-                    t.awaitCells(5_000) { "watermelon" in it }
-                    val (x, y) = middleOfWatermelon(t)
-                    t.shell("input swipe $x $y $x $y 1000")
-                    SystemClock.sleep(2_500)
-                    val t0 = SystemClock.uptimeMillis()
-                    when (k) {
-                        1 -> app.instrumentation.runOnMainSync { }
-                        2 -> app.instrumentation.waitForIdleSync()
-                    }
-                    val took = SystemClock.uptimeMillis() - t0
-                    Log.d("TableBar", "QA idle $path $how: took $took ms, Z")
-                    app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
-                    app.settle(600)
-                    val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
-                    rows += "$path, $how (took $took ms): Z -> \"$cell\""
-                    app.back()
-                }
+        app.launch()
+        for ((k, how) in listOf("sleep only", "runOnMainSync", "waitForIdleSync").withIndex()) {
+            val path = "native"
+            val id = "qa-probe-idle-$path-$k"
+            app.seed(id, md, System.currentTimeMillis())
+            app.tapCard(id)
+            compose.waitUntil(15_000) { app.editorOrNull() != null }
+            app.settle(1_000)
+            val t = Tables(app)
+            t.awaitCells(5_000) { "watermelon" in it }
+            val (x, y) = middleOfWatermelon(t)
+            t.shell("input swipe $x $y $x $y 1000")
+            SystemClock.sleep(2_500)
+            val t0 = SystemClock.uptimeMillis()
+            when (k) {
+                1 -> app.instrumentation.runOnMainSync { }
+                2 -> app.instrumentation.waitForIdleSync()
             }
-        } finally {
-            kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(true) }
+            val took = SystemClock.uptimeMillis() - t0
+            Log.d("TableBar", "QA idle $path $how: took $took ms, Z")
+            app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
+            app.settle(600)
+            val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
+            rows += "$path, $how (took $took ms): Z -> \"$cell\""
+            app.back()
         }
         rows.forEach { log("idle: $it") }
     }
@@ -806,43 +713,36 @@ class NativeTableTapProbeTest : NativeAppTest() {
     /**
      * P2-3f: the user's case of T2 — a tap in the middle of "watermelon" and a key right away, with no wait of the test between them (every
      * earlier tap probe went through `Tables.tap`, which settles 500 ms). Z at 150, 400 and 1000 ms after UP; the tap 60 ms (injected) and
-     * `input tap` (shell). Native and Aztec, a fresh note each time.
+     * `input tap` (shell). A fresh note each time.
      */
     @Test
     fun aTapAndAKeyRightAway() {
         val rows = ArrayList<String>()
-        try {
-            for (aztec in listOf(false, true)) {
-                kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(!aztec) }
-                app.launch()
-                var n = 0
-                for (how in listOf("inject 60 ms", "input tap")) for (keyAt in listOf(150L, 400L, 1000L)) {
-                    val path = if (aztec) "aztec" else "native"
-                    val id = "qa-probe-tapnow-$path-${n++}"
-                    app.seed(id, md, System.currentTimeMillis())
-                    app.tapCard(id)
-                    compose.waitUntil(15_000) { app.editorOrNull() != null || app.aztecOrNull() != null }
-                    app.settle(1_000)
-                    val t = Tables(app)
-                    t.awaitCells(5_000) { "watermelon" in it }
-                    val (x, y) = middleOfWatermelon(t)
-                    if (how == "input tap") t.shell("input tap $x $y") else {
-                        val d = SystemClock.uptimeMillis()
-                        t.inject(MotionEvent.obtain(d, d, MotionEvent.ACTION_DOWN, x.toFloat(), y.toFloat(), 0))
-                        SystemClock.sleep(60)
-                        t.inject(MotionEvent.obtain(d, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x.toFloat(), y.toFloat(), 0))
-                    }
-                    val up = SystemClock.uptimeMillis()
-                    SystemClock.sleep((up + keyAt - SystemClock.uptimeMillis()).coerceAtLeast(0))
-                    app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
-                    app.settle(600)
-                    val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
-                    rows += "$path, $how, Z at $keyAt ms: Z -> \"$cell\""
-                    app.back()
-                }
+        app.launch()
+        var n = 0
+        for (how in listOf("inject 60 ms", "input tap")) for (keyAt in listOf(150L, 400L, 1000L)) {
+            val path = "native"
+            val id = "qa-probe-tapnow-$path-${n++}"
+            app.seed(id, md, System.currentTimeMillis())
+            app.tapCard(id)
+            compose.waitUntil(15_000) { app.editorOrNull() != null }
+            app.settle(1_000)
+            val t = Tables(app)
+            t.awaitCells(5_000) { "watermelon" in it }
+            val (x, y) = middleOfWatermelon(t)
+            if (how == "input tap") t.shell("input tap $x $y") else {
+                val d = SystemClock.uptimeMillis()
+                t.inject(MotionEvent.obtain(d, d, MotionEvent.ACTION_DOWN, x.toFloat(), y.toFloat(), 0))
+                SystemClock.sleep(60)
+                t.inject(MotionEvent.obtain(d, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x.toFloat(), y.toFloat(), 0))
             }
-        } finally {
-            kotlinx.coroutines.runBlocking { prefs.setUseNativeEditor(true) }
+            val up = SystemClock.uptimeMillis()
+            SystemClock.sleep((up + keyAt - SystemClock.uptimeMillis()).coerceAtLeast(0))
+            app.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_Z)
+            app.settle(600)
+            val cell = t.cells().map { it.first }.firstOrNull { it.contains("z") }
+            rows += "$path, $how, Z at $keyAt ms: Z -> \"$cell\""
+            app.back()
         }
         rows.forEach { log("tap now: $it") }
     }

@@ -91,7 +91,7 @@ private fun backtickRunAtStart(s: String): Int {
     return n
 }
 
-/** Same detection as `splitMarkdownIntoBlocks`, but on lines. Returns the table and the index after it. */
+/** Detects a GFM table (with its optional sizing comment) at a line. Returns the table and the index after it. */
 internal fun readTable(lines: List<String>, i: Int): Pair<NoteBlock.Table, Int>? {
     val meta = TESSERA_META.matchEntire(lines[i])
     val start = if (meta != null) i + 1 else i

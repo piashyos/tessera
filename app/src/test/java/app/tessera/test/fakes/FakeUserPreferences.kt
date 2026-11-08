@@ -20,9 +20,6 @@ class FakeUserPreferences : UserPreferences {
     private val viewMode = MutableStateFlow(NotesViewMode.List)
     private val recent = MutableStateFlow<List<String>>(emptyList())
 
-    /** Drivable from tests: set `.value` directly or via [setUseNativeEditor]. */
-    override val useNativeEditor = MutableStateFlow(false)
-
     override val themeMode: Flow<ThemeMode> get() = theme
     override val cachedThemeMode: ThemeMode get() = theme.value
     override val dynamicColor: Flow<Boolean> get() = dynamic
@@ -75,10 +72,6 @@ class FakeUserPreferences : UserPreferences {
 
     override suspend fun setNotesViewMode(mode: NotesViewMode) {
         viewMode.value = mode
-    }
-
-    override suspend fun setUseNativeEditor(enabled: Boolean) {
-        useNativeEditor.value = enabled
     }
 
     override suspend fun addRecentSearch(query: String) {

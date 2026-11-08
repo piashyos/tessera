@@ -44,55 +44,28 @@ import app.tessera.ui.editor.engine.ParagraphFormat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.FormatQuote
-import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.TableChart
 import com.composables.icons.lucide.Heading1
 import com.composables.icons.lucide.Heading2
 import com.composables.icons.lucide.Heading3
-import com.composables.icons.lucide.Heading4
-import com.composables.icons.lucide.Heading5
-import com.composables.icons.lucide.Heading6
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pilcrow
-import org.wordpress.aztec.AztecTextFormat
 
 data class FormatEntry(
-    /**
-     * Aztec format this entry corresponds to. Used to highlight the row when
-     * the cursor's active formats include it. May be `null` for entries that
-     * are not toggles (e.g. "Insert table"), which never appear active.
-     */
-    val format: AztecTextFormat?,
     val icon: ImageVector,
     val labelRes: Int,
     val onClick: () -> Unit,
-    /** Native engine: the paragraph kind this entry sets; the row is active when the caret paragraph is of it. */
-    val kind: ParagraphKind? = null,
+    /** The paragraph kind this entry sets; the row is active when the caret paragraph is of it. */
+    val kind: ParagraphKind,
 )
 
-/** Full block-format catalogue surfaced by the ⋯ panel: paragraph, headings, quote/code/insert. */
+/** The ⋯ catalogue (spec §7): the paragraph kinds the engine has; the divider lives on the bar. */
 fun formatMenuEntries(actions: RichBodyActions): List<FormatEntry> = listOf(
-    FormatEntry(AztecTextFormat.FORMAT_PARAGRAPH, Lucide.Pilcrow, R.string.toolbar_paragraph, actions::toggleParagraph),
-    FormatEntry(AztecTextFormat.FORMAT_HEADING_1, Lucide.Heading1, R.string.toolbar_h1, actions::toggleHeading1),
-    FormatEntry(AztecTextFormat.FORMAT_HEADING_2, Lucide.Heading2, R.string.toolbar_h2, actions::toggleHeading2),
-    FormatEntry(AztecTextFormat.FORMAT_HEADING_3, Lucide.Heading3, R.string.toolbar_h3, actions::toggleHeading3),
-    FormatEntry(AztecTextFormat.FORMAT_HEADING_4, Lucide.Heading4, R.string.toolbar_h4, actions::toggleHeading4),
-    FormatEntry(AztecTextFormat.FORMAT_HEADING_5, Lucide.Heading5, R.string.toolbar_h5, actions::toggleHeading5),
-    FormatEntry(AztecTextFormat.FORMAT_HEADING_6, Lucide.Heading6, R.string.toolbar_h6, actions::toggleHeading6),
-    FormatEntry(AztecTextFormat.FORMAT_QUOTE, Icons.Rounded.FormatQuote, R.string.toolbar_quote, actions::toggleQuote),
-    FormatEntry(AztecTextFormat.FORMAT_PREFORMAT, Icons.Rounded.Code, R.string.toolbar_code, actions::toggleCode),
-    FormatEntry(null, Icons.Rounded.Remove, R.string.toolbar_divider, actions::insertHorizontalRule),
-    FormatEntry(null, Icons.Rounded.TableChart, R.string.toolbar_table, actions::insertTable),
-)
-
-/** The ⋯ catalogue of the native engine (spec §7): the paragraph kinds it has; the divider lives on the bar. */
-fun nativeFormatMenuEntries(actions: RichBodyActions): List<FormatEntry> = listOf(
-    FormatEntry(null, Lucide.Heading1, R.string.editor_style_title, actions::toggleHeading1, ParagraphKind.Title),
-    FormatEntry(null, Lucide.Heading2, R.string.editor_style_heading, actions::toggleHeading2, ParagraphKind.Heading),
-    FormatEntry(null, Lucide.Heading3, R.string.editor_style_subheading, actions::toggleSubheading, ParagraphKind.Subheading),
-    FormatEntry(null, Lucide.Pilcrow, R.string.editor_style_body, actions::toggleParagraph, ParagraphKind.Body),
-    FormatEntry(null, Icons.Rounded.Code, R.string.editor_style_mono, actions::toggleCode, ParagraphKind.Mono),
-    FormatEntry(null, Icons.Rounded.FormatQuote, R.string.toolbar_quote, actions::toggleQuote, ParagraphKind.Quote),
+    FormatEntry(Lucide.Heading1, R.string.editor_style_title, actions::toggleHeading1, ParagraphKind.Title),
+    FormatEntry(Lucide.Heading2, R.string.editor_style_heading, actions::toggleHeading2, ParagraphKind.Heading),
+    FormatEntry(Lucide.Heading3, R.string.editor_style_subheading, actions::toggleSubheading, ParagraphKind.Subheading),
+    FormatEntry(Lucide.Pilcrow, R.string.editor_style_body, actions::toggleParagraph, ParagraphKind.Body),
+    FormatEntry(Icons.Rounded.Code, R.string.editor_style_mono, actions::toggleCode, ParagraphKind.Mono),
+    FormatEntry(Icons.Rounded.FormatQuote, R.string.toolbar_quote, actions::toggleQuote, ParagraphKind.Quote),
 )
 
 /**
@@ -109,11 +82,9 @@ fun nativeFormatMenuEntries(actions: RichBodyActions): List<FormatEntry> = listO
 @Composable
 fun MarkdownFormatMenu(
     expanded: Boolean,
-    activeFormats: Set<AztecTextFormat>,
     actions: RichBodyActions,
     onDismiss: () -> Unit,
-    nativeEngine: Boolean = false,
-    formatState: FormatState? = null,
+    formatState: FormatState = FormatState.Empty,
 ) {
     if (!expanded) return
     val density = LocalDensity.current
@@ -147,13 +118,8 @@ fun MarkdownFormatMenu(
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 8.dp),
                 ) {
-                    val entries = if (nativeEngine) nativeFormatMenuEntries(actions) else formatMenuEntries(actions)
-                    entries.forEach { entry ->
-                        val active = if (nativeEngine) {
-                            entry.kind != null && formatState?.paragraph == ParagraphFormat.Single(entry.kind)
-                        } else {
-                            entry.format != null && entry.format in activeFormats
-                        }
+                    formatMenuEntries(actions).forEach { entry ->
+                        val active = formatState.paragraph == ParagraphFormat.Single(entry.kind)
                         val accent = if (active) {
                             MaterialTheme.colorScheme.primary
                         } else {

@@ -15,10 +15,7 @@ import app.tessera.ui.editor.engine.ClipboardBridge
 import app.tessera.ui.editor.engine.DocBinder
 import app.tessera.ui.editor.engine.TesseraEditText
 import dagger.hilt.android.testing.HiltAndroidTest
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -96,34 +93,6 @@ class NativeEditorRacesTest : NativeAppTest() {
         }
         app.back()
         assertEquals("Rotate\n- itemX\n- YZ", app.entity("qa-rot-2")!!.content)
-    }
-
-    // ------------------------------------------------------------------ the flag under an open note
-
-    @Test
-    fun switchingTheFlagUnderAnOpenNoteChangesNeitherTheEditorNorTheEdit() {
-        app.launch()
-        app.seed("qa-flag", "Flag\n- [ ] task", BASE)
-        val e = app.open("qa-flag")
-        app.ui { e.setSelection(e.text!!.length) }
-        app.ime(e) { commitText("!", 1) }
-        runBlocking { prefs.setUseNativeEditor(false) } // Settings, while the note is open (another window, a second activity)
-        app.settle()
-        assertNotNull("still the native editor", app.editorOrNull())
-        assertNull("no Aztec appeared", app.aztecOrNull())
-        app.ime(app.editorOrNull()!!) { commitText("?", 1) }
-        app.back()
-        assertEquals("both edits saved", "Flag\n- [ ] task!?", app.entity("qa-flag")!!.content)
-
-        // the next note opened takes the new value: Aztec, with the text as saved
-        app.tapCard("qa-flag")
-        compose.waitUntil(15_000) { app.aztecOrNull() != null }
-        val aztecText = app.ui { app.aztecOrNull()!!.text.toString() }
-        assertTrue("Aztec shows the saved edit: \"$aztecText\"", aztecText.contains("task!?"))
-        runBlocking { prefs.setUseNativeEditor(true) } // and back while Aztec is open: Aztec stays
-        app.settle()
-        assertNull("Aztec stays until the note is left", app.editorOrNull())
-        app.back()
     }
 
     // ------------------------------------------------------------------ a sync landing while the note is open

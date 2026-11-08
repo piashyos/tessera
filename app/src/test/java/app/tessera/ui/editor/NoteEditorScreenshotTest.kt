@@ -1,7 +1,10 @@
 package app.tessera.ui.editor
 
+import android.graphics.Bitmap
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import android.util.Size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -9,9 +12,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onFirst
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.components.TagPickerPopup
+import app.tessera.ui.editor.engine.ImageResult
+import app.tessera.ui.editor.engine.ObjectImageSource
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.chrisbanes.haze.HazeState
 import org.junit.Rule
@@ -20,15 +26,13 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import org.wordpress.aztec.Html
 
 /**
  * Screenshot baselines for [NoteEditorScreen] (Plan 07, Task 2).
  *
- * The body is the real AztecText Android View (not the inspection-mode placeholder): it does
- * inflate and render deterministically under Robolectric's NATIVE graphics mode, so these
- * baselines exercise the genuine rich-editor surface — top bar, tag chips, AztecText body, and
- * the format bar — rather than a stand-in. The format bar renders because the IME insets read as
+ * The body is the real native editor View (not the inspection-mode placeholder): it does
+ * render deterministically under Robolectric's NATIVE graphics mode, so these baselines exercise
+ * the genuine editor surface — top bar, tag chips, `NoteBody`, and the format bar — rather than a stand-in. The format bar renders because the IME insets read as
  * visible under Robolectric, which conveniently matches the plan's "IME up" state.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -44,14 +48,14 @@ class NoteEditorScreenshotTest {
                 Surface(modifier = Modifier.fillMaxSize()) { content() }
             }
         }
-        composeRule.onRoot().captureRoboImage("ui/editor/$name.png")
+        composeRule.onAllNodes(isRoot()).onFirst().captureRoboImage("ui/editor/$name.png")
     }
 
     @Composable
-    private fun editor(state: NoteEditorState, imageGetter: Html.ImageGetter? = null) {
+    private fun editor(state: NoteEditorState, imageSource: ObjectImageSource? = null) {
         NoteEditorScreen(
             state = state,
-            imageGetter = imageGetter,
+            imageSource = imageSource,
             onContentChange = {},
             onAddTag = {},
             onRemoveTag = {},
@@ -62,23 +66,18 @@ class NoteEditorScreenshotTest {
     }
 
     /**
-     * Synchronous stand-in for [TesseraImageLoader]: delivers a solid-color tile immediately so the
-     * baseline renders a real image span (not a placeholder) without touching disk or coroutines.
+     * Synchronous stand-in for `NoteObjectImageSource`: the picture is in memory at once, so the baseline renders a real
+     * image object (not a placeholder) without touching disk or coroutines.
      */
-    private fun solidImageGetter(): Html.ImageGetter = object : Html.ImageGetter {
-        override fun loadImage(source: String, callbacks: Html.ImageGetter.Callbacks, maxWidth: Int) {
-            val w = maxWidth.takeIf { it > 0 } ?: 600
-            val drawable = ColorDrawable(Color.rgb(0x6A, 0x8E, 0xAE))
-            drawable.setBounds(0, 0, w, (w * 0.5f).toInt())
-            callbacks.onImageLoaded(drawable)
-        }
-
-        override fun loadImage(
-            source: String,
-            callbacks: Html.ImageGetter.Callbacks,
-            maxWidth: Int,
-            minWidth: Int,
-        ) = loadImage(source, callbacks, maxWidth)
+    private fun solidImageSource(): ObjectImageSource = object : ObjectImageSource {
+        private val tile: Drawable = BitmapDrawable(
+            null,
+            Bitmap.createBitmap(600, 300, Bitmap.Config.ARGB_8888)
+                .apply { eraseColor(Color.rgb(0x6A, 0x8E, 0xAE)); density = Bitmap.DENSITY_NONE },
+        )
+        override fun peek(src: String, maxWidthPx: Int): Drawable = tile
+        override fun size(src: String, maxWidthPx: Int): Size = Size(600, 300)
+        override fun load(src: String, maxWidthPx: Int, onResult: (ImageResult) -> Unit): () -> Unit = {}
     }
 
     @Test fun contentLight() = capture("editor_content_light", darkTheme = false) { editor(contentState()) }
@@ -94,10 +93,10 @@ class NoteEditorScreenshotTest {
     @Test fun tableDark() = capture("editor_table_dark", darkTheme = true) { editor(tableState()) }
 
     @Test fun imageLight() =
-        capture("editor_image_light", darkTheme = false) { editor(imageState(), solidImageGetter()) }
+        capture("editor_image_light", darkTheme = false) { editor(imageState(), solidImageSource()) }
 
     @Test fun imageDark() =
-        capture("editor_image_dark", darkTheme = true) { editor(imageState(), solidImageGetter()) }
+        capture("editor_image_dark", darkTheme = true) { editor(imageState(), solidImageSource()) }
 
     @Test fun tagPickerLight() = capture("editor_tag_picker_light", darkTheme = false) { tagPicker() }
 

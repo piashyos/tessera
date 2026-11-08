@@ -74,7 +74,6 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Balance
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Grain
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
@@ -106,9 +105,6 @@ fun SettingsScreen(
     onExport: (OutputStream) -> Unit = {},
     onEmptyTrash: () -> Unit = {},
     onMessageShown: () -> Unit = {},
-    /** Debug-only rows (the new-editor switch); the caller decides, see `NotesNavGraph`. */
-    showDebugOptions: Boolean = false,
-    onSetUseNativeEditor: (Boolean) -> Unit = {},
 ) {
     var showThemeSheet by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
@@ -237,11 +233,7 @@ fun SettingsScreen(
             }
 
             item {
-                AboutSection(
-                    showDebugOptions = showDebugOptions,
-                    useNativeEditor = state.useNativeEditor,
-                    onSetUseNativeEditor = onSetUseNativeEditor,
-                )
+                AboutSection()
             }
         }
     }
@@ -504,11 +496,7 @@ private fun RowSpinner() {
 }
 
 @Composable
-private fun AboutSection(
-    showDebugOptions: Boolean,
-    useNativeEditor: Boolean,
-    onSetUseNativeEditor: (Boolean) -> Unit,
-) {
+private fun AboutSection() {
     val context = LocalContext.current
     val appVersion = remember(context) {
         runCatching {
@@ -521,17 +509,6 @@ private fun AboutSection(
             title = stringResource(R.string.settings_about),
             subtitle = stringResource(R.string.settings_version, appVersion),
         )
-        if (showDebugOptions) {
-            SettingsDivider()
-            SettingsRow(
-                leadingIcon = Icons.Rounded.EditNote,
-                title = stringResource(R.string.settings_native_editor),
-                onClick = { onSetUseNativeEditor(!useNativeEditor) },
-                trailing = {
-                    Switch(checked = useNativeEditor, onCheckedChange = onSetUseNativeEditor)
-                },
-            )
-        }
         SettingsDivider()
         SettingsRow(
             leadingIcon = Icons.Rounded.Balance,

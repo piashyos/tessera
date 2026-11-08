@@ -22,9 +22,8 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Sources, in order: Room row's `localPath` → `cacheDir/images/<id>.webp` → `filesDir/images/<id>.webp`
  * → Drive via [downloader]. `w`/`rot` are baked into the bitmap: rotate first, then
- * width = `min(rotated width, maxWidth) × w%`. Aztec's span width is `min(drawable.intrinsicWidth,
- * paragraphWidth)` and ignores `setBounds`, hence scaling the pixels; the bitmap density is
- * [Bitmap.DENSITY_NONE] so the intrinsic width is the raw pixel width on every device density.
+ * width = `min(rotated width, maxWidth) × w%`: the pixels are scaled, not the drawable bounds, and the bitmap
+ * density is [Bitmap.DENSITY_NONE] so the intrinsic width is the raw pixel width on every device density.
  */
 class NoteImageDecoder(
     private val noteImageDao: NoteImageDao,
@@ -100,23 +99,6 @@ class NoteImageDecoder(
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
         return if (bounds.outWidth > 0 && bounds.outHeight > 0) Size(bounds.outWidth, bounds.outHeight) else null
-    }
-
-    /**
-     * Blocking decode of the conventional local file only (no Room, no Drive), or null. For callers
-     * that must deliver synchronously (Aztec measures its image span once, right after fromHtml).
-     */
-    fun decodeLocal(src: String, maxWidthPx: Int): Bitmap? {
-        val ref = parseImageRef(src) ?: return null
-        val file = localFile(ref.id, null) ?: return null
-        return fileDecoder(file, maxWidthPx, null, ref)
-    }
-
-    /** Stored (width, height) of [src]'s Room row, for sizing placeholders; null when unknown. */
-    suspend fun storedSize(src: String): Pair<Int, Int>? {
-        val ref = parseImageRef(src) ?: return null
-        val row = attempt { noteImageDao.byId(ref.id) } ?: return null
-        return row.width to row.height
     }
 
     /** Run a Room/Drive call; any failure but cancellation means "no result". */

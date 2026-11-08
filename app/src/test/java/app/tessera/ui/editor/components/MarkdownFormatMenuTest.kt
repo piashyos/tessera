@@ -5,14 +5,18 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import app.tessera.core.text.notedoc.ParagraphKind
 import app.tessera.core.ui.theme.TesseraTheme
+import app.tessera.ui.editor.engine.FormatState
+import app.tessera.ui.editor.engine.ParagraphFormat
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import org.wordpress.aztec.AztecTextFormat
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -20,49 +24,55 @@ import org.wordpress.aztec.AztecTextFormat
 class MarkdownFormatMenuTest {
     @get:Rule val composeRule = createComposeRule()
 
-    private val recordedToggles = mutableListOf<AztecTextFormat>()
+    private val calls = mutableListOf<String>()
 
     private val fakeActions = object : RichBodyActions {
-        override fun toggleBold() { recordedToggles += AztecTextFormat.FORMAT_BOLD }
-        override fun toggleItalic() { recordedToggles += AztecTextFormat.FORMAT_ITALIC }
-        override fun toggleStrikethrough() { recordedToggles += AztecTextFormat.FORMAT_STRIKETHROUGH }
-        override fun toggleParagraph() { recordedToggles += AztecTextFormat.FORMAT_PARAGRAPH }
-        override fun toggleHeading1() { recordedToggles += AztecTextFormat.FORMAT_HEADING_1 }
-        override fun toggleHeading2() { recordedToggles += AztecTextFormat.FORMAT_HEADING_2 }
-        override fun toggleHeading3() { recordedToggles += AztecTextFormat.FORMAT_HEADING_3 }
-        override fun toggleHeading4() { recordedToggles += AztecTextFormat.FORMAT_HEADING_4 }
-        override fun toggleHeading5() { recordedToggles += AztecTextFormat.FORMAT_HEADING_5 }
-        override fun toggleHeading6() { recordedToggles += AztecTextFormat.FORMAT_HEADING_6 }
-        override fun toggleBulletList() { recordedToggles += AztecTextFormat.FORMAT_UNORDERED_LIST }
-        override fun toggleTaskList() { recordedToggles += AztecTextFormat.FORMAT_TASK_LIST }
+        override fun toggleBold() { calls += "bold" }
+        override fun toggleItalic() { calls += "italic" }
+        override fun toggleStrikethrough() { calls += "strike" }
+        override fun toggleParagraph() { calls += "paragraph" }
+        override fun toggleHeading1() { calls += "h1" }
+        override fun toggleHeading2() { calls += "h2" }
+        override fun toggleHeading3() {}
+        override fun toggleHeading4() {}
+        override fun toggleHeading5() {}
+        override fun toggleHeading6() {}
+        override fun toggleBulletList() { calls += "bullet" }
+        override fun toggleTaskList() { calls += "task" }
+        override fun toggleSubheading() { calls += "subheading" }
+        override fun toggleQuote() { calls += "quote" }
+        override fun toggleCode() { calls += "code" }
         override fun focusBody() = Unit
-        override fun activeFormats(): Set<AztecTextFormat> = setOf(AztecTextFormat.FORMAT_BOLD)
     }
 
-    @Test fun `panel shows block entries incl quote and code and dispatches the right callback`() {
+    @Test fun `panel shows the paragraph kinds and dispatches the right callback`() {
         var dismissed = false
         composeRule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
                 MarkdownFormatMenu(
                     expanded = true,
-                    activeFormats = setOf(AztecTextFormat.FORMAT_HEADING_1),
                     actions = fakeActions,
                     onDismiss = { dismissed = true },
+                    formatState = FormatState(paragraph = ParagraphFormat.Single(ParagraphKind.Title)),
                 )
             }
         }
 
-        composeRule.onNodeWithText("Paragraph").assertIsDisplayed()
-        composeRule.onNodeWithText("Heading 1").assertIsDisplayed()
-        // The panel height is capped; late entries scroll into view rather than showing at once.
-        composeRule.onNodeWithText("Heading 6").performScrollTo().assertIsDisplayed()
-        // Block formats hidden in the bar's horizontal scroll must ALSO be reachable here.
-        composeRule.onNodeWithText("Quote").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Code").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Insert table").performScrollTo().assertIsDisplayed()
+        listOf("Title", "Heading", "Subheading", "Body", "Monospaced", "Quote")
+            .forEach { composeRule.onNodeWithText(it).performScrollTo().assertIsDisplayed() }
 
-        composeRule.onNodeWithText("Heading 3").performScrollTo().performClick()
-        assert(AztecTextFormat.FORMAT_HEADING_3 in recordedToggles)
-        assert(dismissed)
+        composeRule.onNodeWithText("Subheading").performScrollTo().performClick()
+        assertEquals(listOf("subheading"), calls)
+        assertTrue(dismissed)
+    }
+
+    @Test fun `the catalogue maps every entry to its paragraph kind`() {
+        assertEquals(
+            listOf(
+                ParagraphKind.Title, ParagraphKind.Heading, ParagraphKind.Subheading,
+                ParagraphKind.Body, ParagraphKind.Mono, ParagraphKind.Quote,
+            ),
+            formatMenuEntries(fakeActions).map { it.kind },
+        )
     }
 }

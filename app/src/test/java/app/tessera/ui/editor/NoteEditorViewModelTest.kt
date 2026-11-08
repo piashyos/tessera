@@ -2,8 +2,6 @@ package app.tessera.ui.editor
 
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
-import app.tessera.core.preferences.UserPreferences
-import app.tessera.test.fakes.FakeUserPreferences
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.delay
 import app.tessera.domain.model.Folder
@@ -41,10 +39,7 @@ import app.tessera.data.images.NoteImageDecoder
 import app.tessera.data.local.dao.NoteImageDao
 import app.tessera.data.local.entity.ImageStatus
 import app.tessera.data.local.entity.NoteImageEntity
-import app.tessera.ui.editor.components.NoteImageLoaderFactory
 import app.tessera.ui.editor.components.NoteObjectImageSourceFactory
-import app.tessera.ui.editor.components.TesseraImageLoader
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -100,21 +95,19 @@ class NoteEditorViewModelTest {
     }
 
     @Test
-    fun `native flag arrives together with the content and is null before`() = runTest(dispatcher.scheduler) {
-        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
-        val vm = FakeEditorRepository(notes = listOf(sampleNote("n", content = "x"))).createViewModel("n", prefs = prefs)
+    fun `no state shows the content before the note is loaded`() = runTest(dispatcher.scheduler) {
+        val vm = FakeEditorRepository(notes = listOf(sampleNote("n", content = "x"))).createViewModel("n")
         val seen = mutableListOf<NoteEditorState>()
-        assertEquals(null, vm.state.value.useNativeEditor)
+        assertTrue(vm.state.value.isLoading)
         val job = launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { seen += it } }
         runCurrent()
 
-        assertEquals(null, seen.first().useNativeEditor)
         assertTrue(seen.first().isLoading)
         assertTrue(
-            seen.none { it.content.isNotEmpty() && it.useNativeEditor == null },
-            "no state shows the content while the engine is unknown",
+            seen.none { it.content.isNotEmpty() && it.isLoading },
+            "no state shows the content while the note is loading",
         )
-        assertEquals(true, vm.state.value.useNativeEditor)
+        assertFalse(vm.state.value.isLoading)
         assertEquals("x", vm.state.value.content)
         job.cancel()
     }
@@ -129,12 +122,11 @@ class NoteEditorViewModelTest {
     }
 
     @Test
-    fun `native open reads the bounds of the note images before the content is shown`() = runTest(dispatcher.scheduler) {
+    fun `open reads the bounds of the note images before the content is shown`() = runTest(dispatcher.scheduler) {
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         val dao = RecordingImageDao(gate)
-        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
         val note = sampleNote("n", content = "a\n\n![](tessera-img://abc?w=50)\n\n![](tessera-img://def)")
-        val vm = FakeEditorRepository(notes = listOf(note)).createViewModel("n", prefs = prefs, imageDao = dao)
+        val vm = FakeEditorRepository(notes = listOf(note)).createViewModel("n", imageDao = dao)
         runCurrent()
         waitFor("the prefetch reached the table", { dao.byIdCalls.isNotEmpty() })
         assertEquals(listOf("abc"), dao.byIdCalls.toList(), "the first image is being looked up")
@@ -151,10 +143,9 @@ class NoteEditorViewModelTest {
     fun `a flush while the bounds are read does not delete the note as a blank one`() = runTest(dispatcher.scheduler) {
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         val dao = RecordingImageDao(gate)
-        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
         val note = sampleNote("n", content = "a\n\n![](tessera-img://abc)")
         val repo = FakeEditorRepository(notes = listOf(note))
-        val vm = repo.createViewModel("n", prefs = prefs, imageDao = dao)
+        val vm = repo.createViewModel("n", imageDao = dao)
         runCurrent()
         waitFor("the prefetch reached the table", { dao.byIdCalls.isNotEmpty() })
 
@@ -171,66 +162,18 @@ class NoteEditorViewModelTest {
     }
 
     @Test
-    fun `the old engine and a note without images read no bounds`()= runTest(dispatcher.scheduler) {
+    fun `a note without images reads no bounds`() = runTest(dispatcher.scheduler) {
         val dao = RecordingImageDao()
-        val withImage = sampleNote("n", content = "![](tessera-img://abc)")
-        val aztec = FakeEditorRepository(notes = listOf(withImage)).createViewModel("n", imageDao = dao)
-        runCurrent()
-        assertFalse(aztec.state.value.isLoading)
-        val native = FakeUserPreferences().apply { useNativeEditor.value = true }
-        val plain = FakeEditorRepository(notes = listOf(sampleNote("p", content = "text"))).createViewModel("p", prefs = native, imageDao = dao)
+        val plain = FakeEditorRepository(notes = listOf(sampleNote("p", content = "text"))).createViewModel("p", imageDao = dao)
         runCurrent()
         assertFalse(plain.state.value.isLoading)
         assertEquals(emptyList<String>(), dao.byIdCalls.toList())
     }
 
     @Test
-    fun `a slow preference holds the note back and the flag still comes with the content`() = runTest(dispatcher.scheduler) {
-        val slow = object : UserPreferences by FakeUserPreferences() {
-            override val useNativeEditor: Flow<Boolean> = flow { delay(1_000); emit(true) }
-        }
-        val repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = "x")))
-        val vm = repo.createViewModel("n", preferences = slow)
-        runCurrent()
-        assertEquals(null, vm.state.value.useNativeEditor)
-        assertEquals("", vm.state.value.content)
-
-        advanceTimeBy(1_001)
-        runCurrent()
-        assertEquals(true, vm.state.value.useNativeEditor)
-        assertEquals("x", vm.state.value.content)
-        assertTrue(repo.updateCalls.isEmpty())
-    }
-
-    @Test
-    fun `native flag off is read once as false`() = runTest(dispatcher.scheduler) {
-        val vm = FakeEditorRepository(notes = listOf(sampleNote("n"))).createViewModel("n")
-        runCurrent()
-        assertEquals(false, vm.state.value.useNativeEditor)
-    }
-
-    @Test
-    fun `flag switched while the note is open changes nothing and writes nothing`() = runTest(dispatcher.scheduler) {
-        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
-        val repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = "* legacy")))
-        val vm = repo.createViewModel("n", prefs = prefs)
-        runCurrent()
-        val before = vm.state.value
-
-        prefs.setUseNativeEditor(false)
-        advanceTimeBy(5_000)
-        runCurrent()
-
-        assertEquals(before, vm.state.value)
-        assertEquals(true, vm.state.value.useNativeEditor)
-        assertTrue(repo.updateCalls.isEmpty())
-    }
-
-    @Test
     fun `an edit undone after a flush still writes the last state, not the one the flush wrote`() = runTest(dispatcher.scheduler) {
-        val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
         val repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = "abc")))
-        val created = repo.createViewModel("n", prefs = prefs)
+        val created = repo.createViewModel("n")
         val store = androidx.lifecycle.ViewModelStore()
         val vm = androidx.lifecycle.ViewModelProvider(store, object : androidx.lifecycle.ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -396,10 +339,9 @@ class NoteEditorViewModelTest {
 
     private class Emptied(val repo: FakeEditorRepository, val vm: NoteEditorViewModel, val store: androidx.lifecycle.ViewModelStore)
 
-    private fun kotlinx.coroutines.test.TestScope.emptied(native: Boolean): Emptied {
-        val prefs = FakeUserPreferences().apply { useNativeEditor.value = native }
+    private fun kotlinx.coroutines.test.TestScope.emptied(): Emptied {
         val repo = FakeEditorRepository(notes = listOf(sampleNote("t6", content = "old content")))
-        val created = repo.createViewModel("t6", currentUser = "me", prefs = prefs)
+        val created = repo.createViewModel("t6", currentUser = "me")
         val store = androidx.lifecycle.ViewModelStore()
         val vm = androidx.lifecycle.ViewModelProvider(store, object : androidx.lifecycle.ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -418,8 +360,8 @@ class NoteEditorViewModelTest {
 
     @Test
     fun `emptied then autosave then typed then Back saves the new text and deletes nothing`() = runTest(dispatcher.scheduler) {
-        for (native in listOf(true, false)) {
-            val e = emptied(native)
+        run {
+            val e = emptied()
             advanceTimeBy(2_000) // the autosave sees the empty text
             runCurrent()
             e.assertUntouched()
@@ -430,16 +372,16 @@ class NoteEditorViewModelTest {
             e.vm.flushAndLeave() // Back
             runCurrent()
 
-            assertEquals(listOf("new content"), e.repo.updateCalls.map { it.content }, "native=$native")
-            assertEquals(emptyList<NoteId>(), e.repo.permanentDeleteEverywhereCalls, "native=$native")
-            assertEquals(emptyList<NoteId>(), e.repo.deleteCalls, "native=$native")
+            assertEquals(listOf("new content"), e.repo.updateCalls.map { it.content })
+            assertEquals(emptyList<NoteId>(), e.repo.permanentDeleteEverywhereCalls)
+            assertEquals(emptyList<NoteId>(), e.repo.deleteCalls)
         }
     }
 
     @Test
     fun `emptied then ON_STOP writes and deletes nothing`() = runTest(dispatcher.scheduler) {
-        for (native in listOf(true, false)) {
-            val e = emptied(native)
+        run {
+            val e = emptied()
             e.vm.flush() // ON_STOP
             runCurrent()
             e.assertUntouched()
@@ -448,27 +390,27 @@ class NoteEditorViewModelTest {
 
     @Test
     fun `emptied then Back deletes the note`() = runTest(dispatcher.scheduler) {
-        for (native in listOf(true, false)) {
-            val e = emptied(native)
+        run {
+            val e = emptied()
             advanceTimeBy(2_000)
             runCurrent()
             e.vm.flushAndLeave()
             runCurrent()
-            assertEquals(listOf(NoteId("t6")), e.repo.permanentDeleteEverywhereCalls, "native=$native")
-            assertEquals(emptyList<String>(), e.repo.updateCalls.map { it.content }, "native=$native")
+            assertEquals(listOf(NoteId("t6")), e.repo.permanentDeleteEverywhereCalls)
+            assertEquals(emptyList<String>(), e.repo.updateCalls.map { it.content })
         }
     }
 
     @Test
-    fun `emptied then cleared without Back deletes on the native engine and leaves the Aztec note alone`() = runTest(dispatcher.scheduler) {
-        val nativeCase = emptied(native = true)
-        nativeCase.store.clear()
+    fun `emptied then cleared without Back deletes the note`() = runTest(dispatcher.scheduler) {
+        val cleared = emptied()
+        cleared.store.clear()
         advanceTimeBy(2_000)
         runCurrent()
-        assertEquals(listOf(NoteId("t6")), nativeCase.repo.permanentDeleteEverywhereCalls)
+        assertEquals(listOf(NoteId("t6")), cleared.repo.permanentDeleteEverywhereCalls)
 
-        // The native one after its autosave already saw the empty text: onCleared still deletes it.
-        val settled = emptied(native = true)
+        // After its autosave already saw the empty text: onCleared still deletes it.
+        val settled = emptied()
         advanceTimeBy(2_000)
         runCurrent()
         settled.assertUntouched()
@@ -476,13 +418,6 @@ class NoteEditorViewModelTest {
         advanceTimeBy(2_000)
         runCurrent()
         assertEquals(listOf(NoteId("t6")), settled.repo.permanentDeleteEverywhereCalls)
-
-        // Aztec: onCleared saves nothing (its dispose hands over a rewritten text), as before.
-        val aztec = emptied(native = false)
-        aztec.store.clear()
-        advanceTimeBy(2_000)
-        runCurrent()
-        aztec.assertUntouched()
     }
 
     @Test
@@ -959,8 +894,6 @@ internal class FakeEditorRepository(
     fun createViewModel(
         noteId: String,
         currentUser: String? = null,
-        prefs: FakeUserPreferences = FakeUserPreferences(),
-        preferences: UserPreferences = prefs,
         imageDao: NoteImageDao = RecordingImageDao(),
     ): NoteEditorViewModel {
         val savedState = SavedStateHandle(mapOf("noteId" to noteId))
@@ -969,13 +902,6 @@ internal class FakeEditorRepository(
         val imagesRepo = object : NoteImagesRepository {
             override suspend fun insertLocalImage(noteId: NoteId, source: Uri): Result<String> =
                 insertImageResult
-        }
-        // The loader factory is never invoked in unit tests (the VM builds the getter lazily and
-        // only the view touches it), so a throwing stub is sufficient and keeps Context out of the
-        // pure-JVM test.
-        val loaderFactory = object : NoteImageLoaderFactory {
-            override fun create(scope: CoroutineScope): TesseraImageLoader =
-                error("image loader is not used in unit tests")
         }
         return NoteEditorViewModel(
             getNoteUseCase = GetNoteUseCase(this),
@@ -991,7 +917,6 @@ internal class FakeEditorRepository(
             leaveSharedNoteUseCase = LeaveSharedNoteUseCase(this),
             unshareNoteUseCase = UnshareNoteUseCase(this),
             insertImageUseCase = InsertImageUseCase(imagesRepo),
-            imageLoaderFactory = loaderFactory,
             objectImageSourceFactory = NoteObjectImageSourceFactory(
                 NoteImageDecoder(imageDao, java.io.File("build/tmp/vm-test-files"), java.io.File("build/tmp/vm-test-cache"), ImageDownloader { null }),
             ),
@@ -1003,7 +928,6 @@ internal class FakeEditorRepository(
             },
             authRepository = auth,
             folderRepository = FakeFolderRepository(),
-            userPreferences = preferences,
             savedStateHandle = savedState,
         )
     }

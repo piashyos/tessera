@@ -284,5 +284,4 @@
         <item quantity="other">%d columns</item>
     </plurals>
     <string name="editor_object_table_a11y">Table, %1$s, %2$s</string>
-    <string name="settings_native_editor">New editor (beta)</string>
 </resources>

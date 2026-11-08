@@ -33,7 +33,7 @@ class EditorFormatBarNativeScreenshotTest {
             TesseraTheme(darkTheme = dark, dynamicColor = false) {
                 Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Box(Modifier.padding(8.dp)) {
-                        EditorFormatBar(actions = null, activeFormats = emptySet(), nativeEngine = true, formatState = fs)
+                        EditorFormatBar(actions = null, formatState = fs)
                     }
                 }
             }

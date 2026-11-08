@@ -6,8 +6,6 @@ import app.tessera.data.images.ImageDownloader
 import app.tessera.data.images.NoteImageDecoder
 import app.tessera.data.local.dao.NoteImageDao
 import dagger.hilt.android.qualifiers.ApplicationContext
-import app.tessera.ui.editor.components.DefaultNoteImageLoaderFactory
-import app.tessera.ui.editor.components.NoteImageLoaderFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,10 +27,4 @@ object ImageModule {
         noteImageDao: NoteImageDao,
         downloader: ImageDownloader,
     ): NoteImageDecoder = NoteImageDecoder(noteImageDao, context.filesDir, context.cacheDir, downloader)
-
-    @Provides
-    @Singleton
-    fun provideNoteImageLoaderFactory(
-        impl: DefaultNoteImageLoaderFactory,
-    ): NoteImageLoaderFactory = impl
 }

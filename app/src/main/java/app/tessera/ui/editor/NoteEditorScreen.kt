@@ -15,26 +15,20 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -61,11 +55,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.tessera.R
-import app.tessera.core.text.MarkdownHtmlConverter
-import app.tessera.core.text.markdownblocks.Block
-import app.tessera.core.text.markdownblocks.TableGrid
-import app.tessera.core.text.markdownblocks.joinBlocksIntoMarkdown
-import app.tessera.core.text.markdownblocks.splitMarkdownIntoBlocks
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.rememberHaptics
 import app.tessera.core.ui.tessera.MembersSheet
@@ -76,15 +65,12 @@ import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.components.EditorFormatBar
 import app.tessera.ui.editor.components.MarkdownFormatMenu
 import app.tessera.ui.editor.components.NoteBody
-import app.tessera.ui.editor.components.OnStop
 import app.tessera.ui.editor.engine.FormatState
 import app.tessera.ui.editor.components.EditorMeta
 import app.tessera.ui.editor.components.RichBodyActions
 import app.tessera.ui.editor.engine.ObjectImageSource
-import app.tessera.ui.editor.components.RichNoteBody
 import app.tessera.ui.editor.components.TableActionsBar
 import app.tessera.ui.editor.components.TableBarState
-import app.tessera.ui.editor.components.TableBlockEditor
 import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.noteDateLabel
@@ -92,8 +78,6 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import org.wordpress.aztec.AztecTextFormat
-import org.wordpress.aztec.Html
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
@@ -128,48 +112,22 @@ fun NoteEditorScreen(
     onInviteInputChanged: () -> Unit = {},
     onDismissMembers: () -> Unit = {},
     onClearShareError: () -> Unit = {},
-    imageGetter: Html.ImageGetter? = null,
     imageSource: ObjectImageSource? = null,
     onInsertImageUri: (Uri) -> Unit = {},
     insertedImageIds: Flow<String> = emptyFlow(),
     consentRequests: Flow<android.app.PendingIntent> = emptyFlow(),
 ) {
     val haptics = rememberHaptics()
-    val converter = remember { MarkdownHtmlConverter() }
     var actions by remember { mutableStateOf<RichBodyActions?>(null) }
     // Leaving: the editor hands over its pending edit FIRST, then the host saves once (the VM text lags the editor by the
     // engine's debounce; saving before the hand-over writes a stale text and then the real one). The system Back goes through
     // here too: this handler sits deeper than the navigation's own and takes precedence.
     val handOverEdit = { actions?.flushPendingEdit() }
     BackHandler { handOverEdit(); onBack() }
-    // Index of the text block whose Aztec editor last held focus. Drives where the
-    // "insert table" action places the new table (after the focused block, not at the end).
-    var lastFocusedBlock by remember { mutableStateOf(0) }
-    // Index of the TABLE block whose cell currently holds focus (null = none). While set, the
-    // bottom pill shows the contextual TableActionsBar instead of the text format bar.
-    var focusedTableIdx by remember { mutableStateOf<Int?>(null) }
-    // The native engine table: the bar of the cell that has the focus (the engine does the edits).
+    // The table the cursor is in: the bar of its cell replaces the format bar (the engine does the edits).
     var nativeTableBar by remember { mutableStateOf<TableBarState?>(null) }
-    val currentFocusedBlock by rememberUpdatedState(lastFocusedBlock)
-    // The native engine takes the whole Markdown itself: no HTML round-trip, no block split (a table is its placeholder).
-    // `null` = the engine is not known yet (the VM sets it together with the content): no body is drawn, so Aztec never
-    // sees a note that the native engine is to edit (its dispose would rewrite the content). A state that is not loading
-    // and carries no flag (previews, tests) is the Aztec path.
-    val engine: Boolean? = state.useNativeEditor ?: if (state.isLoading) null else false
-    val native = engine == true
-    // Aztec keeps its own debounce (RichNoteBody has no flush): at least the VM's autosave window is closed here.
-    if (engine == false) OnStop { handOverEdit(); onFlush() }
-    val initialHtml = remember(state.content, engine) {
-        if (engine != false) "" else converter.markdownToHtml(state.content)
-    }
-    val blocks = remember(state.content, engine) {
-        if (engine != false) emptyList() else splitMarkdownIntoBlocks(state.content)
-    }
-    val hasTable = blocks.any { it is Block.Table }
 
-    // Keep insertTable's closure pointing at the latest content/callback so that
-    // the action captured into `actions` (set once when the editor reports ready)
-    // doesn't observe stale state across recompositions.
+    // The closures captured into `actions` (set once when the editor reports ready) must not see stale state.
     val currentContent by rememberUpdatedState(state.content)
     val currentOnContentChange by rememberUpdatedState(onContentChange)
     val currentOnInsertImageUri by rememberUpdatedState(onInsertImageUri)
@@ -219,18 +177,6 @@ fun NoteEditorScreen(
         object : RichBodyActions by base {
             override fun onInsertImage() = onInsertImageClick()
             override fun onCaptureImage() = onCaptureImageClick()
-            override fun insertTable() {
-                if (native) return base.insertTable() // the engine inserts the table as a paragraph of its own
-                val existing = splitMarkdownIntoBlocks(currentContent).toMutableList()
-                // Insert the table right after the text block that currently holds the
-                // cursor, followed by an empty text block so the user can keep typing
-                // prose past the grid. Falls back to the end when nothing is focused.
-                val insertAt = (currentFocusedBlock + 1).coerceIn(0, existing.size)
-                existing.add(insertAt, Block.Table(TableGrid.empty(columns = 2, rows = 2)))
-                existing.add(insertAt + 1, Block.Text(""))
-                val joined = joinBlocksIntoMarkdown(existing)
-                if (joined != currentContent) currentOnContentChange(joined)
-            }
         }
     }
 
@@ -240,11 +186,7 @@ fun NoteEditorScreen(
     var leaveConfirmVisible by remember { mutableStateOf(false) }
     var deleteForAllConfirmVisible by remember { mutableStateOf(false) }
     var unshareConfirmVisible by remember { mutableStateOf(false) }
-    // Live formats at the editor's caret, pushed from RichNoteBody on selection/text/toggle
-    // changes. Drives the toolbar highlight so buttons no longer stay lit after the caret
-    // leaves the formatted span.
-    var activeFormats by remember { mutableStateOf<Set<AztecTextFormat>>(emptySet()) }
-    // The same for the native engine (`useNativeEditor`): what the bar and the ⋯ menu show.
+    // Live formats at the editor's caret: what the bar and the ⋯ menu show.
     var formatState by remember { mutableStateOf(FormatState.Empty) }
     val imeVisible = WindowInsets.isImeVisible
 
@@ -437,7 +379,6 @@ fun NoteEditorScreen(
                     // With the caret inside a TABLE cell the pill swaps to the contextual
                     // TableActionsBar (Docs/OneNote mobile pattern).
                     var formatMenuExpanded by remember { mutableStateOf(false) }
-                    val focusedTableGrid = focusedTableIdx?.let { (blocks.getOrNull(it) as? Block.Table)?.grid }
                     androidx.compose.foundation.layout.Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -455,7 +396,7 @@ fun NoteEditorScreen(
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                             shadowElevation = 3.dp,
                         ) {
-                            val tableBar = nativeTableBar.takeIf { native }
+                            val tableBar = nativeTableBar
                             if (tableBar != null) {
                                 TableActionsBar(
                                     canRemoveRow = tableBar.canRemoveRow,
@@ -470,71 +411,20 @@ fun NoteEditorScreen(
                                     onMoveDown = tableBar.onMoveDown,
                                     onDeleteTable = tableBar.onDeleteTable,
                                 )
-                            } else if (focusedTableGrid != null) {
-                                val updateTable: ((app.tessera.core.text.markdownblocks.TableGrid) -> app.tessera.core.text.markdownblocks.TableGrid) -> Unit = { transform ->
-                                    val idx = focusedTableIdx
-                                    val block = idx?.let { blocks.getOrNull(it) as? Block.Table }
-                                    if (idx != null && block != null) {
-                                        val updated = blocks.toMutableList()
-                                        updated[idx] = Block.Table(transform(block.grid))
-                                        val joined = joinBlocksIntoMarkdown(updated)
-                                        if (joined != state.content) onContentChange(joined)
-                                    }
-                                }
-                                val moveTable: (Int) -> Unit = { delta ->
-                                    val idx = focusedTableIdx
-                                    val target = idx?.plus(delta)
-                                    if (idx != null && target != null && target in blocks.indices) {
-                                        val updated = blocks.toMutableList()
-                                        val tmp = updated[idx]
-                                        updated[idx] = updated[target]
-                                        updated[target] = tmp
-                                        val joined = joinBlocksIntoMarkdown(updated)
-                                        if (joined != state.content) onContentChange(joined)
-                                        focusedTableIdx = target
-                                    }
-                                }
-                                val deleteTable: () -> Unit = {
-                                    val idx = focusedTableIdx
-                                    if (idx != null && idx in blocks.indices) {
-                                        val updated = blocks.toMutableList()
-                                        updated.removeAt(idx)
-                                        val joined = joinBlocksIntoMarkdown(updated)
-                                        if (joined != state.content) onContentChange(joined)
-                                        focusedTableIdx = null
-                                    }
-                                }
-                                TableActionsBar(
-                                    canRemoveRow = focusedTableGrid.rowCount > 0,
-                                    canRemoveColumn = focusedTableGrid.columnCount > 1,
-                                    canMoveUp = (focusedTableIdx ?: 0) > 0,
-                                    canMoveDown = (focusedTableIdx ?: blocks.lastIndex) < blocks.lastIndex,
-                                    onAddRow = { updateTable { it.addRow() } },
-                                    onRemoveRow = { updateTable { it.removeRow(it.rowCount - 1) } },
-                                    onAddColumn = { updateTable { it.addColumn() } },
-                                    onRemoveColumn = { updateTable { it.removeColumn(it.columnCount - 1) } },
-                                    onMoveUp = { moveTable(-1) },
-                                    onMoveDown = { moveTable(1) },
-                                    onDeleteTable = deleteTable,
-                                )
                             } else {
                                 EditorFormatBar(
                                     actions = actions,
-                                    activeFormats = activeFormats,
                                     menuExpanded = formatMenuExpanded,
                                     onToggleMenu = { formatMenuExpanded = !formatMenuExpanded },
-                                    nativeEngine = native,
                                     formatState = formatState,
                                 )
                             }
                         }
-                        if (currentActions != null && focusedTableGrid == null && nativeTableBar == null) {
+                        if (currentActions != null && nativeTableBar == null) {
                             MarkdownFormatMenu(
                                 expanded = formatMenuExpanded,
-                                activeFormats = activeFormats,
                                 actions = currentActions,
                                 onDismiss = { formatMenuExpanded = false },
-                                nativeEngine = native,
                                 formatState = formatState,
                             )
                         }
@@ -571,14 +461,11 @@ fun NoteEditorScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 )
 
-                // Read-only notes keep the outer Compose scroll: a non-editable AztecText doesn't
-                // scroll its own content, and viewers can't select text so the selection-overlap
-                // issue the internal-scroll path fixes doesn't apply to them.
-                if (engine == null) {
+                // One editor for reading and editing: it fills the area and scrolls itself; tables and images are
+                // placeholders in it. Nothing is drawn before the note is loaded.
+                if (state.isLoading) {
                     Box(Modifier.weight(1f).fillMaxWidth())
-                } else if (native) {
-                    // NATIVE ENGINE — one editor for reading and editing: fills the area and scrolls itself (like the fast
-                    // path below), tables and images are placeholders in it.
+                } else {
                     NoteBody(
                         markdown = state.content,
                         onMarkdownChange = { markdown -> if (markdown != currentContent) currentOnContentChange(markdown) },
@@ -594,99 +481,6 @@ fun NoteEditorScreen(
                             .fillMaxWidth()
                             .then(
                                 if (!imeVisible) Modifier.windowInsetsPadding(WindowInsets.navigationBars) else Modifier,
-                            )
-                            .padding(horizontal = 20.dp),
-                    )
-                } else if (hasTable || state.isReadOnly) {
-                    // BLOCK-STACK / READ-ONLY PATH — text blocks interleaved with tables are multiple
-                    // Views, so they share one outer Compose scroll (each editor stays wrap-content).
-                    BoxWithConstraints(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    ) {
-                        // The tap target below the text must cover ALL visible empty space so a tap
-                        // anywhere in the body — even far below the last line — focuses the editor
-                        // and opens the keyboard. Size it to the viewport height.
-                        val viewportHeight = maxHeight
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 20.dp),
-                        ) {
-                            EditorBody(
-                                hasTable = hasTable,
-                                blocks = blocks,
-                                initialHtml = initialHtml,
-                                content = state.content,
-                                converter = converter,
-                                onContentChange = onContentChange,
-                                onActionsReady = { actions = wrapActions(it) },
-                                onBlockFocused = { lastFocusedBlock = it; focusedTableIdx = null },
-                                onTableFocusChanged = { idx, focused ->
-                                    if (focused) focusedTableIdx = idx
-                                    else if (focusedTableIdx == idx) focusedTableIdx = null
-                                },
-                                onActiveFormatsChanged = { activeFormats = it },
-                                editable = !state.isReadOnly,
-                                imageGetter = imageGetter,
-                                onImageCommitted = onImageCommitted,
-                            )
-
-                            // Tap target below the content forwards focus to the editor body and
-                            // surfaces the IME, so users can resume typing past the visible text.
-                            // Read-only viewers can't edit, so it must NOT exist for them — otherwise
-                            // tapping the empty area would call focusBody() and force the keyboard open.
-                            if (!state.isReadOnly) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(viewportHeight)
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                            onClick = { actions?.focusBody() },
-                                        ),
-                                )
-                            }
-                            Box(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars))
-                        }
-                    }
-                } else {
-                    // FAST PATH — one editor bounded to the remaining space (between the divider and
-                    // the format bar / keyboard) that scrolls internally. weight(1f) takes exactly
-                    // the leftover height so the editor's bottom aligns with the bar/keyboard and
-                    // the OS keeps text-selection UI inside this region. Empty space below the text
-                    // is part of the editor View, so tapping it already focuses the editor.
-                    EditorBody(
-                        hasTable = false,
-                        blocks = blocks,
-                        initialHtml = initialHtml,
-                        content = state.content,
-                        converter = converter,
-                        onContentChange = onContentChange,
-                        onActionsReady = { actions = wrapActions(it) },
-                        onBlockFocused = { lastFocusedBlock = it; focusedTableIdx = null },
-                        onTableFocusChanged = { idx, focused ->
-                            if (focused) focusedTableIdx = idx
-                            else if (focusedTableIdx == idx) focusedTableIdx = null
-                        },
-                        onActiveFormatsChanged = { activeFormats = it },
-                        editable = !state.isReadOnly,
-                        imageGetter = imageGetter,
-                        onImageCommitted = onImageCommitted,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .then(
-                                // Keyboard hidden: keep the editor above the nav bar. Keyboard up:
-                                // the format bar already sits above the IME, so no extra inset.
-                                if (!imeVisible) {
-                                    Modifier.windowInsetsPadding(WindowInsets.navigationBars)
-                                } else {
-                                    Modifier
-                                },
                             )
                             .padding(horizontal = 20.dp),
                     )
@@ -811,97 +605,6 @@ private fun ConfirmDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.share_cancel)) }
         },
     )
-}
-
-/**
- * Editor body — the fast single-editor path for note without tables, or the ordered
- * block stack (text ↔ table) when a table is present. Logic preserved verbatim from the
- * pre-redesign screen; only extracted into a helper to keep [NoteEditorScreen] readable.
- */
-@Composable
-private fun EditorBody(
-    hasTable: Boolean,
-    blocks: List<Block>,
-    initialHtml: String,
-    content: String,
-    converter: MarkdownHtmlConverter,
-    onContentChange: (String) -> Unit,
-    onActionsReady: (RichBodyActions) -> Unit,
-    onBlockFocused: (Int) -> Unit,
-    onActiveFormatsChanged: (Set<AztecTextFormat>) -> Unit,
-    modifier: Modifier = Modifier,
-    editable: Boolean = true,
-    onTableFocusChanged: (Int, Boolean) -> Unit = { _, _ -> },
-    imageGetter: Html.ImageGetter? = null,
-    onImageCommitted: (Uri) -> Boolean = { false },
-) {
-    if (!hasTable) {
-        // FAST PATH — single editor that fills the viewport and scrolls internally. Keeping the
-        // editor bounded (rather than one giant wrap-content View inside the outer scroll) keeps
-        // the OS text-selection toolbar/handles within the visible editor instead of spilling
-        // over the top bar or the keyboard.
-        RichNoteBody(
-            html = initialHtml,
-            markdownKey = content,
-            htmlToMarkdown = converter::htmlToMarkdown,
-            onMarkdownChange = { markdown -> if (markdown != content) onContentChange(markdown) },
-            onActionsReady = onActionsReady,
-            onFocusChanged = { if (it) onBlockFocused(0) },
-            onActiveFormatsChanged = onActiveFormatsChanged,
-            editable = editable,
-            imageGetter = imageGetter,
-            onImageCommitted = onImageCommitted,
-            scrollable = true,
-            modifier = modifier.fillMaxWidth(),
-        )
-        return
-    }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        blocks.forEachIndexed { idx, block ->
-            when (block) {
-                is Block.Text -> {
-                    val blockHtml = remember(block.markdown) { converter.markdownToHtml(block.markdown) }
-                    RichNoteBody(
-                        html = blockHtml,
-                        // The block's local markdown is the echo-loop key — it matches what
-                        // RichNoteBody's internal flush writes back, so a self-originated
-                        // change doesn't fire a self-inflicted reload.
-                        markdownKey = block.markdown,
-                        htmlToMarkdown = converter::htmlToMarkdown,
-                        onMarkdownChange = { newMd ->
-                            val updated = blocks.toMutableList()
-                            updated[idx] = Block.Text(newMd)
-                            val joined = joinBlocksIntoMarkdown(updated)
-                            if (joined != content) onContentChange(joined)
-                        },
-                        onActionsReady = onActionsReady,
-                        onFocusChanged = { if (it) onBlockFocused(idx) },
-                        onActiveFormatsChanged = onActiveFormatsChanged,
-                        editable = editable,
-                        imageGetter = imageGetter,
-                        onImageCommitted = onImageCommitted,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                is Block.Table -> {
-                    TableBlockEditor(
-                        grid = block.grid,
-                        onGridChange = { newGrid ->
-                            val updated = blocks.toMutableList()
-                            updated[idx] = Block.Table(newGrid)
-                            val joined = joinBlocksIntoMarkdown(updated)
-                            if (joined != content) onContentChange(joined)
-                        },
-                        onCellFocusChanged = { focused -> onTableFocusChanged(idx, focused) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFFFFFBF4)

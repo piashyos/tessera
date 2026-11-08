@@ -42,7 +42,7 @@ internal val EMPTY_BODY = NoteBlock.Text(ParagraphKind.Body, Inline(""))
 
 private val IMAGE_SRC = Regex("""^!\[]\((tessera-img://[A-Za-z0-9-]+(?:\?[^)]*)?)\)$""")
 
-/** Same rule as `IMAGE_LINE` of `MarkdownHtmlConverter` (copied, that class is not touched). */
+/** The note's image line: `![](tessera-img://<id>[?params])`; returns the src. */
 internal fun imageLineSrc(line: String): String? = IMAGE_SRC.matchEntire(line)?.groupValues?.get(1)
 
 internal const val MAX_LEVEL = 4

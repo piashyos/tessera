@@ -1,6 +1,5 @@
 package app.tessera.ui.navigation
 
-import android.content.pm.ApplicationInfo
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -11,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -151,13 +149,9 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
             val viewModel: SettingsViewModel = hiltViewModel()
             val state by viewModel.state.collectAsState()
-            val context = LocalContext.current
 
             SettingsScreen(
                 state = state,
-                // BuildConfig is not generated here; the manifest's debuggable flag is the debug-build switch.
-                showDebugOptions = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
-                onSetUseNativeEditor = viewModel::setUseNativeEditor,
                 onBack = { navController.popBackStack() },
                 onSignIn = viewModel::onSignIn,
                 onSignOut = viewModel::onSignOut,
@@ -252,7 +246,6 @@ private fun NavGraphBuilder.editorDestination(navController: NavHostController) 
                 onInviteInputChanged = viewModel::onInviteInputChanged,
                 onDismissMembers = viewModel::dismissMembersSheet,
                 onClearShareError = viewModel::clearShareError,
-                imageGetter = viewModel.imageGetter,
                 imageSource = viewModel.imageSource,
                 onInsertImageUri = viewModel::insertImage,
                 insertedImageIds = viewModel.imageInserts,

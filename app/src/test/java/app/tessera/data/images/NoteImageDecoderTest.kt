@@ -180,14 +180,6 @@ class NoteImageDecoderTest {
         assertEquals(80, decoder().bitmap("tessera-img://src-5").width)
     }
 
-    @Test
-    fun `decodeLocal reads only the convention files and never downloads`() {
-        assertNull(decoder().decodeLocal("tessera-img://nope", 800))
-        stored("loc-1")
-        assertEquals(120, decoder().decodeLocal("tessera-img://loc-1", 800)!!.width)
-        assertEquals(0, downloads)
-    }
-
     // --- refusal ---
 
     @Test
@@ -223,13 +215,6 @@ class NoteImageDecoderTest {
     fun `download=false skips Drive`() = runTest {
         assertEquals(NoteImageDecoder.Result.Unavailable, decoder().decode("tessera-img://missing", 800, download = false))
         assertEquals(0, downloads)
-    }
-
-    @Test
-    fun `storedSize reads the row and is null without one`() = runTest {
-        assertNull(decoder().storedSize("tessera-img://sz"))
-        row = entity("sz", null)
-        assertEquals(120 to 200, decoder().storedSize("tessera-img://sz"))
     }
 
     // --- corrupt local file ---

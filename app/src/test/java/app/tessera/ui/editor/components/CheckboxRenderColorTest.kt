@@ -3,12 +3,12 @@ package app.tessera.ui.editor.components
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
+import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import app.tessera.R
 import app.tessera.core.preferences.ThemePalette
-import app.tessera.core.text.MarkdownHtmlConverter
 import app.tessera.core.ui.theme.TesseraTheme
+import app.tessera.ui.editor.engine.TesseraEditText
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -17,7 +17,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import org.wordpress.aztec.AztecText
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -26,24 +25,24 @@ class CheckboxRenderColorTest {
     @get:Rule
     val rule = createAndroidComposeRule<ComponentActivity>()
 
-    private val converter = MarkdownHtmlConverter()
-
     @Test
     fun checkedBoxUsesPaletteColor() {
         val md = "- [x] done"
         rule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false, palette = ThemePalette.SLATE) {
-                RichNoteBody(
-                    html = converter.markdownToHtml(md),
-                    markdownKey = md,
-                    htmlToMarkdown = converter::htmlToMarkdown,
+                NoteBody(
+                    markdown = md,
                     onMarkdownChange = {},
                     onActionsReady = {},
+                    onFormatStateChanged = {},
+                    editable = true,
                 )
             }
         }
         rule.waitForIdle()
-        val ed = rule.activity.findViewById<AztecText>(R.id.aztec)
+        fun find(v: View): TesseraEditText? =
+            if (v is TesseraEditText) v else (v as? ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { find(g.getChildAt(it)) } }
+        val ed = find(rule.activity.window.decorView) ?: error("no TesseraEditText in the window")
         var bluish = false
         var isBrandOrange = true
         rule.runOnUiThread {

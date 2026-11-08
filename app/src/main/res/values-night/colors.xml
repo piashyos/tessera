@@ -38,6 +38,5 @@
     <color name="brand_outline_variant">#FF4A4740</color>
 
     <!-- Legacy aliases -->
-    <color name="aztec_bullet">@color/brand_primary</color>
     <color name="window_background">@color/brand_background</color>
 </resources>

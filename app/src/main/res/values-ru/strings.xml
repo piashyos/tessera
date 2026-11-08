@@ -295,5 +295,4 @@
         <item quantity="other">%d столбца</item>
     </plurals>
     <string name="editor_object_table_a11y">Таблица, %1$s, %2$s</string>
-    <string name="settings_native_editor">Новый редактор (beta)</string>
 </resources>

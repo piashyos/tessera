@@ -1,20 +1,16 @@
 package app.tessera.ui.editor.components
 
-import android.content.Context
-import android.content.ContextWrapper
-import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.StateListDrawable
 
 /**
  * Live, palette-driven colors for the task-list checkbox. Held mutable so a single drawable
  * instance can be built once yet always paint with the *current* theme palette — the editor just
- * needs an `invalidate()` when these change (see [RichNoteBody]).
+ * needs an `invalidate()` when these change.
  */
 class CheckboxPalette {
     @Volatile var boxColor: Int = 0
@@ -23,8 +19,7 @@ class CheckboxPalette {
 
 /**
  * Self-drawn checkbox: an outlined box when unchecked, a filled box with a tick when checked.
- * Reads [palette] at draw time so palette changes show up on the next invalidate. Bounds/state are
- * set by Aztec's task-list span exactly as for its stock drawable.
+ * Reads [palette] at draw time so palette changes show up on the next invalidate.
  */
 internal class TesseraCheckboxDrawable(
     private val checked: Boolean,
@@ -63,46 +58,4 @@ internal class TesseraCheckboxDrawable(
     override fun setColorFilter(colorFilter: ColorFilter?) = Unit
     @Deprecated("Deprecated in Java", ReplaceWith("PixelFormat.TRANSLUCENT"))
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-}
-
-private fun checkboxSelector(palette: CheckboxPalette, cornerPx: Float, strokePx: Float): StateListDrawable =
-    StateListDrawable().apply {
-        addState(intArrayOf(android.R.attr.state_checked), TesseraCheckboxDrawable(true, palette, cornerPx, strokePx))
-        addState(intArrayOf(), TesseraCheckboxDrawable(false, palette, cornerPx, strokePx))
-    }
-
-/**
- * [Resources] that returns our palette-driven checkbox for Aztec's `ic_checkbox` id and delegates
- * everything else to the platform. Aztec loads the checkbox via `context.resources.getDrawable(id,
- * null)` with a null theme (so it can only read static colors) and recreates the task-list span on
- * every tap — intercepting here is the one place the live palette can reach the checkbox.
- */
-private class CheckboxResources(
-    base: Resources,
-    private val checkboxId: Int,
-    private val selector: StateListDrawable,
-) : Resources(base.assets, base.displayMetrics, base.configuration) {
-    @Deprecated("Deprecated in Java")
-    override fun getDrawable(id: Int, theme: Theme?): Drawable =
-        if (id == checkboxId) selector else super.getDrawable(id, theme)
-}
-
-/**
- * Wraps [base] so the inflated editor (and the task-list spans Aztec creates from its context)
- * resolve `ic_checkbox` to our palette-driven drawable. Returns the wrapped context; mutate
- * [palette] and invalidate the editor to recolor the checkbox live.
- */
-fun checkboxThemedContext(
-    base: Context,
-    palette: CheckboxPalette,
-    cornerPx: Float,
-    strokePx: Float,
-): Context {
-    // Match the exact id the task-list span requests (its compiled R constant) — resolving via
-    // getIdentifier can yield a different value and silently never match.
-    val checkboxId = org.wordpress.aztec.R.drawable.ic_checkbox
-    val wrapped = CheckboxResources(base.resources, checkboxId, checkboxSelector(palette, cornerPx, strokePx))
-    return object : ContextWrapper(base) {
-        override fun getResources(): Resources = wrapped
-    }
 }

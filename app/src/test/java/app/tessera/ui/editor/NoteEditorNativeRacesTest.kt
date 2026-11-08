@@ -17,7 +17,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.domain.model.NoteId
-import app.tessera.test.fakes.FakeUserPreferences
 import app.tessera.ui.editor.engine.TesseraEditText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -30,11 +29,10 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import org.wordpress.aztec.AztecText
 import java.time.Duration
 
 /**
- * The races of the whole screen with the native engine on: `NoteEditorScreen` + the real `NoteEditorViewModel` over fake
+ * The races of the whole screen: `NoteEditorScreen` + the real `NoteEditorViewModel` over fake
  * repositories, time driven through the main looper (the VM debounce 500 ms, the engine's 300 ms).
  */
 @RunWith(RobolectricTestRunner::class)
@@ -42,7 +40,6 @@ import java.time.Duration
 class NoteEditorNativeRacesTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
-    private val prefs = FakeUserPreferences().apply { useNativeEditor.value = true }
     private lateinit var repo: FakeEditorRepository
     private lateinit var vm: NoteEditorViewModel
     private val store = ViewModelStore()
@@ -50,7 +47,7 @@ class NoteEditorNativeRacesTest {
 
     private fun open(content: String) {
         repo = FakeEditorRepository(notes = listOf(sampleNote("n", content = content)))
-        val created = repo.createViewModel("n", prefs = prefs)
+        val created = repo.createViewModel("n")
         vm = ViewModelProvider(store, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T = created as T
@@ -94,14 +91,14 @@ class NoteEditorNativeRacesTest {
 
     private fun stored() = repo.updateCalls.lastOrNull()?.content
 
-    // ------------------------------------------------------------------ the flag (blocker 1)
+    // ------------------------------------------------------------------ loading
 
-    @Test fun no_body_is_drawn_until_the_engine_is_known() {
+    @Test fun no_body_is_drawn_until_the_note_is_loaded() {
         var changes = 0
         rule.setContent {
             TesseraTheme(darkTheme = false, dynamicColor = false) {
                 NoteEditorScreen(
-                    state = NoteEditorState(), // loading, flag unknown
+                    state = NoteEditorState(), // loading
                     onContentChange = { changes++ },
                     onAddTag = {}, onRemoveTag = {}, onTogglePin = {}, onBack = {}, onDelete = {},
                 )
@@ -109,31 +106,17 @@ class NoteEditorNativeRacesTest {
         }
         rule.waitForIdle()
         assertNull(find(TesseraEditText::class.java))
-        assertNull(find(AztecText::class.java))
         assertEquals(0, changes)
     }
 
-    @Test fun flag_on_the_aztec_body_is_never_there_and_a_legacy_note_is_not_rewritten() {
+    @Test fun a_legacy_note_is_not_rewritten_by_opening_it() {
         open("* legacy\n1. 1.")
         assertNotNull(find(TesseraEditText::class.java))
-        assertNull(find(AztecText::class.java))
         pass(3_000)
         assertTrue("opened and untouched: nothing is saved", repo.updateCalls.isEmpty())
         assertEquals("* legacy\n1. 1.", vm.state.value.content)
         assertEquals(1L, vm.state.value.updatedAt)
     }
-
-    @Test fun flag_switched_while_the_note_is_open_changes_neither_the_editor_nor_the_content() {
-        open("* legacy")
-        prefs.useNativeEditor.value = false
-        pass(3_000)
-        assertNotNull(find(TesseraEditText::class.java))
-        assertNull(find(AztecText::class.java))
-        assertTrue(repo.updateCalls.isEmpty())
-        assertEquals("* legacy", vm.state.value.content)
-    }
-
-    // ------------------------------------------------------------------ remote updates (item 8)
 
     @Test fun a_remote_update_without_a_pending_edit_is_shown_and_the_caret_stays_inside() {
         open("abc def ghi")
@@ -274,29 +257,6 @@ class NoteEditorNativeRacesTest {
         type(3, "!")
         pass(50)
         vm.delete()
-        stop()
-        pass(3_000)
-        assertTrue(repo.updateCalls.isEmpty())
-    }
-
-    // ------------------------------------------------------------------ the Aztec path stays as it was
-
-    @Test fun aztec_visit_without_an_edit_leaves_the_note_alone_even_when_the_view_model_is_cleared() {
-        prefs.useNativeEditor.value = false
-        open("# Aztec\n- [ ] task\nbody")
-        assertNotNull(find(AztecText::class.java))
-        pass(3_000)
-        shown = false // Aztec hands over htmlToMarkdown(toHtml()) on dispose: not an identity
-        rule.waitForIdle()
-        store.clear() // the autosave that rewrite starts dies with the scope, and onCleared does not save for Aztec
-        pass(3_000)
-        assertTrue("content and updatedAt are the ones of the store", repo.updateCalls.isEmpty())
-    }
-
-    @Test fun aztec_stop_without_an_edit_writes_nothing() {
-        prefs.useNativeEditor.value = false
-        open("# Aztec\n- [ ] task\nbody")
-        pass(3_000)
         stop()
         pass(3_000)
         assertTrue(repo.updateCalls.isEmpty())

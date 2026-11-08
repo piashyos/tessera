@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Light brand palette (mirror of TesseraBrandLight). Aztec, system Activity, and
+    <!-- Light brand palette (mirror of TesseraBrandLight). The system Activity and
          any XML drawable references read from here via ?attr/colorXxx. -->
 
     <color name="brand_primary">#FFC96442</color>
@@ -39,6 +39,5 @@
     <color name="brand_outline_variant">#FFD9D4C7</color>
 
     <!-- Legacy aliases (kept for compatibility with code/layouts still using these names) -->
-    <color name="aztec_bullet">@color/brand_primary</color>
     <color name="window_background">@color/brand_background</color>
 </resources>

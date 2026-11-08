@@ -21,7 +21,6 @@ import app.tessera.domain.usecase.PermanentlyDeleteNoteUseCase
 import app.tessera.domain.usecase.SignInUseCase
 import app.tessera.domain.usecase.SignOutUseCase
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 import app.tessera.sync.SyncIndicator
 import app.tessera.sync.SyncStatusProvider
 import kotlinx.coroutines.Dispatchers
@@ -196,32 +195,6 @@ class SettingsViewModelTest {
             viewModel.onRetrySync()
 
             assertEquals(1, scheduler.requestCount)
-        }
-
-    @Test
-    fun `native editor switch is off by default and writes through to preferences`() =
-        runTest(dispatcher.scheduler) {
-            // The shared fake (the private one of this file has no controllable flag).
-            val prefs = app.tessera.test.fakes.FakeUserPreferences()
-            val viewModel = createViewModel(
-                FakeAuthRepository(signInResult = Result.success(UserId("uid-new"))),
-                FakeAccountRepository(owner = null),
-                userPreferences = prefs,
-            )
-
-            backgroundScope.launch { viewModel.state.collect {} } // the state is WhileSubscribed
-            advanceUntilIdle()
-            assertFalse(viewModel.state.value.useNativeEditor)
-
-            viewModel.setUseNativeEditor(true)
-            advanceUntilIdle()
-            assertTrue(prefs.useNativeEditor.value)
-            assertTrue(viewModel.state.value.useNativeEditor)
-
-            viewModel.setUseNativeEditor(false)
-            advanceUntilIdle()
-            assertFalse(prefs.useNativeEditor.value)
-            assertFalse(viewModel.state.value.useNativeEditor)
         }
 
     private fun createViewModel(

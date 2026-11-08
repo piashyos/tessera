@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.tessera.core.preferences.UserPreferences
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
 import app.tessera.domain.model.InviteResult
@@ -30,7 +29,6 @@ import app.tessera.domain.usecase.UnshareNoteUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
 import app.tessera.core.text.notedoc.NoteBlock
 import app.tessera.core.text.notedoc.NoteMarkdown
-import app.tessera.ui.editor.components.NoteImageLoaderFactory
 import app.tessera.ui.editor.components.NoteObjectImageSourceFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -50,10 +48,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.wordpress.aztec.Html
 
 private const val AutosaveDebounceMs = 500L
 
@@ -72,12 +68,10 @@ class NoteEditorViewModel @Inject constructor(
     private val leaveSharedNoteUseCase: LeaveSharedNoteUseCase,
     private val unshareNoteUseCase: UnshareNoteUseCase,
     private val insertImageUseCase: InsertImageUseCase,
-    private val imageLoaderFactory: NoteImageLoaderFactory,
     private val objectImageSourceFactory: NoteObjectImageSourceFactory,
     private val driveAuthManager: app.tessera.data.drive.DriveAuthManager,
     private val authRepository: AuthRepository,
     private val folderRepository: FolderRepository,
-    private val userPreferences: UserPreferences,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -86,13 +80,7 @@ class NoteEditorViewModel @Inject constructor(
             ?: error("NoteEditorViewModel requires 'noteId' in SavedStateHandle"),
     )
 
-    /**
-     * Aztec image getter for this editor, lazily built against [viewModelScope] so its async
-     * decode/download work is cancelled with the ViewModel. The screen hands it to the editor.
-     */
-    val imageGetter: Html.ImageGetter by lazy { imageLoaderFactory.create(viewModelScope) }
-
-    /** Pictures of the native editor, bound to [viewModelScope] so loads end with the ViewModel. The screen hands it to the editor. */
+    /** Pictures of the editor, bound to [viewModelScope] so loads end with the ViewModel. The screen hands it to the editor. */
     val imageSource by lazy { objectImageSourceFactory.create(viewModelScope) }
 
     /**
@@ -138,19 +126,14 @@ class NoteEditorViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // The engine is fixed for the life of the open note and arrives WITH its content: until then the screen draws
-            // no body, so the wrong engine never sees the note (Aztec's dispose would rewrite it, §6.9). A switch in
-            // Settings acts from the next note opened.
-            val native = userPreferences.useNativeEditor.first()
             val note = getNoteUseCase(noteId)
             if (note != null) {
-                if (native) prefetchImageSizes(note.content) // before `content` reaches the state: the placeholders get their exact size, nothing jumps (spec §3.1)
+                prefetchImageSizes(note.content) // before `content` reaches the state: the placeholders get their exact size, nothing jumps (spec §3.1)
                 // after the prefetch, which suspends: a flush in that window (Back) would find a baseline and an empty content and delete the note as blank
                 baselineNote = note
                 val me = authRepository.currentUser.value
                 _state.update { current ->
                     current.copy(
-                        useNativeEditor = native,
                         content = note.content,
                         tags = note.tags.map { it.name },
                         isPinned = note.isPinned,
@@ -160,7 +143,7 @@ class NoteEditorViewModel @Inject constructor(
                     )
                 }
             } else {
-                _state.update { it.copy(useNativeEditor = native, isLoading = false) }
+                _state.update { it.copy(isLoading = false) }
             }
         }
 
@@ -443,7 +426,7 @@ class NoteEditorViewModel @Inject constructor(
         // an autosave the local store echoes our own write back through Firestore, and that
         // echo can briefly carry the PRE-edit content (eventual consistency) stamped with an
         // older `updatedAt`. Adopting it would push stale text into the open editor — and since
-        // the editor then has no unsaved edits, RichNoteBody reloads it, resurrecting the
+        // the editor then has no unsaved edits, it reloads it, resurrecting the
         // character the user just deleted. A genuine collaborator edit always has a newer
         // `updatedAt`, so live sync still flows through.
         if (remote.updatedAt <= baseline.updatedAt) return
@@ -477,15 +460,13 @@ class NoteEditorViewModel @Inject constructor(
     }
 
     /**
-     * Leaving the screen hands over the native editor's last edit (its dispose flushes), and the 500 ms autosave that edit
-     * starts dies with [viewModelScope] when the back stack entry goes first: save what is pending, once. Only for the native
-     * engine: Aztec hands over `htmlToMarkdown(toHtml())` on dispose, which is not an identity, so on that path an edit-less
-     * visit must not become a save (it never did: that autosave died with the scope).
+     * Leaving the screen hands over the editor's last edit (its dispose flushes), and the 500 ms autosave that edit
+     * starts dies with [viewModelScope] when the back stack entry goes first: save what is pending, once.
      */
     override fun onCleared() {
         // A blank text counts as pending too: the autosave that saw it wrote nothing (see [persist]), so a note emptied and
         // left without Back is deleted here, as it is on Back.
-        if ((autosavePending || _state.value.content.isBlank()) && _state.value.useNativeEditor == true) {
+        if (autosavePending || _state.value.content.isBlank()) {
             lastSaveScope.launch { persist(leaving = true) }
         }
     }

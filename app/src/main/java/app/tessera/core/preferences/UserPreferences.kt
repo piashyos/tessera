@@ -2,7 +2,6 @@ package app.tessera.core.preferences
 
 import app.tessera.ui.notes.NotesViewMode
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 
 interface UserPreferences {
     val themeMode: Flow<ThemeMode>
@@ -60,12 +59,6 @@ interface UserPreferences {
     /** Most-recent-first list of committed search queries. */
     val recentSearches: Flow<List<String>>
 
-    /**
-     * Debug flag: edit notes with the new native editor (phase 1) instead of Aztec. Off by default.
-     * Has a default implementation so test fakes of this interface don't have to declare it.
-     */
-    val useNativeEditor: Flow<Boolean> get() = flowOf(false)
-
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setDynamicColor(enabled: Boolean)
     suspend fun setThemePalette(palette: ThemePalette)
@@ -77,9 +70,6 @@ interface UserPreferences {
     suspend fun setGrainIntensity(intensity: Float)
     suspend fun setLanguageTag(tag: String)
     suspend fun setNotesViewMode(mode: NotesViewMode)
-
-    /** Persists the [useNativeEditor] debug flag. */
-    suspend fun setUseNativeEditor(enabled: Boolean) {}
 
     /** Adds [query] to the top of the recent list (de-duplicated, capped). */
     suspend fun addRecentSearch(query: String)

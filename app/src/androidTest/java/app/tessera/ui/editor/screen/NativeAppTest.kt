@@ -38,7 +38,6 @@ abstract class NativeAppTest {
         hilt.inject()
         db.clearAllTables()
         runBlocking {
-            prefs.setUseNativeEditor(true)
             prefs.setLanguageTag("") // a test that switched to Russian must not leave the app (and Gboard) in it
         }
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext

@@ -16,6 +16,8 @@ import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.performSemanticsAction
 import app.tessera.core.text.markdownblocks.TableGrid
+import app.tessera.core.text.markdownblocks.metaComment
+import app.tessera.core.text.markdownblocks.serializeGfmTable
 import app.tessera.core.text.notedoc.Inline
 import app.tessera.core.text.notedoc.NoteBlock
 import app.tessera.core.text.notedoc.NoteDoc
@@ -30,6 +32,14 @@ import java.util.concurrent.CopyOnWriteArrayList
 internal fun note(vararg parts: Any): String = NoteMarkdown.serialize(
     NoteDoc(parts.map { p -> if (p is TableGrid) NoteBlock.Table(p) else NoteBlock.Text(ParagraphKind.Body, Inline(p as String)) }),
 )
+
+/**
+ * A note as the removed Aztec path saved it: the blocks joined by a blank line, a table's sizes in a `<!-- tessera:… -->` comment before it.
+ * Paragraphs are `String`s, tables [TableGrid]s. Old notes in this form must still open and close unchanged.
+ */
+internal fun legacyNote(vararg parts: Any): String = parts.joinToString("\n\n") { p ->
+    if (p is TableGrid) listOfNotNull(metaComment(p), serializeGfmTable(p)).joinToString("\n") else p as String
+}
 
 /** The button with [desc] (a button of the format bar or of the table bar: its click, as TalkBack would, wherever the row is scrolled). */
 internal fun ComposeTestRule.press(desc: String, timeout: Long = 5_000) {

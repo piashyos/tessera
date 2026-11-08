@@ -6,9 +6,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.lifecycle.Lifecycle
-import app.tessera.core.text.markdownblocks.Block
 import app.tessera.core.text.markdownblocks.TableGrid
-import app.tessera.core.text.markdownblocks.joinBlocksIntoMarkdown
 import app.tessera.ui.editor.engine.TesseraEditText
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Assert.assertEquals
@@ -41,10 +39,10 @@ class NativeTableOpenCloseTest : NativeAppTest() {
 
     /** Notes as the Aztec path saved them (its join puts a blank line between blocks and the sizes in a comment) and legacy table forms. */
     private val notes = LegacyNotes.all.filter { it.contains('|') } + listOf(
-        joinBlocksIntoMarkdown(listOf(Block.Text("# Budget\nIntro line"), Block.Table(budget), Block.Text("after the table"))),
-        joinBlocksIntoMarkdown(listOf(Block.Table(budget.copy(rowHeights = null)), Block.Text("between"), Block.Table(TableGrid(listOf("a | b", "c"), listOf(listOf("1", "2")))))),
-        joinBlocksIntoMarkdown(listOf(Block.Text("wide"), Block.Table(wide))),
-        joinBlocksIntoMarkdown(listOf(Block.Text("- [ ] task"), Block.Table(TableGrid(listOf("", ""), listOf(listOf("", "")))), Block.Text("> quote"))),
+        legacyNote("# Budget\nIntro line", budget, "after the table"),
+        legacyNote(budget.copy(rowHeights = null), "between", TableGrid(listOf("a | b", "c"), listOf(listOf("1", "2")))),
+        legacyNote("wide", wide),
+        legacyNote("- [ ] task", TableGrid(listOf("", ""), listOf(listOf("", ""))), "> quote"),
         "| A | B |\n|---|---|\n| 1 | 2 |\n\ntext after",
         "# T\n| x | y |\n| :--- | ---: |\n| 1 | 2 |",
         "text\n| one |\n| --- |\n| 1 |\n| 2 |\n| 3 |",

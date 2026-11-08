@@ -14,7 +14,6 @@ import app.tessera.ui.editor.engine.savePng
 import app.tessera.ui.editor.engine.tableZones
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlin.math.abs
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -137,31 +136,6 @@ class NativeTableEditTest : NativeAppTest() {
             if (saved?.content != shown) bad += "$how: shown \"${shown.replace("\n", "\\n")}\", saved ${saved?.content?.let { "\"$it\"" } ?: "nothing (the row is gone)"}"
         }
         assertEquals("what was written after emptying the note is lost", emptyList<String>(), bad)
-    }
-
-    /** T6 on the Aztec path (the flag off): the same emptied note, written again after the autosave, is kept (the fix of 91708fe is for both). */
-    @Test
-    fun aNoteEmptiedAndWrittenAgainInAztecKeepsTheNewContent() {
-        runBlocking { prefs.setUseNativeEditor(false) }
-        app.launch()
-        val id = "qa-aztec-emptied"
-        app.seed(id, "old content", System.currentTimeMillis())
-        app.tapCard(id)
-        compose.waitUntil(15_000) { app.aztecOrNull() != null }
-        app.settle(1_000)
-        app.ui { app.aztecOrNull()!!.let { a -> a.requestFocus(); a.setSelection(0, a.length()) } }
-        app.instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DEL)
-        app.settle(1_500) // past the autosave
-        val whileEmpty = app.entity(id)
-        app.ui { app.aztecOrNull()!!.let { a -> a.setSelection(a.length()); a.onCreateInputConnection(android.view.inputmethod.EditorInfo())!!.commitText("new content", 1) } }
-        app.settle(1_200)
-        val shown = app.ui { app.aztecOrNull()!!.text.toString() }
-        app.back()
-        val saved = app.entity(id)
-        log("Aztec, emptied then text: in the database while empty ${whileEmpty?.let { "\"${it.content}\" deletedAt ${it.deletedAt}" } ?: "nothing"}; shown \"$shown\"; saved ${saved?.content?.let { "\"$it\"" } ?: "nothing"}")
-        runBlocking { prefs.setUseNativeEditor(true) }
-        assertTrue("Aztec: the note is there while it is empty and being edited", whileEmpty != null)
-        assertEquals("Aztec: what was written after emptying is saved", "new content", saved?.content?.trim())
     }
 
     @Test

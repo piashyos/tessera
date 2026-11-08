@@ -4,9 +4,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.preferences.ThemePalette
-import app.tessera.core.text.markdownblocks.Block
 import app.tessera.core.text.markdownblocks.TableGrid
-import app.tessera.core.text.markdownblocks.joinBlocksIntoMarkdown
 import app.tessera.core.text.markdownblocks.serializeGfmTable
 import app.tessera.ui.editor.engine.savePng
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -18,9 +16,8 @@ import org.junit.rules.Timeout
 import java.util.concurrent.TimeUnit
 
 /**
- * The same notes with tables in the native editor and in Aztec, light and dark, at the font scale 1.0 and 1.3, for the comparison of phase 2
- * (plan P2-3). Shots go to Downloads/native-editor-qa (`p2t-<note>-<engine>-<theme>-fs<scale>.png`); `stitch.sh` puts them side by side.
- * The theme and the font scale are set before a note is opened (an open Aztec note does not take a new theme).
+ * Notes with tables in the native editor, light and dark, at the font scale 1.0 and 1.3 (plan P2-3). Shots go to
+ * Downloads/native-editor-qa (`p2t-<note>-native-<theme>-fs<scale>.png`). The theme and the font scale are set before a note is opened.
  */
 @HiltAndroidTest
 class NativeTableShotsTest : NativeAppTest() {
@@ -35,7 +32,7 @@ class NativeTableShotsTest : NativeAppTest() {
     @After
     fun restore() {
         shell("settings put system font_scale 1.0")
-        runBlocking { prefs.setUseNativeEditor(true); prefs.setThemeMode(ThemeMode.AUTO) }
+        runBlocking { prefs.setThemeMode(ThemeMode.AUTO) }
     }
 
     private fun shot(name: String) {
@@ -46,7 +43,7 @@ class NativeTableShotsTest : NativeAppTest() {
     }
 
     @Test
-    fun tablesInTheNativeEditorAndInAztec() {
+    fun tablesInTheNativeEditor() {
         val budget = TableGrid(
             listOf("Статья", "Сумма", "Заметка"),
             listOf(listOf("Аренда", "1200", "ежемесячно"), listOf("Еда", "300", "примерно"), listOf("Транспорт", "80", "")),
@@ -58,7 +55,7 @@ class NativeTableShotsTest : NativeAppTest() {
         )
         val notes = listOf(
             "a" to "# Бюджет\nРасходы за месяц:\n" + serializeTable(budget) + "\nИтого считаем вручную.",
-            "b" to joinBlocksIntoMarkdown(listOf(Block.Text("Широкая таблица со своими ширинами:"), Block.Table(wide), Block.Text("Текст после таблицы."))),
+            "b" to legacyNote("Широкая таблица со своими ширинами:", wide, "Текст после таблицы."),
         )
         for (scale in listOf("1.0", "1.3")) {
             app.close()
@@ -69,15 +66,12 @@ class NativeTableShotsTest : NativeAppTest() {
                 app.launch()
                 app.settle(1_500)
                 notes.forEachIndexed { i, (key, md) -> if (app.entity("qa-tshot-$key") == null) app.seed("qa-tshot-$key", md, 1_700_000_000_000L + i * 1_000L) }
-                for (engine in listOf("native", "aztec")) {
-                    runBlocking { prefs.setUseNativeEditor(engine == "native") }
-                    for ((key, _) in notes) {
-                        app.tapCard("qa-tshot-$key")
-                        compose.waitUntil(15_000) { app.editorOrNull() != null || app.aztecOrNull() != null }
-                        app.settle(2_000)
-                        shot("p2t-$key-$engine-${mode.name.lowercase()}-fs$scale")
-                        app.back()
-                    }
+                for ((key, _) in notes) {
+                    app.tapCard("qa-tshot-$key")
+                    compose.waitUntil(15_000) { app.editorOrNull() != null }
+                    app.settle(2_000)
+                    shot("p2t-$key-native-${mode.name.lowercase()}-fs$scale")
+                    app.back()
                 }
                 app.close()
             }
