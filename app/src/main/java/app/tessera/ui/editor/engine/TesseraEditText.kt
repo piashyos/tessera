@@ -267,16 +267,21 @@ class TesseraEditText(context: Context, style: EditorStyle) :
                 val inserted = typing.afterChange(s, changeEnd)
                 normalizer.normalize(s, changeStart, changeEnd, originKind)
                 val typed = !pasting
+                var repaintFrom = -1
+                var heightBefore: Int? = null
+                var linesBefore: Int? = null
                 if (autoReplace.wouldApply(s, inserted, typed)) {
                     if (!inCommand) history.step(snapshot(s, changeEnd, changeEnd)) // undo right after the replacement gives the typed characters back
-                    val heightBefore = layout?.height
+                    heightBefore = layout?.height
+                    linesBefore = layout?.lineCount
                     autoReplace.tryApply(s, inserted, typed)?.let {
                         setSelection(it.caret.coerceAtMost(s.length))
-                        repaintBelow(paragraphStart(s, it.caret.coerceIn(0, s.length)), heightBefore) // "# " made a heading: the lines under it move
+                        repaintFrom = paragraphStart(s, it.caret.coerceIn(0, s.length))
                     }
                 }
                 applyObjectWidth()
                 healLayout()
+                if (repaintFrom >= 0) repaintBelow(repaintFrom, heightBefore, linesBefore) // "# " made a heading: the lines under it move (after the layout is healed, as in command())
             }
             commitUserEdit()
         }
@@ -566,7 +571,14 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         if (disposed) return
         val s = t.getSpanStart(span)
         if (s < 0) return
-        guard { t.quietly { t.setSpan(span, s, t.getSpanEnd(span), t.getSpanFlags(span)) } }
+        val heightBefore = layout?.height
+        val linesBefore = layout?.lineCount
+        guard {
+            t.quietly { t.setSpan(span, s, t.getSpanEnd(span), t.getSpanFlags(span)) }
+            // a table that grew (a cell wrapped, a row added), a resize preview, a picture that came in another size: the lines below moved, but a block
+            // of the text that was recorded keeps its old place on a hardware canvas (see repaintBelow); the marker is no engine span, so no version change
+            repaintBelow(s, heightBefore, linesBefore)
+        }
         a11y.invalidateRoot()
         invalidate()
     }
@@ -661,13 +673,14 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         val before = snapshot(e, s, t)
         val v0 = versionOf(e)
         val heightBefore = layout?.height
+        val linesBefore = layout?.lineCount
         var sel: Sel? = null
         guard {
             inCommand = true
             try { sel = op(e, s, t) } finally { inCommand = false }
             applyObjectWidth()
             healLayout()
-            repaintBelow(paragraphStart(e, minOf(s, t).coerceIn(0, e.length)), heightBefore)
+            repaintBelow(paragraphStart(e, minOf(s, t).coerceIn(0, e.length)), heightBefore, linesBefore)
         }
         sel?.let { setSelection(it.start.coerceAtMost(e.length), it.end.coerceAtMost(e.length)) }
         val changed = sel != null && changedSince(e, v0)
@@ -1033,15 +1046,16 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     var bottomInset = 0
         set(value) {
             if (value == field) return
-            val pad = paddingBottom - field + value
-            field = value
-            setPadding(paddingLeft, paddingTop, paddingRight, pad)
+            field = value // not `setPadding`: that drops the layout of the whole note; the inset only moves where the view ends
+            requestLayout()
             invalidate()
         }
 
     private var drawingUnderInset = false
 
-    override fun getCompoundPaddingBottom(): Int = super.getCompoundPaddingBottom() - if (drawingUnderInset) bottomInset else 0
+    // Everything TextView reads for scrolling (bringPointIntoView, Touch.scrollTo, line hit-tests, the scroll range) goes through the compound /
+    // extended / total padding, so the inset is part of it; only `onDraw`, which clips to it, sees the plain padding.
+    override fun getCompoundPaddingBottom(): Int = super.getCompoundPaddingBottom() + if (drawingUnderInset) 0 else bottomInset
 
     override fun onDraw(canvas: Canvas) {
         drawingUnderInset = true
@@ -1150,10 +1164,12 @@ class TesseraEditText(context: Context, style: EditorStyle) :
      * place and recording (LAYOUT-H: the lines under a toggled heading stayed where the heading had pushed them, with a gap above). When the
      * text got another height, the lines from [from] to the end are measured and recorded again, as a span set over them does.
      */
-    private fun repaintBelow(from: Int, heightBefore: Int?) {
+    private fun repaintBelow(from: Int, heightBefore: Int?, linesBefore: Int?) {
         val l = layout ?: return
         val t = text ?: return
-        if (heightBefore == null || l.height == heightBefore || t.isEmpty()) return
+        // Only when the number of lines is the same: `DynamicLayout.updateBlocks` shifts the blocks under a change that adds or removes lines
+        // itself (Enter, a merge, a paste), and a re-record of the whole tail is what made those commands 4x slower on a note of 1000 paragraphs.
+        if (heightBefore == null || linesBefore == null || l.height == heightBefore || l.lineCount != linesBefore || t.isEmpty()) return
         Normalizer.relayout(t, from, t.length)
     }
 

@@ -1,6 +1,8 @@
 package app.tessera.ui.editor.screen
 
+import android.graphics.Rect
 import android.util.Log
+import android.view.accessibility.AccessibilityWindowInfo
 import android.view.inputmethod.InputMethodManager
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.ui.editor.engine.TesseraEditText
@@ -119,6 +121,94 @@ class GlassBarShotsTest : NativeAppTest() {
             app.back()
             app.close()
         }
+    }
+
+    /** On the screen: the top of what covers the bottom of the editor — the glass bar (its inset) or the keyboard window, whichever is higher. */
+    private fun coverTop(e: TesseraEditText): Int {
+        val ime = app.instrumentation.uiAutomation.windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+            ?.let { w -> Rect().also { w.getBoundsInScreen(it) }.top } ?: Int.MAX_VALUE
+        return minOf(app.ui { IntArray(2).also(e::getLocationOnScreen)[1] + e.height - e.bottomInset }, ime)
+    }
+
+    /** On the screen: the bottom of the caret. */
+    private fun caretBottom(e: TesseraEditText): Int = app.ui {
+        IntArray(2).also(e::getLocationOnScreen)[1] + (e.caretRect() ?: error("no caret")).bottom.toInt() - e.scrollY
+    }
+
+    private fun assertCaretAboveCover(e: TesseraEditText, what: String) {
+        val caret = caretBottom(e)
+        val cover = coverTop(e)
+        Log.i(TAG, "$what: caret bottom $caret, bar/keyboard top $cover, selection ${app.ui { e.selectionStart }}")
+        assertTrue("$what: the caret (bottom $caret) is above the bar/keyboard (top $cover)", caret <= cover)
+    }
+
+    /**
+     * Scrolls a line so that the bar's top edge cuts it in half, taps its visible upper part (a real `input tap`): the caret is put into that
+     * line and the note scrolls so that the line is above the bar (and above the keyboard the tap may bring up).
+     */
+    private fun tapLineHalfUnderTheBar(e: TesseraEditText, label: String) {
+        Gboard(app) // lets the keyboard window be seen
+        val cover = coverTop(e)
+        val (line, range) = app.ui {
+            val l = e.layout
+            val coverLocal = cover - IntArray(2).also(e::getLocationOnScreen)[1]
+            // a line a bit above the bar now; the note scrolls up until the bar's edge cuts it in half
+            val line = l.getLineForVertical(e.scrollY + coverLocal - e.totalPaddingTop - 200)
+            val mid = (l.getLineTop(line) + l.getLineBottom(line)) / 2
+            e.scrollTo(0, e.totalPaddingTop + mid - coverLocal)
+            line to (l.getLineStart(line)..l.getLineEnd(line))
+        }
+        app.settle(600)
+        val (x, y) = app.ui {
+            val loc = IntArray(2).also(e::getLocationOnScreen)
+            val l = e.layout
+            val top = loc[1] + e.totalPaddingTop + l.getLineTop(line) - e.scrollY
+            Log.i(TAG, "$label: line $line on screen ${top}..${loc[1] + e.totalPaddingTop + l.getLineBottom(line) - e.scrollY}, bar/keyboard top $cover")
+            check(top < cover) { "line $line is not partly above the bar" }
+            (loc[0] + e.totalPaddingLeft + 60) to (top + cover) / 2
+        }
+        shot("tap-before-$label")
+        Gboard(app).tap(Rect(x, y, x + 1, y + 1))
+        app.settle(1_500)
+        val sel = app.ui { e.selectionStart }
+        Log.i(TAG, "$label: tapped ($x, $y) → selection $sel, line range $range, scrollY ${app.ui { e.scrollY }}")
+        shot("tap-after-$label")
+        assertTrue("$label: the caret ($sel) is in the tapped line $range", sel in range)
+        assertCaretAboveCover(e, "$label, after the tap")
+    }
+
+    /** Enter and Backspace of the real Gboard at the end of a long note, and taps on a line the bar half covers: the caret is never under the bar. */
+    @Test
+    fun caretStaysAboveTheGlassBar() {
+        theme(ThemeMode.LIGHT)
+        app.seed("glass-caret", long(80), System.currentTimeMillis())
+        app.launch()
+        val e = app.open("glass-caret")
+        app.settle(1_500)
+        app.ui { e.scrollTo(0, e.layout.height / 2) }
+        tapLineHalfUnderTheBar(e, "keyboard-hidden")
+
+        focusEnd(e)
+        assertCaretAboveCover(e, "at the end")
+        val gb = Gboard(app)
+        gb.awaitShown()
+        repeat(5) {
+            gb.tap(gb.enterKey())
+            app.settle(300)
+            assertCaretAboveCover(e, "Enter ${it + 1}")
+        }
+        gb.type("ab")
+        app.settle(300)
+        shot("caret-after-enter")
+        // "b", "a", then the five empty paragraphs merge one by one, then a character of the last line
+        repeat(8) {
+            gb.press("Delete")
+            app.settle(300)
+            assertCaretAboveCover(e, "Backspace ${it + 1}")
+        }
+        shot("caret-after-backspace")
+        tapLineHalfUnderTheBar(e, "keyboard-shown")
+        app.back()
     }
 
     private companion object { const val TAG = "GlassShots" }

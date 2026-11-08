@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,11 +32,25 @@ class TesseraEditTextBottomInsetTest {
     }
 
     @Test
-    fun theInsetIsRealPadding() {
+    fun theInsetIsPartOfTheTotalPaddingButNotOfThePlainOne() {
         val h = fixture(true)
-        assertEquals(16 + inset, h.view.paddingBottom)
-        h.view.bottomInset = 0
         assertEquals(16, h.view.paddingBottom)
+        assertEquals(16 + inset, h.view.totalPaddingBottom)
+        h.view.bottomInset = 0
+        assertEquals(16, h.view.totalPaddingBottom)
+    }
+
+    @Test
+    fun changingTheInsetKeepsTheLayoutOfTheNote() {
+        val h = fixture(false)
+        val before = h.view.layout
+        h.view.bottomInset = inset
+        h.layout()
+        assertSame("a new inset must not rebuild the DynamicLayout of the whole note", before, h.view.layout)
+        h.view.bottomInset = 0
+        h.layout()
+        assertSame(before, h.view.layout)
+        assertEquals(16, h.view.totalPaddingBottom)
     }
 
     @Test

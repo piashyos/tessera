@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tessera.R
+import app.tessera.core.ui.theme.GlassBlurRadius
 import app.tessera.core.ui.theme.GlassTintAlpha
 import app.tessera.core.ui.theme.TesseraElevation
 import app.tessera.core.ui.theme.TesseraShape
@@ -134,8 +135,6 @@ fun TesseraBottomActionBar(
     }
   }
 }
-
-private val GlassBlurRadius = 16.dp
 
 /** The Surface's own fill: transparent when [hazeState] draws the glass inside it. */
 private fun Color.glassBase(hazeState: HazeState?): Color = if (hazeState == null) this else Color.Transparent

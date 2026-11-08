@@ -226,10 +226,10 @@ internal class Tables(private val app: AppDriver) {
             Triple(x.toInt(), y.toInt(), l.getLineTop(line))
         }
         // as a user does: the line is tapped where it is seen — not under the keyboard or the floating bar (a table that grew pushes it there;
-        // with the keyboard up the editor ends above the bar, so its own bottom is the limit)
+        // the editor reaches under the bar, so its bottom minus the bar's inset is the limit)
         val density = app.instrumentation.targetContext.resources.displayMetrics.density
         val top = app.ui { IntArray(2).also { e.getLocationOnScreen(it) }[1] }
-        val bottom = minOf(imeTop() ?: Int.MAX_VALUE, app.ui { IntArray(2).also { e.getLocationOnScreen(it) }[1] + e.height }) - 8
+        val bottom = minOf(imeTop() ?: Int.MAX_VALUE, app.ui { IntArray(2).also { e.getLocationOnScreen(it) }[1] + e.height - e.bottomInset }) - 8 // the note runs under the glass bar: the seen area ends at the bar's top
         var (x, y, lineTop) = point()
         if (y !in (top + 8)..bottom) {
             Log.i("TableFixtures", "tapText \"$needle\": y $y not in the seen area $top..$bottom, the note scrolled to it")

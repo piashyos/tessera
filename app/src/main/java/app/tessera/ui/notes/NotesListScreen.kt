@@ -159,7 +159,8 @@ fun NotesListScreen(
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val hazeState = remember { HazeState() }
+    val hazeState = remember { HazeState() } // popups: the source is the whole screen (header, list, search, bar)
+    val listHaze = remember { HazeState() } // the glass bottom bar: the source is the list only
 
     var sheetNote by remember { mutableStateOf<Note?>(null) }
     var folderCreatorVisible by remember { mutableStateOf(false) }
@@ -295,7 +296,7 @@ fun NotesListScreen(
             onOpenSettings()
         },
     ) {
-      Box(modifier = Modifier.fillMaxSize()) {
+      Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
         Scaffold(
             modifier = modifier
                 .fillMaxSize()
@@ -388,7 +389,7 @@ fun NotesListScreen(
             // list scrolls behind the transparent nav bar (no empty band under it); the floating
             // bottom bar and the list's bottom contentPadding handle the nav-bar clearance instead.
             Box(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
-                Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                Box(Modifier.fillMaxSize().hazeSource(listHaze)) {
                 NotesBody(
                     state = state,
                     onNoteClick = onNoteClick,
@@ -422,7 +423,7 @@ fun NotesListScreen(
                             )
                         },
                         showFab = !state.searchExpanded,
-                        hazeState = hazeState,
+                        hazeState = listHaze,
                         // Thumb-zone drawer access: folders are the most common top-corner reach.
                         leadingAction = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {

@@ -17,6 +17,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,7 +32,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -51,6 +52,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -389,6 +391,17 @@ fun NoteEditorScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .imePadding()
+                            // the margins around the pill are part of the bar: a tap there must not reach the note under it (a checkbox, an image,
+                            // the caret). The children see the events first (Main pass), so the pill's own buttons still work.
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false).consume()
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        event.changes.forEach { it.consume() }
+                                    } while (event.changes.any { it.pressed })
+                                }
+                            }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                     ) {
@@ -445,7 +458,9 @@ fun NoteEditorScreen(
         ) { padding ->
             // The note runs under the glass format bar (blurred through it): the Column takes back the part of the bar's height
             // that is the bar itself; the keyboard's part still resizes it.
-            val barInsetPx = if (imeVisible && !state.isReadOnly) barExtentPx else 0
+            // Without the keyboard the note runs under the transparent navigation bar the same way (the gesture strip): its height is the inset.
+            val navBarPx = WindowInsets.navigationBars.getBottom(density)
+            val barInsetPx = if (imeVisible) (if (state.isReadOnly) 0 else barExtentPx) else navBarPx
             Column(
                 modifier = Modifier
                     .padding(
@@ -493,9 +508,6 @@ fun NoteEditorScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .then(
-                                if (!imeVisible) Modifier.windowInsetsPadding(WindowInsets.navigationBars) else Modifier,
-                            )
                             .padding(horizontal = 20.dp),
                     )
                 }

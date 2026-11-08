@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import app.tessera.core.ui.UiTestTags
+import app.tessera.core.ui.theme.GlassBlurRadius
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
@@ -149,6 +150,8 @@ fun TesseraPopup(
                     .fillMaxSize()
                     .hazeEffect(state = hazeState) {
                         backgroundColor = frostColor
+                        blurEnabled = true
+                        blurRadius = GlassBlurRadius
                     }
                     .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.25f))
                     .testTag(UiTestTags.PopupScrim)

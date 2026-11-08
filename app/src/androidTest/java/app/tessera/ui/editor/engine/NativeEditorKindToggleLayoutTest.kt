@@ -48,6 +48,7 @@ class NativeEditorKindToggleLayoutTest {
         val e = b.e
         val live = e.capture(e.view)
         val caret = e.ui { e.view.caretRect() }
+        val scrollY = e.ui { e.view.scrollY }
         val fresh = e.ui {
             b.fresh?.let { e.container.removeView(it) }
             e.newEditor(e.view.markdown()).also {
@@ -57,6 +58,8 @@ class NativeEditorKindToggleLayoutTest {
                 b.fresh = it
             }
         }
+        e.idle()
+        if (e.ui { e.view.scrollY } > 0) e.ui { fresh.scrollTo(0, e.view.scrollY) } // a live editor that took the caret mid-note has scrolled to it: the fresh one is shown at the same place
         val freshShot = e.capture(fresh)
         val (liveSoft, freshSoft) = e.ui { soft(e.view) to soft(fresh) }
         val (liveTops, freshTops) = e.ui {
@@ -69,7 +72,7 @@ class NativeEditorKindToggleLayoutTest {
         // the caret of a focused live editor is not in the fresh one: its column is blanked in both
         if (caret != null) for (bmp in listOf(live, freshShot, liveSoft, freshSoft)) {
             for (x in (caret.left.toInt() - 3).coerceAtLeast(0)..(caret.right.toInt() + 3).coerceAtMost(bmp.width - 1)) {
-                for (y in (caret.top.toInt() - 2).coerceAtLeast(0)..(caret.bottom.toInt() + 2).coerceAtMost(bmp.height - 1)) bmp.setPixel(x, y, 0)
+                for (y in (caret.top.toInt() - scrollY - 2).coerceAtLeast(0)..(caret.bottom.toInt() - scrollY + 2).coerceAtMost(bmp.height - 1)) bmp.setPixel(x, y, 0)
             }
         }
         pixelDiff(live, freshShot)?.let { hw ->
@@ -175,6 +178,62 @@ class NativeEditorKindToggleLayoutTest {
             assertLooksFresh(b, "typed H1 off")
             toggle(e, ParagraphKind.Title)
             assertLooksFresh(b, "typed H1 on again")
+        }
+    }
+
+    // ---- commands that add or remove lines: `repaintBelow` is not called for them (the layout shifts the blocks itself); the window must still match.
+
+    private val longNote = "# Title line\nFf\n" + (1..40).joinToString("\n") { "Paragraph $it of the note with some words to fill a line, and a few more to wrap onto a second line of the screen" }
+
+    @Test fun enterInTheMiddleOfALongNote() {
+        val b = board(longNote, focus = true)
+        b.e.use { e ->
+            e.capture(e.view) // the blocks of the live editor are recorded before the commands
+            for (at in listOf("Paragraph 6 ", "Paragraph 12 ", "Paragraph 30 ", "Paragraph 38 ")) {
+                e.caret(e.at(at, 4))
+                e.ui { e.view.performEnter() }
+                e.idle()
+                assertLooksFresh(b, "Enter in \"$at\"")
+            }
+        }
+    }
+
+    @Test fun backspaceMergeInTheMiddleOfALongNote() {
+        val b = board(longNote, focus = true)
+        b.e.use { e ->
+            e.capture(e.view)
+            for (at in listOf("Paragraph 6 ", "Paragraph 13 ", "Paragraph 20 ")) {
+                e.caret(e.at(at))
+                e.ui { e.view.performBackspace() }
+                e.idle()
+                assertLooksFresh(b, "Backspace-merge at \"$at\"")
+            }
+        }
+    }
+
+    @Test fun aMultiLinePasteInTheMiddleOfALongNote() {
+        val b = board(longNote, focus = true)
+        b.e.use { e ->
+            e.capture(e.view)
+            e.caret(e.at("Paragraph 9 ", 4))
+            e.ime { commitText("alpha beta\ngamma delta\nepsilon zeta eta theta", 1) }
+            assertLooksFresh(b, "paste of three lines")
+            e.caret(e.at("Paragraph 25 ", 4))
+            e.ime { commitText("one\ntwo", 1) }
+            assertLooksFresh(b, "paste of two lines")
+        }
+    }
+
+    /** A heading that wraps (more lines than the body paragraph had) and one that does not: the first changes the number of lines too. */
+    @Test fun aKindChangeThatWrapsTheParagraph() {
+        val b = board(longNote, focus = false)
+        b.e.use { e ->
+            e.capture(e.view)
+            e.caret(e.at("Paragraph 5 ", 3))
+            toggle(e, ParagraphKind.Title)
+            assertLooksFresh(b, "wrapping H1 on")
+            toggle(e, ParagraphKind.Title)
+            assertLooksFresh(b, "wrapping H1 off")
         }
     }
 }

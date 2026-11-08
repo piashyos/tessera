@@ -1,6 +1,7 @@
 package app.tessera.core.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 /** Brand color tokens. Mirror of `design/mockups/tokens.css`. */
 interface TesseraBrandColors {
@@ -377,6 +378,9 @@ object TesseraSageDark : TesseraBrandColors {
 
 /** Alpha of a theme-colour tint over a Haze backdrop: low enough for the blurred content to read, high enough that the hue stays recognisable. */
 const val GlassTintAlpha = 0.48f
+
+/** Blur of a Haze backdrop. Haze has no default radius: nothing is blurred without one. */
+val GlassBlurRadius = 16.dp
 
 val CapsuleBorder            = Color.White.copy(alpha = 0.20f)
 val CapsuleTintLight         = Color.White.copy(alpha = 0.65f)
