@@ -269,7 +269,11 @@ class TesseraEditText(context: Context, style: EditorStyle) :
                 val typed = !pasting
                 if (autoReplace.wouldApply(s, inserted, typed)) {
                     if (!inCommand) history.step(snapshot(s, changeEnd, changeEnd)) // undo right after the replacement gives the typed characters back
-                    autoReplace.tryApply(s, inserted, typed)?.let { setSelection(it.caret.coerceAtMost(s.length)) }
+                    val heightBefore = layout?.height
+                    autoReplace.tryApply(s, inserted, typed)?.let {
+                        setSelection(it.caret.coerceAtMost(s.length))
+                        repaintBelow(paragraphStart(s, it.caret.coerceIn(0, s.length)), heightBefore) // "# " made a heading: the lines under it move
+                    }
                 }
                 applyObjectWidth()
                 healLayout()
@@ -656,12 +660,14 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         val t = at ?: selectionEnd.coerceAtLeast(0)
         val before = snapshot(e, s, t)
         val v0 = versionOf(e)
+        val heightBefore = layout?.height
         var sel: Sel? = null
         guard {
             inCommand = true
             try { sel = op(e, s, t) } finally { inCommand = false }
             applyObjectWidth()
             healLayout()
+            repaintBelow(paragraphStart(e, minOf(s, t).coerceIn(0, e.length)), heightBefore)
         }
         sel?.let { setSelection(it.start.coerceAtMost(e.length), it.end.coerceAtMost(e.length)) }
         val changed = sel != null && changedSince(e, v0)
@@ -1113,6 +1119,20 @@ class TesseraEditText(context: Context, style: EditorStyle) :
             field = value
             isCursorVisible = !value && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
         }
+
+    /**
+     * A command that changes how a paragraph looks (a heading turned off, a list item made a quote) changes its height and the margins of its
+     * neighbours, and moves every line under it. The `Editor` of a `TextView` draws the text from one `RenderNode` per block of lines and
+     * puts a block where it was when it was last recorded: a span change invalidates the blocks of its own lines, so the blocks below keep their old
+     * place and recording (LAYOUT-H: the lines under a toggled heading stayed where the heading had pushed them, with a gap above). When the
+     * text got another height, the lines from [from] to the end are measured and recorded again, as a span set over them does.
+     */
+    private fun repaintBelow(from: Int, heightBefore: Int?) {
+        val l = layout ?: return
+        val t = text ?: return
+        if (heightBefore == null || l.height == heightBefore || t.isEmpty()) return
+        Normalizer.relayout(t, from, t.length)
+    }
 
     private fun applyViewStyle() {
         setTextColor(editorStyle.textColor)
