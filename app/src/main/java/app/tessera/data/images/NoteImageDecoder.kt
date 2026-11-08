@@ -155,7 +155,7 @@ class NoteImageDecoder(
      * half-painted bitmap) counts as undecodable, so the caller falls through to Drive.
      */
     private fun decodeSampled(file: File, sample: Int): Bitmap? {
-        if (strictDecoding) return decodeSampledStrict(file, sample)
+        if (strictDecoding && Build.VERSION.SDK_INT >= 28) return decodeSampledStrict(file, sample)
         val opts = BitmapFactory.Options().apply { inSampleSize = sample }
         return BitmapFactory.decodeFile(file.absolutePath, opts)
     }
