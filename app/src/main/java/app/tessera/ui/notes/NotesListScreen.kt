@@ -160,7 +160,6 @@ fun NotesListScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val hazeState = remember { HazeState() } // popups: the source is the whole screen (header, list, search, bar)
-    val listHaze = remember { HazeState() } // the glass bottom bar: the source is the list only
 
     var sheetNote by remember { mutableStateOf<Note?>(null) }
     var folderCreatorVisible by remember { mutableStateOf(false) }
@@ -296,11 +295,12 @@ fun NotesListScreen(
             onOpenSettings()
         },
     ) {
-      Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
+      Box(modifier = modifier.fillMaxSize().testTag(UiTestTags.NotesListRoot)) {
+        // Haze draws nothing for an effect that sits INSIDE a hazeSource: the glass bar below is a sibling of the
+        // sources, never a descendant. The popups blur this source; the bar blurs it too.
+        Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
         Scaffold(
-            modifier = modifier
-                .fillMaxSize()
-                .testTag(UiTestTags.NotesListRoot),
+            modifier = Modifier.fillMaxSize(),
             // Transparent so the app-wide background + film grain (painted by GrainOverlay) shows
             // through; the note cards paint their own opaque surface on top and stay grain-free.
             containerColor = Color.Transparent,
@@ -389,7 +389,7 @@ fun NotesListScreen(
             // list scrolls behind the transparent nav bar (no empty band under it); the floating
             // bottom bar and the list's bottom contentPadding handle the nav-bar clearance instead.
             Box(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
-                Box(Modifier.fillMaxSize().hazeSource(listHaze)) {
+                Box(Modifier.fillMaxSize()) {
                 NotesBody(
                     state = state,
                     onNoteClick = onNoteClick,
@@ -409,67 +409,69 @@ fun NotesListScreen(
                     currentUserId = currentUserId,
                 )
                 }
-                if (!selectionMode) {
-                    TesseraBottomActionBar(
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
-                        searchQuery = state.query(),
-                        onSearchClick = onExpandSearch,
-                        onFabClick = onCreateNote,
-                        fabIcon = {
-                            Icon(
-                                Icons.Rounded.Add,
-                                contentDescription = stringResource(R.string.create_note),
-                                modifier = Modifier.testTag(UiTestTags.CreateNoteFab),
-                            )
-                        },
-                        showFab = !state.searchExpanded,
-                        hazeState = listHaze,
-                        // Thumb-zone drawer access: folders are the most common top-corner reach.
-                        leadingAction = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(
-                                    Icons.Rounded.Folder,
-                                    contentDescription = stringResource(R.string.folders_open_drawer),
+            }
+        }
+        }
+
+        if (!selectionMode) {
+            TesseraBottomActionBar(
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+                searchQuery = state.query(),
+                onSearchClick = onExpandSearch,
+                onFabClick = onCreateNote,
+                fabIcon = {
+                    Icon(
+                        Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.create_note),
+                        modifier = Modifier.testTag(UiTestTags.CreateNoteFab),
+                    )
+                },
+                showFab = !state.searchExpanded,
+                hazeState = hazeState,
+                // Thumb-zone drawer access: folders are the most common top-corner reach.
+                leadingAction = {
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                        Icon(
+                            Icons.Rounded.Folder,
+                            contentDescription = stringResource(R.string.folders_open_drawer),
+                        )
+                    }
+                },
+            )
+        } else {
+            // Batch actions live in a reachable floating toolbar (M3E contextual pattern)
+            // instead of the top-right dead zone.
+            SelectionFloatingToolbar(
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+                isTrashView = state.isTrashView,
+                onMove = { selectionMovePickerVisible = true },
+                onDelete = {
+                    if (state.isTrashView) {
+                        val count = selection.size
+                        onPermanentlyDeleteSelected()
+                        if (count > 0) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = permanentlyDeletedMessage,
+                                    duration = SnackbarDuration.Short,
                                 )
                             }
-                        },
-                    )
-                } else {
-                    // Batch actions live in a reachable floating toolbar (M3E contextual pattern)
-                    // instead of the top-right dead zone.
-                    SelectionFloatingToolbar(
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
-                        isTrashView = state.isTrashView,
-                        onMove = { selectionMovePickerVisible = true },
-                        onDelete = {
-                            if (state.isTrashView) {
-                                val count = selection.size
-                                onPermanentlyDeleteSelected()
-                                if (count > 0) {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(
-                                            message = permanentlyDeletedMessage,
-                                            duration = SnackbarDuration.Short,
-                                        )
-                                    }
-                                }
-                            } else {
-                                val ids = onDeleteSelected()
-                                if (ids.isNotEmpty()) {
-                                    scope.launch {
-                                        val r = snackbarHostState.showSnackbar(
-                                            message = selectionDeletedMessage,
-                                            actionLabel = undoLabel,
-                                            duration = SnackbarDuration.Short,
-                                        )
-                                        if (r == SnackbarResult.ActionPerformed) onRestoreNotes(ids)
-                                    }
-                                }
+                        }
+                    } else {
+                        val ids = onDeleteSelected()
+                        if (ids.isNotEmpty()) {
+                            scope.launch {
+                                val r = snackbarHostState.showSnackbar(
+                                    message = selectionDeletedMessage,
+                                    actionLabel = undoLabel,
+                                    duration = SnackbarDuration.Short,
+                                )
+                                if (r == SnackbarResult.ActionPerformed) onRestoreNotes(ids)
                             }
-                        },
-                    )
-                }
-            }
+                        }
+                    }
+                },
+            )
         }
 
         // Full-screen search surface that overlays the list while search is expanded.
@@ -483,7 +485,7 @@ fun NotesListScreen(
             visible = state.searchExpanded,
             enter = fadeIn(tween(180)),
             exit = fadeOut(tween(180)),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().hazeSource(hazeState, zIndex = 1f),
         ) {
             SearchScreen(
                 query = searchQuery,
