@@ -69,13 +69,15 @@ class SyncRepositoryImpl @Inject constructor(
         runCatching {
             Log.d(TAG, "syncNow start uid=${uid.value}")
             pushPendingFolders(uid)
-            pushPending(uid)
             val remoteFolderList = remoteFolders.fetchAll(uid.value)
             Log.d(TAG, "Pulled ${remoteFolderList.size} folder(s) from Firestore")
             mergeRemoteFolders(uid, remoteFolderList)
+            // Pull before push: a newer cloud copy must reach the merge (which keeps an unsent local
+            // edit as a conflict copy) before the push would overwrite it with an older version.
             val remoteNoteList = remote.fetchAll(uid.value)
             Log.d(TAG, "Pulled ${remoteNoteList.size} note(s) from Firestore")
             mergeRemote(uid, remoteNoteList)
+            pushPending(uid)
             val remoteSharedList = remoteShared.fetchAll(uid.value)
             Log.d(TAG, "Pulled ${remoteSharedList.size} shared note(s) from Firestore")
             mergeRemoteShared(uid, remoteSharedList)
@@ -169,7 +171,7 @@ class SyncRepositoryImpl @Inject constructor(
         }
         remote.upsertAll(uid.value, payload)
         val now = clock.nowMs()
-        pending.forEach { noteDao.markSynced(it.id, now) }
+        pending.forEach { noteDao.markSynced(it.id, now, it.updatedAt) }
     }
 
     /**
@@ -198,7 +200,7 @@ class SyncRepositoryImpl @Inject constructor(
                 remoteShared.pushSharedNote(
                     sharedMapper.toRemoteContent(entity, tagDao.tagsForNote(entity.id)),
                 )
-                noteDao.markSynced(entity.id, now)
+                noteDao.markSynced(entity.id, now, entity.updatedAt)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Never swallow structured-concurrency cancellation; let it unwind the coroutine.
                 throw e
@@ -251,6 +253,14 @@ class SyncRepositoryImpl @Inject constructor(
                 // owner's private subtree on share must not clobber the shared copy.
                 if (local != null && local.shareState == NoteEntity.SHARE_STATE_SHARED) continue
                 if (local != null && local.updatedAt >= remoteNote.updatedAt) continue
+                // The cloud copy is newer but this device holds an edit that never went out (made
+                // offline): keep it as its own note instead of silently replacing it.
+                if (local != null && local.syncedAt == null && local.deletedAt == null &&
+                    local.content != remoteNote.content &&
+                    !(local.title.isBlank() && local.content.isBlank())
+                ) {
+                    keepAsConflictCopy(local, now)
+                }
 
                 noteDao.upsert(mapper.toEntity(remoteNote, ownerId = uid.value, syncedAt = now))
                 replaceTags(remoteNote.id, remoteNote.tags)
@@ -258,6 +268,15 @@ class SyncRepositoryImpl @Inject constructor(
                 mergeImageManifest(remoteNote.id, remoteNote.images)
             }
         }
+    }
+
+    // ponytail: the copy shares the original's image ids (rows stay keyed to the original note), so
+    // its images won't resolve on other devices; per-copy image rows if that ever matters.
+    private suspend fun keepAsConflictCopy(local: NoteEntity, now: Long) {
+        val copyId = UUID.randomUUID().toString()
+        noteDao.upsert(local.copy(id = copyId, updatedAt = now, syncedAt = null))
+        replaceTags(copyId, tagDao.tagsForNote(local.id))
+        folderDao.folderIdForNote(local.id)?.let { folderDao.assignNote(NoteFolderCrossRef(copyId, it)) }
     }
 
     /**

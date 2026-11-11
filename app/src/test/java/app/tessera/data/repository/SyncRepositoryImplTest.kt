@@ -65,7 +65,7 @@ class SyncRepositoryImplTest {
         tagDao: TagDao = SyncFakeTagDao(),
         folderDao: SyncFakeFolderDao = SyncFakeFolderDao(),
         sharedMemberDao: FakeSharedMemberDao = FakeSharedMemberDao(),
-        remote: FakeRemoteNotesDataSource = FakeRemoteNotesDataSource(),
+        remote: RemoteNotesDataSource = FakeRemoteNotesDataSource(),
         remoteFolders: SyncFakeRemoteFoldersDataSource = SyncFakeRemoteFoldersDataSource(),
         remoteShared: FakeRemoteSharedNotesDataSource = FakeRemoteSharedNotesDataSource(),
         noteImageDao: NoteImageDao = SyncFakeNoteImageDao(),
@@ -259,6 +259,96 @@ class SyncRepositoryImplTest {
             repo.observeRemote(uid).first()
 
             assertEquals("FreshLocal", noteDao.getById("x")?.title)
+        }
+
+    @Test
+    fun `offline edit older remote - listener snapshot first, then sync - edit survives and is pushed`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val repo = create(noteDao = noteDao, remote = remote, clock = SyncTestClock(500L))
+            noteDao.upsert(entity("x", title = "OfflineEdit", updatedAt = 100L, syncedAt = null))
+            remote.store(RemoteNote(id = "x", title = "OldCloud", content = "c", updatedAt = 40L))
+            remote.emit(listOf(RemoteNote(id = "x", title = "OldCloud", content = "c", updatedAt = 40L)))
+
+            repo.observeRemote(uid).first() // connection is back: the listener fires before the worker
+            repo.syncNow(uid)
+
+            assertEquals("OfflineEdit", noteDao.getById("x")?.title)
+            assertEquals("OfflineEdit", remote.uploaded["x"]?.title)
+            assertEquals(500L, noteDao.getById("x")?.syncedAt)
+        }
+
+    @Test
+    fun `offline edit while another device saved later - listener snapshot keeps the edit as a copy`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val repo = create(noteDao = noteDao, remote = remote)
+            noteDao.upsert(entity("x", title = "OfflineEdit", content = "mine", updatedAt = 100L, syncedAt = null))
+            remote.emit(listOf(RemoteNote(id = "x", title = "OtherDevice", content = "theirs", updatedAt = 200L)))
+
+            repo.observeRemote(uid).first()
+
+            assertEquals("theirs", noteDao.getById("x")?.content)
+            val copy = noteDao.getAll().single { it.id != "x" }
+            assertEquals("mine", copy.content)
+            assertNull(copy.syncedAt)
+        }
+
+    @Test
+    fun `offline edit while another device saved later - sync keeps both and does not overwrite the cloud`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val repo = create(noteDao = noteDao, remote = remote)
+            noteDao.upsert(entity("x", title = "OfflineEdit", content = "mine", updatedAt = 100L, syncedAt = null))
+            remote.store(RemoteNote(id = "x", title = "OtherDevice", content = "theirs", updatedAt = 200L))
+
+            repo.syncNow(uid)
+
+            assertEquals("theirs", noteDao.getById("x")?.content)
+            assertEquals("theirs", remote.uploaded["x"]?.content ?: "theirs")
+            val copy = noteDao.getAll().single { it.id != "x" }
+            assertEquals("mine", copy.content)
+            assertEquals("mine", remote.uploaded[copy.id]?.content)
+            assertNotNull(noteDao.getById(copy.id)?.syncedAt)
+        }
+
+    @Test
+    fun `a newer cloud copy with unchanged content makes no conflict copy`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val repo = create(noteDao = noteDao, remote = remote)
+            // only a pin toggle is pending locally; the text is the same as in the cloud
+            noteDao.upsert(entity("x", content = "same", updatedAt = 100L, syncedAt = null))
+            remote.store(RemoteNote(id = "x", title = "title", content = "same", updatedAt = 200L))
+
+            repo.syncNow(uid)
+
+            assertEquals(1, noteDao.getAll().size)
+        }
+
+    @Test
+    fun `an edit saved while the push is in flight stays pending`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val inner = FakeRemoteNotesDataSource()
+            val racing =
+                object : RemoteNotesDataSource by inner {
+                    override suspend fun upsertAll(uid: String, notes: List<RemoteNote>) {
+                        inner.upsertAll(uid, notes)
+                        // the user keeps typing: the editor saves while the batch commit is awaited
+                        noteDao.upsert(entity("x", title = "TypedDuringPush", updatedAt = 200L, syncedAt = null))
+                    }
+                }
+            val repo = create(noteDao = noteDao, remote = racing)
+            noteDao.upsert(entity("x", title = "Before", updatedAt = 100L, syncedAt = null))
+
+            repo.pushLocalChanges(uid)
+
+            assertNull(noteDao.getById("x")?.syncedAt)
         }
 
     @Test
@@ -787,8 +877,8 @@ private class SyncFakeNoteDao : NoteDao {
     override suspend fun getSharedNotes(): List<NoteEntity> =
         notes.values.filter { it.shareState == NoteEntity.SHARE_STATE_SHARED }
 
-    override suspend fun markSynced(id: String, ts: Long) {
-        notes[id]?.let { notes[id] = it.copy(syncedAt = ts) }
+    override suspend fun markSynced(id: String, ts: Long, updatedAt: Long) {
+        notes[id]?.takeIf { it.updatedAt == updatedAt }?.let { notes[id] = it.copy(syncedAt = ts) }
     }
 
     override suspend fun markPendingSync(id: String, ts: Long) {

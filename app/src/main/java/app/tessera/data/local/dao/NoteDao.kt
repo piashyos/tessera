@@ -101,8 +101,12 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE shareState = 'SHARED'")
     suspend fun getSharedNotes(): List<NoteEntity>
 
-    @Query("UPDATE notes SET syncedAt = :ts WHERE id = :id")
-    suspend fun markSynced(id: String, ts: Long)
+    /**
+     * Stamps [id] as synced only if it is still the version that was pushed ([updatedAt]); an edit
+     * saved while the push was in flight keeps `syncedAt = NULL` and goes out on the next sync.
+     */
+    @Query("UPDATE notes SET syncedAt = :ts WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun markSynced(id: String, ts: Long, updatedAt: Long)
 
     @Query("UPDATE notes SET syncedAt = NULL, updatedAt = :ts WHERE id = :id")
     suspend fun markPendingSync(id: String, ts: Long)
