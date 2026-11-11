@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.theme.GlassBlurRadius
+import app.tessera.core.ui.theme.TesseraMotion
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
@@ -128,7 +129,7 @@ fun TesseraPopup(
                     currentDismiss.value()
                 } else if (dragTotal.floatValue > 0f) {
                     dragTotal.floatValue = 0f
-                    dragOffset.animateTo(0f, spring())
+                    dragOffset.animateTo(0f, TesseraMotion.snappySpring())
                 }
                 return Velocity.Zero
             }
@@ -137,8 +138,8 @@ fun TesseraPopup(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        enter = fadeIn(TesseraMotion.smoothSpring()),
+        exit = fadeOut(TesseraMotion.smoothSpring()),
         modifier = modifier,
     ) {
         BackHandler(enabled = visible, onBack = dismiss)
@@ -173,8 +174,8 @@ fun TesseraPopup(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .animateEnterExit(
-                        enter = slideInVertically(spring()) { it },
-                        exit = slideOutVertically(spring()) { it },
+                        enter = slideInVertically(TesseraMotion.smoothSpring()) { it },
+                        exit = slideOutVertically(TesseraMotion.smoothSpring()) { it },
                     )
                     .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                     .fillMaxWidth()
@@ -198,12 +199,12 @@ fun TesseraPopup(
                                     dismiss()
                                 } else {
                                     dragTotal.floatValue = 0f
-                                    dragScope.launch { dragOffset.animateTo(0f, spring()) }
+                                    dragScope.launch { dragOffset.animateTo(0f, TesseraMotion.snappySpring()) }
                                 }
                             },
                             onDragCancel = {
                                 dragTotal.floatValue = 0f
-                                dragScope.launch { dragOffset.animateTo(0f, spring()) }
+                                dragScope.launch { dragOffset.animateTo(0f, TesseraMotion.snappySpring()) }
                             },
                         )
                     }

@@ -31,8 +31,10 @@ import app.tessera.R
 import app.tessera.core.ui.theme.GlassBlurRadius
 import app.tessera.core.ui.theme.GlassTintAlpha
 import app.tessera.core.ui.theme.TesseraElevation
+import app.tessera.core.ui.theme.TesseraMotion
 import app.tessera.core.ui.theme.TesseraShape
 import app.tessera.core.ui.theme.TesseraSpacing
+import app.tessera.core.ui.theme.tesseraGlassShadow
 import app.tessera.core.ui.theme.tesseraShadow
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
@@ -75,7 +77,7 @@ fun TesseraBottomActionBar(
         shape = TesseraShape.pill,
         modifier = Modifier
           .size(52.dp)
-          .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill) else Modifier) // a shadow would show through the glass as a grey fill,
+          .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill) else Modifier.tesseraGlassShadow(TesseraElevation.Level2, TesseraShape.pill)) // glass: the shadow is drawn only outside the shape
       ) {
         Box(modifier = Modifier.fillMaxSize().tesseraGlass(hazeState, color), contentAlignment = Alignment.Center) {
           leadingAction()
@@ -92,7 +94,7 @@ fun TesseraBottomActionBar(
         .semantics { role = Role.Button }
         .weight(1f)
         .height(52.dp)
-        .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill) else Modifier) // a shadow would show through the glass as a grey fill,
+        .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level2, shape = TesseraShape.pill) else Modifier.tesseraGlassShadow(TesseraElevation.Level2, TesseraShape.pill)) // glass: the shadow is drawn only outside the shape
     ) {
       Box(
         modifier = Modifier.fillMaxSize().tesseraGlass(hazeState, searchColor).padding(horizontal = TesseraSpacing.xl),
@@ -114,8 +116,8 @@ fun TesseraBottomActionBar(
     }
     AnimatedVisibility(
       visible = showFab,
-      enter = fadeIn() + scaleIn(),
-      exit = fadeOut() + scaleOut(),
+      enter = fadeIn(TesseraMotion.snappySpring()) + scaleIn(TesseraMotion.snappySpring(), initialScale = 0.6f),
+      exit = fadeOut(TesseraMotion.snappySpring()) + scaleOut(TesseraMotion.snappySpring(), targetScale = 0.6f),
     ) {
       val fabColor = MaterialTheme.colorScheme.primaryContainer
       Surface(
@@ -126,7 +128,7 @@ fun TesseraBottomActionBar(
         modifier = Modifier
           .semantics { role = Role.Button }
           .size(52.dp)
-          .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level3, shape = TesseraShape.fab) else Modifier) // a shadow would show through the glass as a grey fill,
+          .then(if (hazeState == null) Modifier.tesseraShadow(TesseraElevation.Level3, shape = TesseraShape.fab) else Modifier.tesseraGlassShadow(TesseraElevation.Level3, TesseraShape.fab)) // glass: the shadow is drawn only outside the shape
       ) {
         Box(modifier = Modifier.fillMaxSize().tesseraGlass(hazeState, fabColor), contentAlignment = Alignment.Center) {
           fabIcon()
