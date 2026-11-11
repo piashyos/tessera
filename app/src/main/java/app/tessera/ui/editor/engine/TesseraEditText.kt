@@ -25,7 +25,9 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.ViewConfiguration
+import android.view.animation.AnimationUtils
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.TextView
@@ -45,6 +47,8 @@ import app.tessera.ui.editor.engine.spans.ObjectSpan
 import java.io.File
 import java.util.UUID
 import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.roundToInt
 
 /** A selected image: its paragraph, its `src`, and where it is in the view (the host draws the resize and rotate handles there). */
 data class ImageSelection(val ps: Int, val src: String, val rect: Rect)
@@ -244,6 +248,19 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     private var downY = 0f
     private var longPressMs = 0L
 
+    // ---- inertial scrolling. TextView scrolls a drag with Touch.scrollTo and stops dead on lift: the fling is added here.
+    // Velocity decays like UIScrollView's normal deceleration (0.998 per millisecond) and the fling ends at an edge.
+    private val viewConfig = ViewConfiguration.get(context)
+    private var velocityTracker: VelocityTracker? = null
+    private var flingVelocity = 0f // px/s of the content, + = scrolling down; 0 = no fling
+    private var flingY = 0f
+    private var flingLastMs = 0L
+    private var caughtFling = false // this gesture began on a moving fling: it stops it, and is not a tap
+    private var scrollYAtDown = 0
+    private var selectionAtDown = 0L
+    private var flingDownY = 0f
+    private val flingStep = Runnable { stepFling() }
+
     private val watcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {
             if (guarded || !ready) return
@@ -254,6 +271,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         }
 
         override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+            stopFling() // typing scrolls to the caret: the fling must not fight it
             markdownCache = null // the version of the editable changes when the replace is over; a step taken in afterTextChanged needs the text as it is now
             restartBlink()
             if (guarded || !ready) return
@@ -858,6 +876,78 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         checkboxZones().filter { it.rect.contains(x.toInt(), y.toInt()) }.minByOrNull { abs(it.rect.centerY() - y) }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            tracker.clear()
+            caughtFling = flingVelocity != 0f
+            stopFling()
+            scrollYAtDown = scrollY
+            flingDownY = event.y
+        }
+        tracker.addMovement(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP && caughtFling && abs(event.y - flingDownY) <= touchSlop) {
+            // a touch that stopped a moving fling is not a tap: no caret, no keyboard
+            caughtFling = false
+            val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+            super.onTouchEvent(cancel)
+            cancel.recycle()
+            return true
+        }
+        val selectionBefore = selectionStart.toLong() shl 32 or selectionEnd.toLong()
+        val handled = handleTouch(event)
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            if (caughtFling) { tapTarget = null; imageTapTarget = null; tableTapTarget = null }
+            // after the DOWN is handled: a touch that focuses the editor puts the caret under the finger right there, and that is not a selection drag
+            selectionAtDown = selectionStart.toLong() shl 32 or selectionEnd.toLong()
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_UP -> {
+                caughtFling = false
+                val moved = abs(scrollY - scrollYAtDown) > touchSlop
+                val sameSelection = selectionAtDown == selectionBefore // as the drag left it: the lift itself may put the caret down
+                tracker.computeCurrentVelocity(1000, viewConfig.scaledMaximumFlingVelocity.toFloat())
+                val v = -tracker.yVelocity
+                // only a scroll drag flings: a drag that selected text (or moved a handle) leaves the view where it is
+                if (moved && sameSelection && abs(v) >= viewConfig.scaledMinimumFlingVelocity) startFling(v)
+                tracker.recycle(); velocityTracker = null
+            }
+            MotionEvent.ACTION_CANCEL -> { caughtFling = false; tracker.recycle(); velocityTracker = null }
+        }
+        return handled
+    }
+
+    private fun startFling(velocity: Float) {
+        flingVelocity = velocity
+        flingY = scrollY.toFloat()
+        flingLastMs = AnimationUtils.currentAnimationTimeMillis()
+        postOnAnimation(flingStep)
+    }
+
+    private fun stopFling() {
+        if (flingVelocity == 0f) return
+        flingVelocity = 0f
+        removeCallbacks(flingStep)
+    }
+
+    private fun stepFling() {
+        val l = layout
+        if (flingVelocity == 0f || l == null) { stopFling(); return }
+        val now = AnimationUtils.currentAnimationTimeMillis()
+        val dt = (now - flingLastMs).coerceIn(1L, 50L)
+        flingLastMs = now
+        flingY += flingVelocity * dt / 1000f
+        flingVelocity *= FLING_DECAY_PER_MS.pow(dt.toFloat())
+        // The range is what Touch.onTouchEvent clamps a drag to (Touch.scrollTo itself does not clamp y): padding and the
+        // glass bar's inset are part of the total padding. Reaching either end ends the fling.
+        val max = (l.height - (height - totalPaddingTop - totalPaddingBottom)).coerceAtLeast(0)
+        val atEdge = flingY <= 0f || flingY >= max
+        flingY = flingY.coerceIn(0f, max.toFloat())
+        android.text.method.Touch.scrollTo(this, l, scrollX, flingY.roundToInt())
+        awakenScrollBars()
+        if (atEdge || abs(flingVelocity) < FLING_STOP_VELOCITY) stopFling() else postOnAnimation(flingStep)
+    }
+
+    private fun handleTouch(event: MotionEvent): Boolean {
         if (ready && editable) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -986,6 +1076,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     override fun onDetachedFromWindow() {
+        stopFling()
         emitHandler.removeCallbacks(blink)
         super.onDetachedFromWindow()
     }
@@ -1200,5 +1291,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         const val MIN_TOUCH_DP = 48
         const val CARET_BLINK_MS = 500L
         const val CARET_WIDTH_DP = 2
+        const val FLING_DECAY_PER_MS = 0.998f // UIScrollView.DecelerationRate.normal
+        const val FLING_STOP_VELOCITY = 30f // px/s
     }
 }

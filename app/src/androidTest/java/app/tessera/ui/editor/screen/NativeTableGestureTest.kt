@@ -47,6 +47,17 @@ class NativeTableGestureTest : NativeAppTest() {
 
     private fun scrollY(e: TesseraEditText) = app.ui { e.scrollY }
 
+    /** A swipe leaves the note coasting (inertial scrolling): wait until it has come to rest, as a user would before the next touch. */
+    private fun awaitRest(e: TesseraEditText) {
+        var last = -1
+        var stable = 0
+        repeat(80) {
+            val y = scrollY(e)
+            if (y == last) { if (++stable >= 3) return } else { stable = 0; last = y }
+            Thread.sleep(100)
+        }
+    }
+
     /** The header cell at the table's left edge: another one once the table scrolled sideways (a fling may take it far). */
     private fun leftHeader(e: TesseraEditText): String {
         val cells = t.cells(t.onScreen(e)).filter { it.second.width() > 8 }
@@ -63,13 +74,18 @@ class NativeTableGestureTest : NativeAppTest() {
         val table = t.onScreen(e)
         val s0 = scrollY(e)
         t.drag(table.centerX(), table.centerY(), 0, -dp(160))
+        awaitRest(e)
         val s1 = scrollY(e)
+        // the swipe coasted on, further than the finger went (maybe to the end of the note): bring the table back under the finger
+        t.scrollTableTo(e, dp(260))
         val again = t.onScreen(e)
+        val s1b = scrollY(e)
         t.drag(again.centerX(), again.centerY(), 0, dp(100), steps = 15)
+        awaitRest(e)
         val s2 = scrollY(e)
-        log("swipe on the table: up 160dp scrollY $s0 -> $s1, down 100dp -> $s2")
+        log("swipe on the table: up 160dp scrollY $s0 -> $s1, down 100dp from $s1b -> $s2")
         assertTrue("up from the table scrolls the note: $s0 -> $s1", s1 - s0 >= dp(100))
-        assertTrue("down scrolls it back: $s1 -> $s2", s1 - s2 >= dp(60))
+        assertTrue("down scrolls it back: $s1b -> $s2", s1b - s2 >= dp(60))
 
         // a cell with the focus and the keyboard up
         t.scrollTableTo(e, dp(120))
@@ -78,6 +94,7 @@ class NativeTableGestureTest : NativeAppTest() {
         val field = t.focused()!!
         val s3 = scrollY(e)
         t.drag(field.second.centerX(), field.second.centerY(), 0, -dp(100), steps = 15)
+        awaitRest(e)
         val s4 = scrollY(e)
         val stillFocused = t.focused()?.first
         log("swipe on the focused cell \"${field.first}\": up 100dp scrollY $s3 -> $s4, focused after: $stillFocused")
@@ -110,7 +127,7 @@ class NativeTableGestureTest : NativeAppTest() {
         t.scrollTableTo(e, dp(260))
         val table = t.onScreen(e)
         val (r0, s0) = leftHeader(e) to scrollY(e)
-        swipe(table.right - dp(60), table.centerY(), table.right - dp(60) - dp(120), table.centerY() - dp(120))
+        swipe(e, table.right - dp(60), table.centerY(), table.right - dp(60) - dp(120), table.centerY() - dp(120))
         val (r1, s1) = leftHeader(e) to scrollY(e)
         // what a 45° swipe moves is not promised (observed: sometimes the table, sometimes nothing); what follows must work
         log("diagonal swipe (shell): the header at the left edge \"$r0\" -> \"$r1\", note ${s1 - s0} px")
@@ -118,7 +135,7 @@ class NativeTableGestureTest : NativeAppTest() {
         t.scrollTableTo(e, dp(260))
         val tv = t.onScreen(e)
         val s2 = scrollY(e)
-        swipe(tv.centerX(), tv.centerY(), tv.centerX(), tv.centerY() - dp(140))
+        swipe(e, tv.centerX(), tv.centerY(), tv.centerX(), tv.centerY() - dp(140))
         val s3 = scrollY(e)
         t.scrollTableTo(e, dp(220))
         log("after the diagonal: vertical swipe scrollY $s2 -> $s3")
@@ -131,9 +148,10 @@ class NativeTableGestureTest : NativeAppTest() {
         assertEquals("a tap still focuses a cell", "3", focused)
     }
 
-    private fun swipe(x1: Int, y1: Int, x2: Int, y2: Int) {
+    private fun swipe(e: TesseraEditText, x1: Int, y1: Int, x2: Int, y2: Int) {
         t.shell("input swipe $x1 $y1 $x2 $y2 300")
         app.settle(600)
+        awaitRest(e)
     }
 
     @Test
