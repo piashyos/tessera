@@ -66,6 +66,8 @@ import app.tessera.core.ui.tessera.MembersSheet
 import app.tessera.core.ui.tessera.TesseraTopBar
 import app.tessera.core.ui.tessera.tesseraGlass
 import app.tessera.core.ui.tessera.TesseraTopBarIconButton
+import app.tessera.core.ui.theme.TesseraElevation
+import app.tessera.core.ui.theme.tesseraGlassShadow
 import app.tessera.core.ui.theme.TesseraMotion
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.components.EditorFormatBar
@@ -392,16 +394,12 @@ fun NoteEditorScreen(
                             .fillMaxWidth()
                             .imePadding()
                             // the margins around the pill are part of the bar: a tap there must not reach the note under it (a checkbox, an image,
-                            // the caret). The children see the events first (Main pass), so the pill's own buttons still work.
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    awaitFirstDown(requireUnconsumed = false).consume()
-                                    do {
-                                        val event = awaitPointerEvent()
-                                        event.changes.forEach { it.consume() }
-                                    } while (event.changes.any { it.pressed })
-                                }
-                            }
+                            // the caret). Handled in the FINAL pass, after the children are done with the event: the pill's own buttons
+                            // and its horizontally scrolling row (whose drag would otherwise arrive consumed) work as usual.
+                            // the margins around the pill are part of the bar: a tap there must not reach the note under it (a checkbox, an image,
+                            // the caret). Any pointer input on the node already takes the hit from the siblings below it; it must NOT consume the
+                            // events, a consumed DOWN makes the pill's horizontally scrolling row ignore the drag.
+                            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                     ) {
@@ -415,8 +413,10 @@ fun NoteEditorScreen(
                             color = Color.Transparent,
                             contentColor = contentColorFor(pillColor),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                            // a shadow only outside the pill: under it the glass would show it as a grey fill
+                            modifier = Modifier.tesseraGlassShadow(TesseraElevation.Level2, androidx.compose.foundation.shape.RoundedCornerShape(28.dp)),
                         ) {
-                            // inside the Surface, which clips to the pill; no shadow — it would show through the glass as a grey fill
+                            // inside the Surface, which clips to the pill
                             Box(Modifier.tesseraGlass(hazeState, pillColor)) {
                             val tableBar = nativeTableBar
                             if (tableBar != null) {
@@ -460,12 +460,14 @@ fun NoteEditorScreen(
             // that is the bar itself; the keyboard's part still resizes it.
             // Without the keyboard the note runs under the transparent navigation bar the same way (the gesture strip): its height is the inset.
             val navBarPx = WindowInsets.navigationBars.getBottom(density)
-            val barInsetPx = if (imeVisible) (if (state.isReadOnly) 0 else barExtentPx) else navBarPx
+            val columnInsetPx = if (imeVisible) (if (state.isReadOnly) 0 else barExtentPx) else navBarPx // the column reaches the screen edge
+            // Without the keyboard nothing is reserved inside the editor: the note scrolls to the very edge, under the gesture strip.
+            val barInsetPx = if (imeVisible && !state.isReadOnly) barExtentPx else 0
             Column(
                 modifier = Modifier
                     .padding(
                         top = padding.calculateTopPadding(),
-                        bottom = (padding.calculateBottomPadding() - with(density) { barInsetPx.toDp() }).coerceAtLeast(0.dp),
+                        bottom = (padding.calculateBottomPadding() - with(density) { columnInsetPx.toDp() }).coerceAtLeast(0.dp),
                     )
                     .fillMaxSize()
                     .hazeSource(hazeState),
