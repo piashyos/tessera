@@ -25,6 +25,13 @@ Resume in a new session by reading this file + the plan, then continuing with th
 | 1 «Ядро» | [plans/2026-11-06-native-editor-phase1.md](plans/2026-11-06-native-editor-phase1.md) | ✅ done (2026-11-07) | спека `specs/2026-11-06-native-editor-design.md`; ветка `feature/native-editor` (не влита); за debug-флагом; QA `qa/native-editor-6b.md` |
 | 2 «Объекты и переключение» | [plans/2026-11-07-native-editor-phase2.md](plans/2026-11-07-native-editor-phase2.md) | ✅ done (2026-11-08) | спека `specs/2026-11-07-native-editor-phase2-design.md`; картинки, таблицы, Aztec удалён, флага нет; QA `qa/native-editor-p2-images.md`, `qa/native-editor-p2-tables.md`; ветка не влита |
 
+### Редактор и оформление (2026-11)
+
+| Фича | План | Статус | Заметки |
+|---|---|---|---|
+| Касания вне текста, ручка вставки, меню «⋯» | [plans/2026-11-11-editor-touch-and-format-sheet.md](plans/2026-11-11-editor-touch-and-format-sheet.md) | ✅ done (2026-11-11), ждёт коммита | спека `specs/2026-11-11-editor-touch-and-format-sheet-design.md`; QA `qa/editor-touch-and-format-sheet.md`; ветка `feature/editor-touch-and-format-sheet` (не закоммичено) |
+| Оформление тегов и папок | — | ⬜ pending | спека `specs/2026-11-11-tag-folder-appearance-design.md`; после предыдущей |
+
 Legend: ✅ done · ⏳ in progress · ⬜ pending · ⚠️ blocked
 
 ## How to resume
