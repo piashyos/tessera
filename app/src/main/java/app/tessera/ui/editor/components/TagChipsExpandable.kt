@@ -33,7 +33,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.tessera.R
 import app.tessera.core.ui.rememberHaptics
+import app.tessera.core.ui.tessera.EntityIconView
 import app.tessera.core.ui.tessera.rememberTagChipColors
+import app.tessera.core.ui.tessera.rememberTagIcon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
@@ -78,6 +80,7 @@ fun TagChipsExpandable(
                 // tag shows on the list card and in the filter row. labelSmall text, tight padding,
                 // and a modest inline ✕.
                 val tagColors = rememberTagChipColors(tag)
+                val tagIcon = rememberTagIcon(tag)
                 Surface(
                     shape = CircleShape,
                     color = tagColors.container,
@@ -89,7 +92,8 @@ fun TagChipsExpandable(
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                         modifier = Modifier.padding(start = 10.dp, end = 3.dp, top = 3.dp, bottom = 3.dp),
                     ) {
-                        Text("#$tag", style = MaterialTheme.typography.labelSmall)
+                        if (tagIcon != null) EntityIconView(tagIcon, tint = tagColors.content, size = 12.dp)
+                        Text(if (tagIcon != null) tag else "#$tag", style = MaterialTheme.typography.labelSmall)
                         Surface(
                             onClick = { haptics.tick(); onRemoveTag(tag) },
                             shape = CircleShape,

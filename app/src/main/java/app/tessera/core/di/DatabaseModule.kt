@@ -10,6 +10,7 @@ import app.tessera.data.local.MIGRATION_3_4
 import app.tessera.data.local.MIGRATION_4_5
 import app.tessera.data.local.MIGRATION_5_6
 import app.tessera.data.local.MIGRATION_6_7
+import app.tessera.data.local.MIGRATION_7_8
 import app.tessera.data.local.NotesDatabase
 import app.tessera.data.local.RoomTransactor
 import app.tessera.data.local.Transactor
@@ -32,7 +33,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): NotesDatabase =
         Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .build()
 
     @Provides

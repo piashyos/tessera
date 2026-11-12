@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "folders",
     indices = [
-        Index("name", unique = true),
+        Index("name"),
         Index("parentId"),
     ],
     foreignKeys = [
@@ -29,4 +29,6 @@ data class FolderEntity(
     val updatedAt: Long = createdAt,
     val deletedAt: Long? = null,
     val syncedAt: Long? = null,
+    val color: String? = null,
+    val icon: String? = null,
 )

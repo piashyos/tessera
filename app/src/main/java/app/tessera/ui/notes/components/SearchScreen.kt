@@ -346,17 +346,24 @@ private fun RecentRow(
 @Composable
 private fun TagPill(tag: String, onClick: () -> Unit) {
     val tagColors = app.tessera.core.ui.tessera.rememberTagChipColors(tag)
+    val tagIcon = app.tessera.core.ui.tessera.rememberTagIcon(tag)
     Surface(
         color = tagColors.container,
         contentColor = tagColors.content,
         shape = androidx.compose.foundation.shape.CircleShape,
         onClick = onClick,
     ) {
-        Text(
-            text = "#$tag",
-            style = MaterialTheme.typography.labelLarge,
+        Row(
             modifier = Modifier.padding(horizontal = TesseraSpacing.md, vertical = TesseraSpacing.sm),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.xs),
+        ) {
+            if (tagIcon != null) app.tessera.core.ui.tessera.EntityIconView(tagIcon, tint = tagColors.content, size = 16.dp)
+            Text(
+                text = if (tagIcon != null) tag else "#$tag",
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
     }
 }
 

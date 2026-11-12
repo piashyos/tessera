@@ -28,7 +28,7 @@ import app.tessera.data.local.entity.TagEntity
         SharedMemberEntity::class,
         NoteImageEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(ImageStatusConverter::class)

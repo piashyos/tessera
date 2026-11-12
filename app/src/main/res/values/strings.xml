@@ -186,7 +186,6 @@
     <string name="folders_new_hint">Folder name</string>
     <string name="folders_save">Save</string>
     <string name="folders_cancel">Cancel</string>
-    <string name="folders_rename">Rename</string>
     <string name="folders_delete">Delete</string>
     <string name="folders_open_drawer">Folders</string>
     <string name="note_action_move">Move to folder</string>
@@ -285,4 +284,57 @@
         <item quantity="other">%d columns</item>
     </plurals>
     <string name="editor_object_table_a11y">Table, %1$s, %2$s</string>
+
+    <!-- Tag / folder appearance -->
+    <string name="folders_edit_title">Folder</string>
+    <string name="folders_edit">Edit</string>
+    <string name="folders_more">Folder actions</string>
+    <string name="folders_name_taken">A folder with this name already exists</string>
+    <string name="appearance_color">Color</string>
+    <string name="appearance_icon">Icon</string>
+    <string name="appearance_emoji">Emoji</string>
+    <string name="appearance_reset">Reset</string>
+    <string name="appearance_color_auto">Auto</string>
+    <string name="appearance_color_none">None</string>
+    <string name="appearance_icon_none">No icon</string>
+    <string name="color_red">Red</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_green">Green</string>
+    <string name="color_teal">Teal</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_indigo">Indigo</string>
+    <string name="color_purple">Purple</string>
+    <string name="color_pink">Pink</string>
+    <string name="color_brown">Brown</string>
+    <string name="icon_folder">Folder</string>
+    <string name="icon_house">Home</string>
+    <string name="icon_briefcase">Work</string>
+    <string name="icon_book_open">Book</string>
+    <string name="icon_lightbulb">Idea</string>
+    <string name="icon_star">Star</string>
+    <string name="icon_heart">Heart</string>
+    <string name="icon_shopping_cart">Shopping</string>
+    <string name="icon_plane">Travel</string>
+    <string name="icon_car">Car</string>
+    <string name="icon_dumbbell">Sport</string>
+    <string name="icon_utensils">Food</string>
+    <string name="icon_coffee">Coffee</string>
+    <string name="icon_music">Music</string>
+    <string name="icon_camera">Photo</string>
+    <string name="icon_gamepad_2">Games</string>
+    <string name="icon_graduation_cap">Study</string>
+    <string name="icon_code">Code</string>
+    <string name="icon_palette">Art</string>
+    <string name="icon_wallet">Money</string>
+    <string name="icon_calendar">Calendar</string>
+    <string name="icon_clock">Time</string>
+    <string name="icon_flag">Flag</string>
+    <string name="icon_bookmark">Bookmark</string>
+    <string name="icon_tag">Tag</string>
+    <string name="icon_users">People</string>
+    <string name="icon_baby">Kids</string>
+    <string name="icon_paw_print">Pets</string>
+    <string name="icon_leaf">Nature</string>
+    <string name="icon_gift">Gift</string>
 </resources>

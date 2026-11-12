@@ -11,4 +11,8 @@ import androidx.room.PrimaryKey
 data class TagEntity(
     @PrimaryKey val id: String,
     val name: String,
+    val color: String? = null,
+    val icon: String? = null,
+    val updatedAt: Long = 0,
+    val syncedAt: Long? = null,
 )

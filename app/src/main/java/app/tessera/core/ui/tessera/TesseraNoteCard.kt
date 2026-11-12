@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -56,6 +57,8 @@ fun TesseraNoteCard(
   modifier: Modifier = Modifier,
   selected: Boolean = false,
   avatars: (@Composable () -> Unit)? = null,
+  // Folder-colour fill (AccentColor.cardTint()); selection still wins over it.
+  tint: Color? = null,
 ) {
   val haptics = LocalHapticFeedback.current
   // Selection is expressed the PixelPlayer way — a corner-radius morph plus a tonal shift —
@@ -67,7 +70,7 @@ fun TesseraNoteCard(
   )
   val containerColor by animateColorAsState(
     targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer
-                  else MaterialTheme.colorScheme.surfaceContainerLow,
+                  else tint ?: MaterialTheme.colorScheme.surfaceContainerLow,
     animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
     label = "noteCardColor",
   )
@@ -130,16 +133,23 @@ fun TesseraNoteCard(
           ) {
             tags.take(MaxInlineTags).forEach { tag ->
               val tagColors = rememberTagChipColors(tag)
-              Text(
-                text = "#$tag",
-                style = MaterialTheme.typography.labelSmall,
-                color = tagColors.content,
+              val tagIcon = rememberTagIcon(tag)
+              Row(
                 modifier = Modifier
                   .clip(CircleShape)
                   .background(tagColors.container)
                   .padding(horizontal = TesseraSpacing.sm, vertical = 3.dp),
-                maxLines = 1,
-              )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.xs),
+              ) {
+                if (tagIcon != null) EntityIconView(tagIcon, tint = tagColors.content, size = 12.dp)
+                Text(
+                  text = if (tagIcon != null) tag else "#$tag",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = tagColors.content,
+                  maxLines = 1,
+                )
+              }
             }
             val overflow = tags.size - MaxInlineTags
             if (overflow > 0) {

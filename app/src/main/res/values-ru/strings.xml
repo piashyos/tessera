@@ -193,7 +193,6 @@
     <string name="folders_new_hint">Название папки</string>
     <string name="folders_save">Сохранить</string>
     <string name="folders_cancel">Отмена</string>
-    <string name="folders_rename">Переименовать</string>
     <string name="folders_delete">Удалить</string>
     <string name="folders_open_drawer">Папки</string>
     <string name="note_action_move">В папку</string>
@@ -296,4 +295,57 @@
         <item quantity="other">%d столбца</item>
     </plurals>
     <string name="editor_object_table_a11y">Таблица, %1$s, %2$s</string>
+
+    <!-- Tag / folder appearance -->
+    <string name="folders_edit_title">Папка</string>
+    <string name="folders_edit">Изменить</string>
+    <string name="folders_more">Действия с папкой</string>
+    <string name="folders_name_taken">Папка с таким именем уже есть</string>
+    <string name="appearance_color">Цвет</string>
+    <string name="appearance_icon">Иконка</string>
+    <string name="appearance_emoji">Эмодзи</string>
+    <string name="appearance_reset">Сбросить</string>
+    <string name="appearance_color_auto">Авто</string>
+    <string name="appearance_color_none">Нет</string>
+    <string name="appearance_icon_none">Без иконки</string>
+    <string name="color_red">Красный</string>
+    <string name="color_orange">Оранжевый</string>
+    <string name="color_yellow">Жёлтый</string>
+    <string name="color_green">Зелёный</string>
+    <string name="color_teal">Бирюзовый</string>
+    <string name="color_blue">Синий</string>
+    <string name="color_indigo">Индиго</string>
+    <string name="color_purple">Фиолетовый</string>
+    <string name="color_pink">Розовый</string>
+    <string name="color_brown">Коричневый</string>
+    <string name="icon_folder">Папка</string>
+    <string name="icon_house">Дом</string>
+    <string name="icon_briefcase">Работа</string>
+    <string name="icon_book_open">Книга</string>
+    <string name="icon_lightbulb">Идея</string>
+    <string name="icon_star">Звезда</string>
+    <string name="icon_heart">Сердце</string>
+    <string name="icon_shopping_cart">Покупки</string>
+    <string name="icon_plane">Путешествия</string>
+    <string name="icon_car">Машина</string>
+    <string name="icon_dumbbell">Спорт</string>
+    <string name="icon_utensils">Еда</string>
+    <string name="icon_coffee">Кофе</string>
+    <string name="icon_music">Музыка</string>
+    <string name="icon_camera">Фото</string>
+    <string name="icon_gamepad_2">Игры</string>
+    <string name="icon_graduation_cap">Учёба</string>
+    <string name="icon_code">Код</string>
+    <string name="icon_palette">Творчество</string>
+    <string name="icon_wallet">Деньги</string>
+    <string name="icon_calendar">Календарь</string>
+    <string name="icon_clock">Время</string>
+    <string name="icon_flag">Флаг</string>
+    <string name="icon_bookmark">Закладка</string>
+    <string name="icon_tag">Метка</string>
+    <string name="icon_users">Люди</string>
+    <string name="icon_baby">Дети</string>
+    <string name="icon_paw_print">Питомцы</string>
+    <string name="icon_leaf">Природа</string>
+    <string name="icon_gift">Подарок</string>
 </resources>

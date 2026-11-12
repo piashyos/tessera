@@ -10,6 +10,7 @@ rules_version = '2';
 //   users/{uid}                       — публичный профиль
 //   users/{uid}/notes/{noteId}        — приватные заметки (доступ только владельцу)
 //   users/{uid}/folders/{folderId}    — папки (доступ только владельцу)
+//   users/{uid}/tags/{tagId}          — цвет и иконка тега (docId = Base64url имени; только владельцу)
 //   usersByEmail/{emailKey}           — индекс email -> uid для инвайта
 //   sharedNotes/{noteId}              — общие заметки (доступ по членству/роли)
 service cloud.firestore {
@@ -28,6 +29,17 @@ service cloud.firestore {
 
     match /users/{uid}/folders/{folderId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Оформление тега: docId — Base64url имени. Сброс — запись с color/icon = null, не удаление.
+    match /users/{uid}/tags/{tagId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'color', 'icon', 'updatedAt'])
+        && request.resource.data.name is string
+        && (request.resource.data.get('color', null) == null || request.resource.data.color is string)
+        && (request.resource.data.get('icon', null) == null || request.resource.data.icon is string)
+        && request.resource.data.updatedAt is int;
     }
 
     // Индекс email -> uid. Читать может любой залогиненный (нужно для lookup при инвайте);

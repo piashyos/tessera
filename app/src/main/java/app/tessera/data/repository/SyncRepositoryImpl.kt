@@ -24,6 +24,8 @@ import app.tessera.data.remote.RemoteNote
 import app.tessera.data.remote.RemoteNotesDataSource
 import app.tessera.data.remote.RemoteSharedNote
 import app.tessera.data.remote.RemoteSharedNotesDataSource
+import app.tessera.data.remote.RemoteTag
+import app.tessera.data.remote.RemoteTagsDataSource
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.ShareRole
 import app.tessera.domain.model.UserId
@@ -54,6 +56,7 @@ class SyncRepositoryImpl @Inject constructor(
     private val remote: RemoteNotesDataSource,
     private val remoteFolders: RemoteFoldersDataSource,
     private val remoteShared: RemoteSharedNotesDataSource,
+    private val remoteTags: RemoteTagsDataSource,
     private val mapper: NoteMapper,
     private val sharedMapper: SharedNoteMapper,
     private val imageMapper: NoteImageMapper,
@@ -81,6 +84,9 @@ class SyncRepositoryImpl @Inject constructor(
             val remoteSharedList = remoteShared.fetchAll(uid.value)
             Log.d(TAG, "Pulled ${remoteSharedList.size} shared note(s) from Firestore")
             mergeRemoteShared(uid, remoteSharedList)
+            // Own runCatching: until the `users/{uid}/tags` rules are deployed this fails with
+            // PERMISSION_DENIED, which must not stop the notes and folders that already synced.
+            syncTagAppearances(uid)
             Log.d(TAG, "syncNow finished uid=${uid.value}")
         }
 
@@ -88,6 +94,8 @@ class SyncRepositoryImpl @Inject constructor(
         runCatching {
             pushPendingFolders(uid)
             pushPending(uid)
+            // Sign-in wipes the local tables next; unsent tag appearances would be lost with them.
+            runCatching { pushPendingTags(uid) }.onFailure(::logTagFailure)
         }
 
     override suspend fun purgeTombstones(uid: UserId): Result<Unit> =
@@ -144,7 +152,52 @@ class SyncRepositoryImpl @Inject constructor(
             }
             .catch { error -> Log.w(TAG, "Shared notes snapshot listener stopped", error) }
             .map { }
-        return merge(foldersFlow, notesFlow, sharedFlow)
+        val tagsFlow = remoteTags.observeTags(uid.value)
+            .onEach { remoteTagList ->
+                Log.d(TAG, "Remote tags snapshot: ${remoteTagList.size} doc(s)")
+                mergeRemoteTags(remoteTagList)
+            }
+            .catch { error -> Log.w(TAG, "Tags snapshot listener stopped", error) }
+            .map { }
+        return merge(foldersFlow, notesFlow, sharedFlow, tagsFlow)
+    }
+
+    private suspend fun syncTagAppearances(uid: UserId) {
+        try {
+            mergeRemoteTags(remoteTags.fetchAll(uid.value))
+            pushPendingTags(uid)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logTagFailure(e)
+        }
+    }
+
+    private fun logTagFailure(error: Throwable) {
+        if (error is kotlinx.coroutines.CancellationException) throw error
+        Log.w(TAG, "Tag appearance sync failed; notes and folders are unaffected", error)
+    }
+
+    private suspend fun pushPendingTags(uid: UserId) {
+        val pending = tagDao.getPendingSync()
+        if (pending.isEmpty()) return
+        remoteTags.upsertAll(
+            uid.value,
+            pending.map { RemoteTag(name = it.name, color = it.color, icon = it.icon, updatedAt = it.updatedAt) },
+        )
+        val now = clock.nowMs()
+        pending.forEach { tagDao.markSynced(it.name, now, it.updatedAt) }
+    }
+
+    internal suspend fun mergeRemoteTags(remoteTagList: List<RemoteTag>) = mergeMutex.withLock {
+        transactor.transaction {
+            val now = clock.nowMs()
+            for (remoteTag in remoteTagList) {
+                val local = tagDao.findByNames(listOf(remoteTag.name)).firstOrNull()
+                if (local != null && local.updatedAt >= remoteTag.updatedAt) continue
+                tagDao.applyRemote(remoteTag.name, remoteTag.color, remoteTag.icon, remoteTag.updatedAt, now)
+            }
+        }
     }
 
     private suspend fun pushPending(uid: UserId) {
@@ -232,11 +285,13 @@ class SyncRepositoryImpl @Inject constructor(
                 createdAt = entity.createdAt,
                 updatedAt = entity.updatedAt,
                 deletedAt = entity.deletedAt,
+                color = entity.color,
+                icon = entity.icon,
             )
         }
         remoteFolders.upsertAll(uid.value, payload)
         val now = clock.nowMs()
-        pending.forEach { folderDao.markSynced(it.id, now) }
+        pending.forEach { folderDao.markSynced(it.id, now, it.updatedAt) }
     }
 
     internal suspend fun mergeRemote(
@@ -408,6 +463,8 @@ class SyncRepositoryImpl @Inject constructor(
                         updatedAt = remoteFolder.updatedAt,
                         deletedAt = remoteFolder.deletedAt,
                         syncedAt = now,
+                        color = remoteFolder.color,
+                        icon = remoteFolder.icon,
                     ),
                 )
             }

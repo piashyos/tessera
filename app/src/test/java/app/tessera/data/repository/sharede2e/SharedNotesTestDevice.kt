@@ -63,6 +63,7 @@ class SharedNotesTestDevice(
         backend.privateFor(uid),
         EmptyRemoteFolders(),
         backend.sharedFor(uid),
+        EmptyRemoteTags(),
         NoteMapper(),
         SharedNoteMapper(),
         app.tessera.data.mapper.NoteImageMapper(),

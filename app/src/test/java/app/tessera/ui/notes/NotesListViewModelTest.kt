@@ -1,22 +1,32 @@
 package app.tessera.ui.notes
 
 import app.cash.turbine.test
+import app.tessera.domain.model.Folder
+import app.tessera.domain.model.FolderId
+import app.tessera.domain.model.FolderSaveResult
+import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.Tag
+import app.tessera.domain.model.TagAppearance
 import app.tessera.domain.model.UserId
+import app.tessera.domain.repository.FolderRepository
 import app.tessera.domain.repository.NotesRepository
+import app.tessera.domain.repository.TagRepository
 import app.tessera.domain.usecase.CreateNoteUseCase
 import app.tessera.domain.usecase.DeleteNoteUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
 import app.tessera.domain.usecase.RestoreNoteUseCase
 import app.tessera.domain.usecase.SearchNotesUseCase
+import app.tessera.domain.usecase.SetTagAppearanceUseCase
 import app.tessera.domain.usecase.TogglePinUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -261,6 +271,58 @@ class NotesListViewModelTest {
         }
 
     @Test
+    fun `noteTints is empty inside one folder and filled in a search started from it`() =
+        runTest(dispatcher.scheduler) {
+            val work = Folder(FolderId("work"), "Work", null, 1L, color = "blue")
+            val inWork = sampleNote("n1")
+            val repository =
+                FakeNotesRepository(
+                    initialNotes = listOf(inWork, sampleNote("n2"), sampleNote("n4")),
+                    searchResults = mapOf("kot" to listOf(inWork, sampleNote("n3"))),
+                )
+            val folderRepo = FolderRepoStub(
+                folders = listOf(work),
+                assignments = mapOf(NoteId("n1") to work.id),
+                notesInFolder = mapOf(work.id to listOf(inWork)),
+            )
+            val viewModel = repository.createViewModel(folderRepo = folderRepo)
+            val collector = backgroundScope.launch { viewModel.state.collect {} }
+
+            // "All": every card takes its folder colour.
+            val all = viewModel.state.first { it is NotesListState.Content && it.notes.size == 3 } as NotesListState.Content
+            assertEquals(mapOf(NoteId("n1") to "blue"), all.noteTints)
+
+            // The list of one folder: nothing is tinted.
+            viewModel.selectFolder(work.id)
+            val inFolder = viewModel.state.first {
+                it is NotesListState.Content && it.selectedFolderId == work.id && it.notes.size == 1
+            } as NotesListState.Content
+            assertTrue(inFolder.noteTints.isEmpty())
+
+            // A search from inside that folder reads every folder, so it is tinted again.
+            viewModel.onQueryChange("kot")
+            val searched = viewModel.state.first {
+                it is NotesListState.Content && it.selectedFolderId == work.id && it.notes.any { n -> n.id.value == "n3" }
+            } as NotesListState.Content
+            assertEquals(mapOf(NoteId("n1") to "blue"), searched.noteTints)
+            collector.cancel()
+        }
+
+    @Test
+    fun `a taken folder name reaches the caller instead of being swallowed`() =
+        runTest(dispatcher.scheduler) {
+            val folderRepo = FolderRepoStub(
+                folders = listOf(Folder(FolderId("p"), "Parent", null, 1L)),
+                saveResult = FolderSaveResult.NameTaken,
+            )
+            val viewModel = FakeNotesRepository(initialNotes = emptyList()).createViewModel(folderRepo = folderRepo)
+
+            assertEquals(FolderSaveResult.NameTaken, viewModel.createFolder("Work", "blue", null))
+            assertEquals(FolderSaveResult.NameTaken, viewModel.createSubfolder(FolderId("p"), "Work", null, "lucide:star"))
+            assertEquals(FolderSaveResult.NameTaken, viewModel.updateFolder(FolderId("f"), "Work", "red", null))
+        }
+
+    @Test
     fun `clearing query returns to observe flow without debounce`() =
         runTest(dispatcher.scheduler) {
             val repository =
@@ -368,8 +430,10 @@ private class FakeNotesRepository(
     override fun observeMembers(id: NoteId): Flow<List<app.tessera.domain.model.ShareMember>> =
         kotlinx.coroutines.flow.flowOf(emptyList())
 
-    fun createViewModel(currentUser: UserId? = null): NotesListViewModel {
-        val folderRepo = app.tessera.test.fakes.FakeFolderRepository()
+    fun createViewModel(
+        currentUser: UserId? = null,
+        folderRepo: FolderRepository = app.tessera.test.fakes.FakeFolderRepository(),
+    ): NotesListViewModel {
         val authRepository = FakeAuthRepository().apply { this.currentUser.value = currentUser }
         return NotesListViewModel(
             observeNotesUseCase = ObserveNotesUseCase(this),
@@ -391,10 +455,12 @@ private class FakeNotesRepository(
             observeDeletedNotesUseCase = app.tessera.domain.usecase.ObserveDeletedNotesUseCase(this),
             observeFoldersUseCase = app.tessera.domain.usecase.ObserveFoldersUseCase(folderRepo),
             observeFolderTreeUseCase = app.tessera.domain.usecase.ObserveFolderTreeUseCase(folderRepo),
+            observeFolderAssignmentsUseCase = app.tessera.domain.usecase.ObserveFolderAssignmentsUseCase(folderRepo),
             observeNotesInFolderUseCase = app.tessera.domain.usecase.ObserveNotesInFolderUseCase(folderRepo),
             createFolderUseCase = app.tessera.domain.usecase.CreateFolderUseCase(folderRepo),
             createSubfolderUseCase = app.tessera.domain.usecase.CreateSubfolderUseCase(folderRepo),
-            renameFolderUseCase = app.tessera.domain.usecase.RenameFolderUseCase(folderRepo),
+            updateFolderUseCase = app.tessera.domain.usecase.UpdateFolderUseCase(folderRepo),
+            setTagAppearanceUseCase = SetTagAppearanceUseCase(NoOpTagRepository),
             moveFolderUseCase = app.tessera.domain.usecase.MoveFolderUseCase(folderRepo),
             deleteFolderUseCase = app.tessera.domain.usecase.DeleteFolderUseCase(folderRepo),
             moveNoteToFolderUseCase = app.tessera.domain.usecase.MoveNoteToFolderUseCase(folderRepo),
@@ -403,6 +469,35 @@ private class FakeNotesRepository(
             authRepository = authRepository,
         )
     }
+}
+
+/** A folder repository with canned folders, assignments, folder lists and one save result. */
+private class FolderRepoStub(
+    private val folders: List<Folder> = emptyList(),
+    private val assignments: Map<NoteId, FolderId> = emptyMap(),
+    private val notesInFolder: Map<FolderId, List<Note>> = emptyMap(),
+    private val saveResult: FolderSaveResult? = null,
+) : FolderRepository {
+    override fun observeFolders(): Flow<List<Folder>> = flowOf(folders)
+    override fun observeFolderTree(): Flow<List<FolderTreeNode>> =
+        flowOf(folders.filter { it.parentId == null }.map { root -> FolderTreeNode(root, folders.filter { it.parentId == root.id }) })
+    override fun observeFolderForNote(noteId: NoteId): Flow<FolderId?> = flowOf(assignments[noteId])
+    override fun observeNotesInFolder(folderId: FolderId): Flow<List<Note>> = flowOf(notesInFolder[folderId].orEmpty())
+    override fun observeFolderAssignments(): Flow<Map<NoteId, FolderId>> = flowOf(assignments)
+    override suspend fun createFolder(name: String, color: String?, icon: String?): FolderSaveResult =
+        saveResult ?: FolderSaveResult.Saved(Folder(FolderId("new"), name, null, 0L, color, icon))
+    override suspend fun createSubfolder(parentId: FolderId, name: String, color: String?, icon: String?): FolderSaveResult =
+        saveResult ?: FolderSaveResult.Saved(Folder(FolderId("new"), name, parentId, 0L, color, icon))
+    override suspend fun updateFolder(id: FolderId, name: String, color: String?, icon: String?): FolderSaveResult =
+        saveResult ?: FolderSaveResult.Saved(Folder(id, name, null, 0L, color, icon))
+    override suspend fun moveFolder(id: FolderId, newParentId: FolderId?) = Unit
+    override suspend fun deleteFolder(id: FolderId) = Unit
+    override suspend fun assignNote(noteId: NoteId, folderId: FolderId?) = Unit
+}
+
+private object NoOpTagRepository : TagRepository {
+    override fun observeAppearances(): Flow<Map<String, TagAppearance>> = flowOf(emptyMap())
+    override suspend fun setAppearance(name: String, color: String?, icon: String?) = Unit
 }
 
 private class FakeUserPreferences : app.tessera.core.preferences.UserPreferences {

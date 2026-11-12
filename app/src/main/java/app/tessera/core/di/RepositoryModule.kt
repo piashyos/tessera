@@ -1,6 +1,8 @@
 package app.tessera.core.di
 
 import app.tessera.data.remote.FirestoreFoldersClient
+import app.tessera.data.remote.FirestoreTagsClient
+import app.tessera.data.remote.RemoteTagsDataSource
 import app.tessera.data.remote.FirestoreNotesClient
 import app.tessera.data.remote.FirestoreSharedNotesClient
 import app.tessera.data.remote.FirestoreUserDirectory
@@ -20,6 +22,7 @@ import app.tessera.data.drive.DriveAuthManager
 import app.tessera.data.drive.DriveFolderCache
 import app.tessera.data.drive.PlayServicesDriveAuthManager
 import app.tessera.data.repository.SyncRepositoryImpl
+import app.tessera.data.repository.TagRepositoryImpl
 import app.tessera.domain.repository.AccountRepository
 import app.tessera.domain.repository.AuthRepository
 import app.tessera.domain.repository.FolderRepository
@@ -27,6 +30,7 @@ import app.tessera.domain.repository.NoteImagesRepository
 import app.tessera.domain.repository.NotesRepository
 import app.tessera.domain.repository.SyncRepository
 import app.tessera.domain.repository.SyncScheduler
+import app.tessera.domain.repository.TagRepository
 import app.tessera.sync.DefaultImageUploadNotifier
 import app.tessera.sync.ImageUploadNotifier
 import app.tessera.sync.ImageWorkScheduler
@@ -67,6 +71,10 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindRemoteTagsDataSource(impl: FirestoreTagsClient): RemoteTagsDataSource
+
+    @Binds
+    @Singleton
     abstract fun bindRemoteSharedNotesDataSource(
         impl: FirestoreSharedNotesClient,
     ): RemoteSharedNotesDataSource
@@ -82,6 +90,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindFolderRepository(impl: FolderRepositoryImpl): FolderRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTagRepository(impl: TagRepositoryImpl): TagRepository
 
     @Binds
     @Singleton

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.tessera.core.preferences.UserPreferences
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
+import app.tessera.domain.model.FolderSaveResult
 import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
@@ -24,15 +25,17 @@ import app.tessera.domain.usecase.MoveNoteToFolderUseCase
 import app.tessera.domain.usecase.ObserveArchivedNotesUseCase
 import app.tessera.domain.usecase.ObserveDeletedNotesUseCase
 import app.tessera.domain.usecase.ObserveFolderTreeUseCase
+import app.tessera.domain.usecase.ObserveFolderAssignmentsUseCase
 import app.tessera.domain.usecase.ObserveFoldersUseCase
 import app.tessera.domain.usecase.ObserveNotesInFolderUseCase
 import app.tessera.domain.usecase.ObserveNotesUseCase
 import app.tessera.domain.usecase.PermanentlyDeleteNoteUseCase
-import app.tessera.domain.usecase.RenameFolderUseCase
 import app.tessera.domain.usecase.RestoreNoteUseCase
 import app.tessera.domain.usecase.SearchNotesUseCase
+import app.tessera.domain.usecase.SetTagAppearanceUseCase
 import app.tessera.domain.usecase.ShareNoteUseCase
 import app.tessera.domain.usecase.TogglePinUseCase
+import app.tessera.domain.usecase.UpdateFolderUseCase
 import app.tessera.domain.usecase.UpdateNoteUseCase
 import app.tessera.domain.model.Tag
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -79,10 +82,12 @@ class NotesListViewModel @Inject constructor(
     private val observeDeletedNotesUseCase: ObserveDeletedNotesUseCase,
     private val observeFoldersUseCase: ObserveFoldersUseCase,
     private val observeFolderTreeUseCase: ObserveFolderTreeUseCase,
+    private val observeFolderAssignmentsUseCase: ObserveFolderAssignmentsUseCase,
     private val observeNotesInFolderUseCase: ObserveNotesInFolderUseCase,
     private val createFolderUseCase: CreateFolderUseCase,
     private val createSubfolderUseCase: CreateSubfolderUseCase,
-    private val renameFolderUseCase: RenameFolderUseCase,
+    private val updateFolderUseCase: UpdateFolderUseCase,
+    private val setTagAppearanceUseCase: SetTagAppearanceUseCase,
     private val moveFolderUseCase: MoveFolderUseCase,
     private val deleteFolderUseCase: DeleteFolderUseCase,
     private val moveNoteToFolderUseCase: MoveNoteToFolderUseCase,
@@ -142,16 +147,27 @@ class NotesListViewModel @Inject constructor(
             Triple(value, folderId, view)
         }
             .flatMapLatest { (value, folderId, view) ->
+                // `tinted` is decided here, by the same branch that picks the source: only the list of one
+                // folder is not tinted (search from inside a folder reads every folder, so it is).
                 when {
-                    view == SystemView.Trash -> observeDeletedNotesUseCase()
-                    view == SystemView.Archive -> observeArchivedNotesUseCase()
-                    view == SystemView.Shared -> observeNotesUseCase()
-                    view == SystemView.Pinned -> observeNotesUseCase()
-                    value.isNotBlank() -> searchNotesUseCase(value)
-                    folderId != null -> observeNotesInFolderUseCase(folderId)
-                    else -> observeNotesUseCase()
+                    view == SystemView.Trash -> observeDeletedNotesUseCase().map { NotesSource(it, tinted = true) }
+                    view == SystemView.Archive -> observeArchivedNotesUseCase().map { NotesSource(it, tinted = true) }
+                    view == SystemView.Shared -> observeNotesUseCase().map { NotesSource(it, tinted = true) }
+                    view == SystemView.Pinned -> observeNotesUseCase().map { NotesSource(it, tinted = true) }
+                    value.isNotBlank() -> searchNotesUseCase(value).map { NotesSource(it, tinted = true) }
+                    folderId != null -> observeNotesInFolderUseCase(folderId).map { NotesSource(it, tinted = false) }
+                    else -> observeNotesUseCase().map { NotesSource(it, tinted = true) }
                 }
             }
+
+    private val folderInputs =
+        combine(
+            observeFoldersUseCase(),
+            observeFolderTreeUseCase(),
+            observeFolderAssignmentsUseCase(),
+        ) { folders, folderTree, assignments ->
+            FolderInputs(folders, folderTree, assignments)
+        }
 
     val state: StateFlow<NotesListState> =
         combine(
@@ -165,8 +181,7 @@ class NotesListViewModel @Inject constructor(
                 StateInputs(q, t, sel, selMode, vm)
             },
             notesFlow,
-            observeFoldersUseCase(),
-            observeFolderTreeUseCase(),
+            folderInputs,
             combine(
                 selectedFolderId,
                 searchExpanded,
@@ -178,15 +193,16 @@ class NotesListViewModel @Inject constructor(
             ) { fid, expanded, viewMeta, period, recents ->
                 SearchExtras(fid, expanded, viewMeta, period, recents)
             },
-        ) { inputs, notes, folders, folderTree, extras ->
-            notes.toUiState(
+        ) { inputs, source, folderData, extras ->
+            source.notes.toUiState(
                 query = inputs.query,
                 selectedTags = inputs.tags,
                 selection = inputs.selection,
                 selectionMode = inputs.selectionMode,
                 viewMode = inputs.viewMode,
-                folders = folders,
-                folderTree = folderTree,
+                folders = folderData.folders,
+                folderTree = folderData.folderTree,
+                noteTints = if (source.tinted) noteTints(source.notes, folderData.assignments, folderData.folders) else emptyMap(),
                 selectedFolderId = extras.folderId,
                 searchExpanded = extras.searchExpanded,
                 isArchiveView = extras.viewMeta.view == SystemView.Archive,
@@ -440,21 +456,18 @@ class NotesListViewModel @Inject constructor(
         }
     }
 
-    fun createFolder(name: String) {
-        viewModelScope.launch { createFolderUseCase(name) }
-    }
+    // The result goes back to the appearance popup (NameTaken is an error under its name field).
+    suspend fun createFolder(name: String, color: String?, icon: String?): FolderSaveResult =
+        createFolderUseCase(name, color, icon)
 
-    fun createSubfolder(parentId: FolderId, name: String) {
-        viewModelScope.launch {
-            val result = createSubfolderUseCase(parentId, name)
-            if (result.isFailure) {
-                eventsChannel.send(NotesListEvent.ShowSnackbar("Can't create subfolder here"))
-            }
-        }
-    }
+    suspend fun createSubfolder(parentId: FolderId, name: String, color: String?, icon: String?): FolderSaveResult =
+        createSubfolderUseCase(parentId, name, color, icon)
 
-    fun renameFolder(id: FolderId, name: String) {
-        viewModelScope.launch { renameFolderUseCase(id, name) }
+    suspend fun updateFolder(id: FolderId, name: String, color: String?, icon: String?): FolderSaveResult =
+        updateFolderUseCase(id, name, color, icon)
+
+    fun setTagAppearance(name: String, color: String?, icon: String?) {
+        viewModelScope.launch { setTagAppearanceUseCase(name, color, icon) }
     }
 
     fun moveFolder(folderId: FolderId, newParentId: FolderId?) {
@@ -491,6 +504,15 @@ class NotesListViewModel @Inject constructor(
     }
 }
 
+/** Notes of the current list and whether their cards take the folder colour (not in a single folder's list). */
+private data class NotesSource(val notes: List<Note>, val tinted: Boolean)
+
+private data class FolderInputs(
+    val folders: List<Folder>,
+    val folderTree: List<FolderTreeNode>,
+    val assignments: Map<NoteId, FolderId>,
+)
+
 private data class StateInputs(
     val query: String,
     val tags: Set<String>,
@@ -523,6 +545,7 @@ private fun List<Note>.toUiState(
     viewMode: NotesViewMode,
     folders: List<Folder>,
     folderTree: List<FolderTreeNode>,
+    noteTints: Map<NoteId, String>,
     selectedFolderId: FolderId?,
     searchExpanded: Boolean,
     isArchiveView: Boolean,
@@ -576,6 +599,7 @@ private fun List<Note>.toUiState(
 
     return NotesListState.Content(
         notes = visibleNotes,
+        noteTints = noteTints,
         pinnedCount = visibleNotes.count(Note::isPinned),
         query = query,
         selection = selection,

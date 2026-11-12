@@ -70,6 +70,7 @@ class DeleteTombstonesWorkerTest {
             remote,
             NoOpRemoteFolders(),
             NoOpRemoteShared(),
+            NoOpRemoteTags(),
             NoteMapper(),
             SharedNoteMapper(),
             app.tessera.data.mapper.NoteImageMapper(),
@@ -149,6 +150,12 @@ class DeleteTombstonesWorkerTest {
         override suspend fun upsertAll(uid: String, folders: List<RemoteFolder>) = Unit
         override fun observeFolders(uid: String): Flow<List<RemoteFolder>> = emptyFlow()
         override suspend fun deleteOlderTombstones(uid: String, threshold: Long): Int = 0
+    }
+
+    private class NoOpRemoteTags : app.tessera.data.remote.RemoteTagsDataSource {
+        override suspend fun fetchAll(uid: String): List<app.tessera.data.remote.RemoteTag> = emptyList()
+        override suspend fun upsertAll(uid: String, tags: List<app.tessera.data.remote.RemoteTag>) = Unit
+        override fun observeTags(uid: String): Flow<List<app.tessera.data.remote.RemoteTag>> = emptyFlow()
     }
 
     private class NoOpRemoteShared : RemoteSharedNotesDataSource {

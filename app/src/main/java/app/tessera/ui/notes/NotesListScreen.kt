@@ -1,5 +1,6 @@
 package app.tessera.ui.notes
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -63,20 +64,25 @@ import app.tessera.core.text.markdownBodyPreviewPlainText
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.tessera.TesseraBottomActionBar
 import app.tessera.core.ui.tessera.TesseraChip
+import app.tessera.core.ui.tessera.LocalTagAppearances
 import app.tessera.core.ui.tessera.TesseraChipRow
+import app.tessera.core.ui.tessera.cardTint
+import app.tessera.core.ui.tessera.toRaw
+import app.tessera.core.ui.theme.AccentColor
 import app.tessera.core.ui.tessera.TesseraDialog
 import app.tessera.core.ui.tessera.MemberAvatarStack
 import app.tessera.core.ui.tessera.TesseraTopBar
 import app.tessera.core.ui.tessera.TesseraTopBarIconButton
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
+import app.tessera.domain.model.FolderSaveResult
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.model.ShareState
 import app.tessera.domain.model.UserId
 import app.tessera.domain.model.canDeleteForAll
 import app.tessera.domain.model.myRole
-import app.tessera.ui.notes.components.FolderNamePopup
+import app.tessera.ui.notes.components.AppearancePopup
 import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.components.FolderPickerPopup
 import app.tessera.ui.notes.components.NoteActionsSheet
@@ -125,8 +131,10 @@ fun NotesListScreen(
     onRefresh: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onSelectFolder: (FolderId?) -> Unit = {},
-    onCreateFolder: (String) -> Unit = {},
-    onRenameFolder: (FolderId, String) -> Unit = { _, _ -> },
+    // Folder saves return their result: the appearance popup shows NameTaken under the name field.
+    onCreateFolder: suspend (String, String?, String?) -> FolderSaveResult = { _, _, _ -> FolderSaveResult.Invalid("not wired") },
+    onUpdateFolder: suspend (FolderId, String, String?, String?) -> FolderSaveResult = { _, _, _, _ -> FolderSaveResult.Invalid("not wired") },
+    onSetTagAppearance: (String, String?, String?) -> Unit = { _, _, _ -> },
     onDeleteFolder: (FolderId) -> Unit = {},
     onMoveNoteToFolder: (NoteId, FolderId?) -> Unit = { _, _ -> },
     onEnterSelectionMode: (NoteId) -> Unit = {},
@@ -144,7 +152,7 @@ fun NotesListScreen(
     onAddRecentSearch: (String) -> Unit = {},
     onRemoveRecentSearch: (String) -> Unit = {},
     onClearRecentSearches: () -> Unit = {},
-    onCreateSubfolder: (FolderId, String) -> Unit = { _, _ -> },
+    onCreateSubfolder: suspend (FolderId, String, String?, String?) -> FolderSaveResult = { _, _, _, _ -> FolderSaveResult.Invalid("not wired") },
     onMoveFolder: (FolderId, FolderId?) -> Unit = { _, _ -> },
     onDuplicateNote: (NoteId) -> Unit = {},
     onArchiveNote: (NoteId, Boolean) -> Unit = { _, _ -> },
@@ -169,6 +177,9 @@ fun NotesListScreen(
     var selectionMovePickerVisible by remember { mutableStateOf(false) }
     var subfolderParent by remember { mutableStateOf<FolderId?>(null) }
     var folderPendingDelete by remember { mutableStateOf<Folder?>(null) }
+    var tagEditorTarget by remember { mutableStateOf<String?>(null) }
+    var folderNameTaken by remember { mutableStateOf(false) }
+    var folderSaving by remember { mutableStateOf(false) }
     var selectedSystemKey by remember { mutableStateOf("all") }
     var tagsVisible by remember { mutableStateOf(false) }
     var searchFolderPickerVisible by remember { mutableStateOf(false) }
@@ -283,12 +294,21 @@ fun NotesListScreen(
             onSelectFolder(id)
             scope.launch { drawerState.close() }
         },
-        onCreateRootFolder = { folderCreatorVisible = true },
+        onCreateRootFolder = {
+            folderNameTaken = false
+            folderCreatorVisible = true
+        },
         onCreateSubfolder = { parentId ->
+            folderNameTaken = false
             subfolderParent = parentId
         },
         onDeleteFolder = { id ->
             folderPendingDelete = state.folders.firstOrNull { it.id == id }
+        },
+        // The drawer stays open: the popup is a sibling drawn over it, and the change shows in the drawer at once.
+        onEditFolder = { id ->
+            folderNameTaken = false
+            folderEditorTarget = state.folders.firstOrNull { it.id == id }
         },
         onSettingsClick = {
             scope.launch { drawerState.close() }
@@ -372,7 +392,7 @@ fun NotesListScreen(
                         enter = expandVertically() + fadeIn(),
                         exit = shrinkVertically() + fadeOut(),
                     ) {
-                        TesseraChipRow(chips = tagChips, onChipClick = onTagToggle)
+                        TesseraChipRow(chips = tagChips, onChipClick = onTagToggle, onChipLongClick = { tagEditorTarget = it })
                     }
                 }
             },
@@ -558,38 +578,99 @@ fun NotesListScreen(
         )
     }
 
-    FolderNamePopup(
+    // Runs a folder save and reacts to its result: Saved closes, NameTaken shows the error, Invalid
+    // (unreachable from this UI) is logged and closes.
+    val saveFolder: (suspend () -> FolderSaveResult, () -> Unit) -> Unit = { save, close ->
+        // A second tap while the first save runs would race it (Saved, then NameTaken for the same name).
+        if (!folderSaving) {
+            folderSaving = true
+            scope.launch {
+                try {
+                    when (val result = save()) {
+                        is FolderSaveResult.Saved -> { folderNameTaken = false; close() }
+                        FolderSaveResult.NameTaken -> folderNameTaken = true
+                        is FolderSaveResult.Invalid -> {
+                            Log.w("NotesListScreen", "Folder save rejected: ${result.reason}")
+                            folderNameTaken = false
+                            close()
+                        }
+                    }
+                } finally {
+                    folderSaving = false
+                }
+            }
+        }
+    }
+
+    AppearancePopup(
         visible = folderCreatorVisible,
-        initialName = "",
-        onSubmit = { name ->
-            onCreateFolder(name)
-            folderCreatorVisible = false
+        title = stringResource(R.string.folders_new),
+        name = "",
+        initialColor = null,
+        initialIcon = null,
+        onSave = { name, color, icon ->
+            saveFolder({ onCreateFolder(name, color, icon) }) { folderCreatorVisible = false }
         },
-        onDismiss = { folderCreatorVisible = false },
+        onDismiss = { folderCreatorVisible = false; folderNameTaken = false },
         hazeState = hazeState,
+        nameTaken = folderNameTaken,
+        onNameEdited = { folderNameTaken = false },
     )
 
     val subfolderParentId = subfolderParent
-    FolderNamePopup(
+    AppearancePopup(
         visible = subfolderParentId != null,
-        initialName = "",
-        onSubmit = { name ->
-            if (subfolderParentId != null) onCreateSubfolder(subfolderParentId, name)
-            subfolderParent = null
+        title = stringResource(R.string.folders_new),
+        name = "",
+        initialColor = null,
+        initialIcon = null,
+        onSave = { name, color, icon ->
+            if (subfolderParentId != null) {
+                saveFolder({ onCreateSubfolder(subfolderParentId, name, color, icon) }) { subfolderParent = null }
+            }
         },
-        onDismiss = { subfolderParent = null },
+        onDismiss = { subfolderParent = null; folderNameTaken = false },
         hazeState = hazeState,
+        nameTaken = folderNameTaken,
+        onNameEdited = { folderNameTaken = false },
     )
 
-    val renameTarget = folderEditorTarget
-    FolderNamePopup(
-        visible = renameTarget != null,
-        initialName = renameTarget?.name.orEmpty(),
-        onSubmit = { name ->
-            if (renameTarget != null) onRenameFolder(renameTarget.id, name)
-            folderEditorTarget = null
+    val editTarget = folderEditorTarget
+    AppearancePopup(
+        visible = editTarget != null,
+        title = stringResource(R.string.folders_edit_title),
+        name = editTarget?.name.orEmpty(),
+        initialColor = editTarget?.color,
+        initialIcon = editTarget?.icon,
+        showReset = true,
+        onSave = { name, color, icon ->
+            if (editTarget != null) {
+                saveFolder({ onUpdateFolder(editTarget.id, name, color, icon) }) { folderEditorTarget = null }
+            }
         },
-        onDismiss = { folderEditorTarget = null },
+        onDismiss = { folderEditorTarget = null; folderNameTaken = false },
+        hazeState = hazeState,
+        nameTaken = folderNameTaken,
+        onNameEdited = { folderNameTaken = false },
+    )
+
+    val tagTarget = tagEditorTarget
+    val tagStyle = tagTarget?.let { LocalTagAppearances.current[it] }
+    AppearancePopup(
+        visible = tagTarget != null,
+        title = "#${tagTarget.orEmpty()}",
+        name = null,
+        initialColor = tagStyle?.color?.key,
+        initialIcon = tagStyle?.icon?.toRaw(),
+        showReset = true,
+        onSave = { _, color, icon ->
+            // Nothing changed (also: a key of a newer version reads as none): do not write a fresh null.
+            if (tagTarget != null && (color != tagStyle?.color?.key || icon != tagStyle?.icon?.toRaw())) {
+                onSetTagAppearance(tagTarget, color, icon)
+            }
+            tagEditorTarget = null
+        },
+        onDismiss = { tagEditorTarget = null },
         hazeState = hazeState,
     )
 
@@ -776,6 +857,7 @@ private fun NotesBody(
                                 } else {
                                     null
                                 },
+                                tint = AccentColor.fromKey(state.noteTints[note.id])?.cardTint(),
                             )
                         }
                     }
@@ -910,6 +992,7 @@ private fun NotesBody(
                             } else {
                                 null
                             },
+                            tint = AccentColor.fromKey(state.noteTints[note.id])?.cardTint(),
                         )
                     }
                 }

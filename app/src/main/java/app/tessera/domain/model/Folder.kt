@@ -7,4 +7,6 @@ data class Folder(
     val name: String,
     val parentId: FolderId?,
     val createdAt: Long,
+    val color: String? = null,
+    val icon: String? = null,
 )

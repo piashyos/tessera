@@ -499,6 +499,20 @@ private class FakeTagDao : TagDao {
     override suspend fun findByNames(names: List<String>): List<TagEntity> =
         names.mapNotNull(tagsByName::get)
 
+    override fun observeAppearances(): Flow<List<TagEntity>> =
+        MutableStateFlow(tagsByName.values.filter { it.color != null || it.icon != null })
+
+    override suspend fun getPendingSync(): List<TagEntity> =
+        tagsByName.values.filter { it.syncedAt == null && it.updatedAt > 0 }
+
+    override suspend fun markSynced(name: String, ts: Long, updatedAt: Long) {
+        tagsByName[name]?.takeIf { it.updatedAt == updatedAt }?.let { tagsByName[name] = it.copy(syncedAt = ts) }
+    }
+
+    override suspend fun updateAppearance(name: String, color: String?, icon: String?, updatedAt: Long, syncedAt: Long?) {
+        tagsByName[name]?.let { tagsByName[name] = it.copy(color = color, icon = icon, updatedAt = updatedAt, syncedAt = syncedAt) }
+    }
+
     override suspend fun linkTagsToNote(refs: List<NoteTagCrossRef>) {
         refs.forEach { ref ->
             val noteTags = tagIdsByNote.getOrPut(ref.noteId) { linkedSetOf() }

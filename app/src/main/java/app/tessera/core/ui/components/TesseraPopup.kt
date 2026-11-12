@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -74,6 +76,8 @@ fun TesseraPopup(
     bottomInset: Dp = 0.dp,
     /** `false`: closing keeps the focus (and the keyboard) where it is. */
     clearFocusOnDismiss: Boolean = true,
+    /** Buttons pinned under the scrolling content: they stay visible however tall the content is. */
+    footer: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
@@ -83,7 +87,8 @@ fun TesseraPopup(
     val keyboardVisible = WindowInsets.ime.getBottom(density) > WindowInsets.navigationBars.getBottom(density)
     val cardBottomGap = if (keyboardVisible) 12.dp else 16.dp
     // With a bottom inset the card also stops under the status bar, but never gets shorter than three rows (landscape with the keyboard up).
-    val maxCardHeight = if (bottomInset == 0.dp) {
+    // A popup with a footer also stops above the keyboard: its buttons must not hide behind it.
+    val maxCardHeight = if (bottomInset == 0.dp && (footer == null || !keyboardVisible)) {
         sixtyPercent
     } else {
         val belowCardPx = WindowInsets.ime.union(WindowInsets.navigationBars).getBottom(density) +
@@ -231,14 +236,32 @@ fun TesseraPopup(
                         onClick = {},
                     ),
             ) {
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = maxCardHeight)
-                        .verticalScroll(rememberScrollState())
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    content = content,
-                )
+                if (footer == null) {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = maxCardHeight)
+                            .verticalScroll(rememberScrollState())
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        content = content,
+                    )
+                } else {
+                    Column(modifier = Modifier.heightIn(max = maxCardHeight)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .verticalScroll(rememberScrollState())
+                                .padding(start = 20.dp, top = 20.dp, end = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            content = content,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            content = footer,
+                        )
+                    }
+                }
             }
         }
     }

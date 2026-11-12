@@ -9,6 +9,7 @@ import app.tessera.data.local.entity.NoteFolderCrossRef
 import app.tessera.data.mapper.NoteMapper
 import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
+import app.tessera.domain.model.FolderSaveResult
 import app.tessera.domain.model.FolderTreeNode
 import app.tessera.domain.model.Note
 import app.tessera.domain.model.NoteId
@@ -20,6 +21,8 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @Singleton
 class FolderRepositoryImpl @Inject constructor(
@@ -30,6 +33,8 @@ class FolderRepositoryImpl @Inject constructor(
     private val clock: Clock,
     private val syncScheduler: SyncScheduler,
 ) : FolderRepository {
+    /** Serialises "name check + write" so a double-tap on Save can't create two same-named folders. */
+    private val nameMutex = Mutex()
 
     override fun observeFolders(): Flow<List<Folder>> =
         folderDao.observeAll().map { entities -> entities.map(::toDomain) }
@@ -51,14 +56,34 @@ class FolderRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun createFolder(name: String): Folder = createFolderInternal(name, parentId = null)
+    override fun observeFolderAssignments(): Flow<Map<NoteId, FolderId>> =
+        folderDao.observeAllAssignments().map { refs ->
+            refs.associate { NoteId(it.noteId) to FolderId(it.folderId) }
+        }
 
-    override suspend fun createSubfolder(parentId: FolderId, name: String): Folder =
-        createFolderInternal(name, parentId = parentId.value)
+    override suspend fun createFolder(name: String, color: String?, icon: String?): FolderSaveResult =
+        createFolderInternal(name, color, icon, parentId = null)
 
-    private suspend fun createFolderInternal(name: String, parentId: String?): Folder {
+    override suspend fun createSubfolder(
+        parentId: FolderId,
+        name: String,
+        color: String?,
+        icon: String?,
+    ): FolderSaveResult = createFolderInternal(name, color, icon, parentId = parentId.value)
+
+    /** Live (not tombstoned) folders only; case-insensitive, any alphabet (SQLite NOCASE is ASCII-only). */
+    private suspend fun isNameTaken(name: String, exceptId: String?): Boolean =
+        folderDao.observeAll().first().any { it.id != exceptId && it.name.equals(name, ignoreCase = true) }
+
+    private suspend fun createFolderInternal(
+        name: String,
+        color: String?,
+        icon: String?,
+        parentId: String?,
+    ): FolderSaveResult = nameMutex.withLock {
         val trimmed = name.trim()
         require(trimmed.isNotEmpty()) { "folder name must not be blank" }
+        if (isNameTaken(trimmed, exceptId = null)) return@withLock FolderSaveResult.NameTaken
         val now = clock.nowMs()
         val folder = FolderEntity(
             id = UUID.randomUUID().toString(),
@@ -68,17 +93,33 @@ class FolderRepositoryImpl @Inject constructor(
             updatedAt = now,
             deletedAt = null,
             syncedAt = null,
+            color = color,
+            icon = icon,
         )
         folderDao.upsert(folder)
         syncScheduler.requestSync()
-        return toDomain(folder)
+        FolderSaveResult.Saved(toDomain(folder))
     }
 
-    override suspend fun renameFolder(id: FolderId, name: String) {
+    override suspend fun updateFolder(
+        id: FolderId,
+        name: String,
+        color: String?,
+        icon: String?,
+    ): FolderSaveResult = nameMutex.withLock {
         val trimmed = name.trim()
         require(trimmed.isNotEmpty()) { "folder name must not be blank" }
-        folderDao.rename(id.value, trimmed, clock.nowMs())
+        val cur = folderDao.getById(id.value)?.takeIf { it.deletedAt == null }
+            ?: return@withLock FolderSaveResult.Invalid("folder not found")
+        // Only a changed name is checked (exact match skips it): after v7 live "Work" and "work"
+        // may coexist, and recolouring one of them must not report NameTaken. A case-only change
+        // onto a live namesake is still NameTaken.
+        if (trimmed != cur.name && isNameTaken(trimmed, exceptId = id.value)) {
+            return@withLock FolderSaveResult.NameTaken
+        }
+        folderDao.update(id.value, trimmed, color, icon, clock.nowMs())
         syncScheduler.requestSync()
+        FolderSaveResult.Saved(toDomain(folderDao.getById(id.value) ?: cur))
     }
 
     override suspend fun moveFolder(id: FolderId, newParentId: FolderId?) {
@@ -110,5 +151,7 @@ class FolderRepositoryImpl @Inject constructor(
             name = e.name,
             parentId = e.parentId?.let(::FolderId),
             createdAt = e.createdAt,
+            color = e.color,
+            icon = e.icon,
         )
 }

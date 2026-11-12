@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import app.tessera.data.local.entity.FolderEntity
 import app.tessera.data.local.entity.NoteEntity
 import app.tessera.data.local.entity.NoteFolderCrossRef
@@ -17,7 +18,7 @@ interface FolderDao {
     @Query("SELECT * FROM folders WHERE id = :id")
     suspend fun getById(id: String): FolderEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(folder: FolderEntity)
 
     @Query("UPDATE folders SET deletedAt = :ts, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
@@ -26,8 +27,8 @@ interface FolderDao {
     @Query("DELETE FROM folders WHERE id = :id")
     suspend fun hardDelete(id: String)
 
-    @Query("UPDATE folders SET name = :name, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
-    suspend fun rename(id: String, name: String, ts: Long)
+    @Query("UPDATE folders SET name = :name, color = :color, icon = :icon, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
+    suspend fun update(id: String, name: String, color: String?, icon: String?, ts: Long)
 
     @Query("UPDATE folders SET parentId = :parentId, updatedAt = :ts, syncedAt = NULL WHERE id = :id")
     suspend fun updateParent(id: String, parentId: String?, ts: Long)
@@ -35,14 +36,17 @@ interface FolderDao {
     @Query("SELECT * FROM folders WHERE syncedAt IS NULL")
     suspend fun getPendingSync(): List<FolderEntity>
 
-    @Query("UPDATE folders SET syncedAt = :ts WHERE id = :id")
-    suspend fun markSynced(id: String, ts: Long)
+    @Query("UPDATE folders SET syncedAt = :ts WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun markSynced(id: String, ts: Long, updatedAt: Long)
 
     @Query("DELETE FROM folders WHERE deletedAt IS NOT NULL AND deletedAt < :threshold")
     suspend fun purgeOldTombstones(threshold: Long): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun assignNote(ref: NoteFolderCrossRef)
+
+    @Query("SELECT * FROM note_folders")
+    fun observeAllAssignments(): Flow<List<NoteFolderCrossRef>>
 
     @Query("DELETE FROM note_folders WHERE noteId = :noteId")
     suspend fun clearAssignment(noteId: String)

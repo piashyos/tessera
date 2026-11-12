@@ -14,4 +14,6 @@ data class RemoteFolder(
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
     val deletedAt: Long? = null,
+    val color: String? = null,
+    val icon: String? = null,
 )

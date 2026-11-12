@@ -41,7 +41,7 @@ class GlassPopupShotsTest : NativeAppTest() {
             db.clearAllTables()
             val now = System.currentTimeMillis()
             (1..8).forEach { app.seed("gp-$it", "# Заметка $it\nТекст заметки номер $it, несколько слов для карточки.", now - it * 1000L) }
-            runBlocking { folders.createFolder("Работа") }
+            runBlocking { folders.createFolder("Работа", null, null) }
             fun fresh() { app.close(); app.launch(); app.awaitCard("gp-1"); app.settle(800) }
 
             // new folder: from the drawer

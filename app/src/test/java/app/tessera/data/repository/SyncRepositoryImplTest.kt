@@ -68,6 +68,7 @@ class SyncRepositoryImplTest {
         remote: RemoteNotesDataSource = FakeRemoteNotesDataSource(),
         remoteFolders: SyncFakeRemoteFoldersDataSource = SyncFakeRemoteFoldersDataSource(),
         remoteShared: FakeRemoteSharedNotesDataSource = FakeRemoteSharedNotesDataSource(),
+        remoteTags: SyncFakeRemoteTagsDataSource = SyncFakeRemoteTagsDataSource(),
         noteImageDao: NoteImageDao = SyncFakeNoteImageDao(),
         clock: Clock = SyncTestClock(1000L),
     ) = SyncRepositoryImpl(
@@ -80,6 +81,7 @@ class SyncRepositoryImplTest {
         remote,
         remoteFolders,
         remoteShared,
+        remoteTags,
         NoteMapper(),
         SharedNoteMapper(),
         NoteImageMapper(),
@@ -411,6 +413,176 @@ class SyncRepositoryImplTest {
             assertNotNull(pulledNote)
             assertEquals("Hello", pulledNote?.title)
             assertEquals("folder-1", folderDao.folderIdForNote("note-1"))
+        }
+
+    @Test
+    fun `newer remote tag appearance is applied and keeps the tag id and note links`() =
+        runTest {
+            val tagDao = SyncFakeTagDao()
+            val remoteTags = SyncFakeRemoteTagsDataSource()
+            val repo = create(tagDao = tagDao, remoteTags = remoteTags, clock = SyncTestClock(900L))
+            tagDao.insertTags(listOf(TagEntity(id = "t1", name = "idea", color = "red", updatedAt = 10L, syncedAt = 10L)))
+            tagDao.linkTagsToNote(listOf(NoteTagCrossRef(noteId = "n1", tagId = "t1")))
+            remoteTags.store(app.tessera.data.remote.RemoteTag("idea", "blue", "lucide:star", updatedAt = 20L))
+
+            repo.syncNow(uid)
+
+            val tag = tagDao.findByNames(listOf("idea")).single()
+            assertEquals("t1", tag.id)
+            assertEquals("blue", tag.color)
+            assertEquals("lucide:star", tag.icon)
+            assertEquals(20L, tag.updatedAt)
+            assertEquals(900L, tag.syncedAt)
+            assertEquals(listOf("idea"), tagDao.tagsForNote("n1"))
+        }
+
+    @Test
+    fun `older remote tag appearance is ignored and the local one is pushed`() =
+        runTest {
+            val tagDao = SyncFakeTagDao()
+            val remoteTags = SyncFakeRemoteTagsDataSource()
+            val repo = create(tagDao = tagDao, remoteTags = remoteTags)
+            tagDao.insertTags(listOf(TagEntity(id = "t1", name = "idea", color = "red", updatedAt = 30L)))
+            remoteTags.store(app.tessera.data.remote.RemoteTag("idea", "blue", null, updatedAt = 20L))
+
+            repo.syncNow(uid)
+
+            assertEquals("red", tagDao.findByNames(listOf("idea")).single().color)
+            assertEquals("red", remoteTags.uploaded["idea"]?.color)
+        }
+
+    @Test
+    fun `remote tag without a local row is created`() =
+        runTest {
+            val tagDao = SyncFakeTagDao()
+            val remoteTags = SyncFakeRemoteTagsDataSource()
+            val repo = create(tagDao = tagDao, remoteTags = remoteTags)
+            remoteTags.store(app.tessera.data.remote.RemoteTag("fresh", "teal", null, updatedAt = 5L))
+
+            repo.syncNow(uid)
+
+            assertEquals("teal", tagDao.findByNames(listOf("fresh")).single().color)
+        }
+
+    @Test
+    fun `pending tag is pushed and marked synced only for the version that went out`() =
+        runTest {
+            val tagDao = SyncFakeTagDao()
+            val remoteTags = SyncFakeRemoteTagsDataSource()
+            val repo = create(tagDao = tagDao, remoteTags = remoteTags, clock = SyncTestClock(800L))
+            tagDao.insertTags(listOf(TagEntity(id = "t1", name = "idea", color = "red", updatedAt = 10L)))
+            tagDao.insertTags(listOf(TagEntity(id = "t2", name = "plain")))
+
+            repo.syncNow(uid)
+
+            assertEquals(setOf("idea"), remoteTags.uploaded.keys)
+            assertEquals(10L, remoteTags.uploaded["idea"]?.updatedAt)
+            assertEquals(800L, tagDao.findByNames(listOf("idea")).single().syncedAt)
+
+            // Edited while the push is in flight: its newer version must stay pending.
+            tagDao.updateAppearance("idea", "green", null, updatedAt = 11L, syncedAt = null)
+            remoteTags.duringUpsert = { tagDao.updateAppearance("idea", "pink", null, updatedAt = 12L, syncedAt = null) }
+            remoteTags.store(app.tessera.data.remote.RemoteTag("idea", "red", null, updatedAt = 10L))
+
+            repo.syncNow(uid)
+
+            val tag = tagDao.findByNames(listOf("idea")).single()
+            assertEquals("pink", tag.color)
+            assertNull(tag.syncedAt)
+        }
+
+    @Test
+    fun `a failing tags fetch does not stop notes from syncing`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val remoteTags = SyncFakeRemoteTagsDataSource().apply { fetchError = IllegalStateException("PERMISSION_DENIED") }
+            val repo = create(noteDao = noteDao, remote = remote, remoteTags = remoteTags)
+            noteDao.upsert(entity("a", syncedAt = null))
+            remote.store(RemoteNote(id = "b", title = "Pulled", content = "Body", updatedAt = 20L))
+
+            val result = repo.syncNow(uid)
+
+            assertTrue(result.isSuccess)
+            assertEquals(setOf("a"), remote.uploaded.keys)
+            assertNotNull(noteDao.getById("b"))
+        }
+
+    @Test
+    fun `folder colour and icon are pulled`() =
+        runTest {
+            val folderDao = SyncFakeFolderDao()
+            val remoteFolders = SyncFakeRemoteFoldersDataSource()
+            val repo = create(folderDao = folderDao, remoteFolders = remoteFolders)
+            remoteFolders.store(
+                app.tessera.data.remote.RemoteFolder(
+                    id = "f1", name = "Work", createdAt = 1L, updatedAt = 10L, color = "teal", icon = "emoji:🏠",
+                ),
+            )
+
+            repo.syncNow(uid)
+
+            assertEquals("teal", folderDao.getById("f1")?.color)
+            assertEquals("emoji:🏠", folderDao.getById("f1")?.icon)
+        }
+
+    @Test
+    fun `folder colour and icon are pushed and the edit made during the push stays pending`() =
+        runTest {
+            val folderDao = SyncFakeFolderDao()
+            val remoteFolders = SyncFakeRemoteFoldersDataSource()
+            val repo = create(folderDao = folderDao, remoteFolders = remoteFolders)
+            folderDao.upsert(
+                app.tessera.data.local.entity.FolderEntity(
+                    id = "f1", name = "Work", createdAt = 1L, updatedAt = 10L, color = "red", icon = "lucide:book",
+                ),
+            )
+
+            repo.syncNow(uid)
+
+            assertEquals("red", remoteFolders.uploaded["f1"]?.color)
+            assertEquals("lucide:book", remoteFolders.uploaded["f1"]?.icon)
+            assertNotNull(folderDao.getById("f1")?.syncedAt)
+
+            // Edited while the push is in flight: its newer version must stay pending.
+            remoteFolders.duringUpsert = { folderDao.update("f1", "Work", "pink", null, ts = 20L) }
+            folderDao.update("f1", "Work", "green", null, ts = 15L)
+
+            repo.syncNow(uid)
+
+            assertEquals("pink", folderDao.getById("f1")?.color)
+            assertNull(folderDao.getById("f1")?.syncedAt)
+        }
+
+    @Test
+    fun `pushLocalChanges pushes pending tags`() =
+        runTest {
+            val tagDao = SyncFakeTagDao()
+            val remoteTags = SyncFakeRemoteTagsDataSource()
+            val repo = create(tagDao = tagDao, remoteTags = remoteTags)
+            tagDao.insertTags(listOf(TagEntity(id = "t1", name = "idea", color = "red", updatedAt = 10L)))
+
+            assertTrue(repo.pushLocalChanges(uid).isSuccess)
+
+            assertEquals("red", remoteTags.uploaded["idea"]?.color)
+        }
+
+    @Test
+    fun `pushLocalChanges survives a tags push error and still pushes notes`() =
+        runTest {
+            val noteDao = SyncFakeNoteDao()
+            val remote = FakeRemoteNotesDataSource()
+            val tagDao = SyncFakeTagDao()
+            val remoteTags = SyncFakeRemoteTagsDataSource().apply { upsertError = IllegalStateException("PERMISSION_DENIED") }
+            val repo = create(noteDao = noteDao, remote = remote, tagDao = tagDao, remoteTags = remoteTags)
+            noteDao.upsert(entity("a", syncedAt = null))
+            tagDao.insertTags(listOf(TagEntity(id = "t1", name = "idea", color = "red", updatedAt = 10L)))
+
+            val result = repo.pushLocalChanges(uid)
+
+            assertTrue(result.isSuccess)
+            assertEquals(setOf("a"), remote.uploaded.keys)
+            assertNull(tagDao.findByNames(listOf("idea")).single().syncedAt)
         }
 
     @Test
@@ -928,6 +1100,20 @@ private class SyncFakeTagDao : TagDao {
 
     override suspend fun findByNames(names: List<String>): List<TagEntity> = names.mapNotNull(tagsByName::get)
 
+    override fun observeAppearances(): Flow<List<TagEntity>> =
+        MutableStateFlow(tagsByName.values.filter { it.color != null || it.icon != null })
+
+    override suspend fun getPendingSync(): List<TagEntity> =
+        tagsByName.values.filter { it.syncedAt == null && it.updatedAt > 0 }
+
+    override suspend fun markSynced(name: String, ts: Long, updatedAt: Long) {
+        tagsByName[name]?.takeIf { it.updatedAt == updatedAt }?.let { tagsByName[name] = it.copy(syncedAt = ts) }
+    }
+
+    override suspend fun updateAppearance(name: String, color: String?, icon: String?, updatedAt: Long, syncedAt: Long?) {
+        tagsByName[name]?.let { tagsByName[name] = it.copy(color = color, icon = icon, updatedAt = updatedAt, syncedAt = syncedAt) }
+    }
+
     override suspend fun linkTagsToNote(refs: List<NoteTagCrossRef>) {
         refs.forEach { ref -> tagIdsByNote.getOrPut(ref.noteId) { linkedSetOf() }.add(ref.tagId) }
     }
@@ -965,17 +1151,24 @@ private class SyncFakeFolderDao : app.tessera.data.local.dao.FolderDao {
         folders.remove(id)
     }
 
-    override suspend fun rename(id: String, name: String, ts: Long) {
-        folders[id]?.let { folders[id] = it.copy(name = name, updatedAt = ts, syncedAt = null) }
+    override suspend fun update(id: String, name: String, color: String?, icon: String?, ts: Long) {
+        folders[id]?.let {
+            folders[id] = it.copy(name = name, color = color, icon = icon, updatedAt = ts, syncedAt = null)
+        }
     }
+
+    override fun observeAllAssignments(): Flow<List<app.tessera.data.local.entity.NoteFolderCrossRef>> =
+        MutableStateFlow(assignments.map { (noteId, folderId) ->
+            app.tessera.data.local.entity.NoteFolderCrossRef(noteId, folderId)
+        })
 
     override suspend fun updateParent(id: String, parentId: String?, ts: Long) {
         folders[id]?.let { folders[id] = it.copy(parentId = parentId, updatedAt = ts, syncedAt = null) }
     }
 
     override suspend fun getPendingSync() = folders.values.filter { it.syncedAt == null }
-    override suspend fun markSynced(id: String, ts: Long) {
-        folders[id]?.let { folders[id] = it.copy(syncedAt = ts) }
+    override suspend fun markSynced(id: String, ts: Long, updatedAt: Long) {
+        folders[id]?.takeIf { it.updatedAt == updatedAt }?.let { folders[id] = it.copy(syncedAt = ts) }
     }
 
     override suspend fun purgeOldTombstones(threshold: Long): Int {
@@ -1004,6 +1197,8 @@ private class SyncFakeFolderDao : app.tessera.data.local.dao.FolderDao {
 private class SyncFakeRemoteFoldersDataSource : app.tessera.data.remote.RemoteFoldersDataSource {
     private val folders = linkedMapOf<String, app.tessera.data.remote.RemoteFolder>()
     val uploaded = linkedMapOf<String, app.tessera.data.remote.RemoteFolder>()
+    /** Runs while an upsert is "in flight" — lets a test edit a folder locally mid-push. */
+    var duringUpsert: suspend () -> Unit = {}
 
     fun store(folder: app.tessera.data.remote.RemoteFolder) {
         folders[folder.id] = folder
@@ -1011,12 +1206,39 @@ private class SyncFakeRemoteFoldersDataSource : app.tessera.data.remote.RemoteFo
 
     override suspend fun fetchAll(uid: String) = folders.values.toList()
     override suspend fun upsertAll(uid: String, folders: List<app.tessera.data.remote.RemoteFolder>) {
+        duringUpsert()
         folders.forEach { uploaded[it.id] = it; this.folders[it.id] = it }
     }
     override fun observeFolders(uid: String) =
         MutableStateFlow(folders.values.toList())
 
     override suspend fun deleteOlderTombstones(uid: String, threshold: Long) = 0
+}
+
+private class SyncFakeRemoteTagsDataSource : app.tessera.data.remote.RemoteTagsDataSource {
+    private val tags = linkedMapOf<String, app.tessera.data.remote.RemoteTag>()
+    val uploaded = linkedMapOf<String, app.tessera.data.remote.RemoteTag>()
+    var fetchError: Exception? = null
+    var upsertError: Exception? = null
+    /** Runs while an upsert is "in flight" — lets a test edit the tag locally mid-push. */
+    var duringUpsert: suspend () -> Unit = {}
+
+    fun store(tag: app.tessera.data.remote.RemoteTag) {
+        tags[tag.name] = tag
+    }
+
+    override suspend fun fetchAll(uid: String): List<app.tessera.data.remote.RemoteTag> {
+        fetchError?.let { throw it }
+        return tags.values.toList()
+    }
+
+    override suspend fun upsertAll(uid: String, tags: List<app.tessera.data.remote.RemoteTag>) {
+        upsertError?.let { throw it }
+        duringUpsert()
+        tags.forEach { uploaded[it.name] = it; this.tags[it.name] = it }
+    }
+
+    override fun observeTags(uid: String) = MutableStateFlow(tags.values.toList())
 }
 
 private class FakeSharedMemberDao : SharedMemberDao {
@@ -1127,4 +1349,67 @@ private class SyncFakeNoteImageDao : NoteImageDao {
     override suspend fun delete(imageId: String) {
         rows.remove(imageId)
     }
+}
+
+/**
+ * Real in-memory Room (a fake DAO can't reproduce foreign-key actions): a remote change to an
+ * existing folder must keep its `note_folders` rows and its subfolders' `parentId`.
+ */
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [34])
+class SyncRepositoryRealRoomFolderTest {
+    private lateinit var db: app.tessera.data.local.NotesDatabase
+
+    @org.junit.Before
+    fun setUp() {
+        db = androidx.room.Room.inMemoryDatabaseBuilder(
+            androidx.test.core.app.ApplicationProvider.getApplicationContext(),
+            app.tessera.data.local.NotesDatabase::class.java,
+        ).allowMainThreadQueries().build()
+    }
+
+    @org.junit.After
+    fun tearDown() = db.close()
+
+    @org.junit.Test
+    fun `remote change of an existing folder keeps its note assignments and subfolder parent`() =
+        runTest {
+            val remoteFolders = SyncFakeRemoteFoldersDataSource()
+            val repo = SyncRepositoryImpl(
+                app.tessera.data.local.RoomTransactor(db),
+                db.noteDao(),
+                db.tagDao(),
+                db.folderDao(),
+                FakeSharedMemberDao(),
+                db.noteImageDao(),
+                FakeRemoteNotesDataSource(),
+                remoteFolders,
+                FakeRemoteSharedNotesDataSource(),
+                SyncFakeRemoteTagsDataSource(),
+                NoteMapper(),
+                SharedNoteMapper(),
+                NoteImageMapper(),
+                SyncTestClock(1000L),
+            )
+            val dao = db.folderDao()
+            dao.upsert(app.tessera.data.local.entity.FolderEntity(id = "p", name = "Work", createdAt = 1L, syncedAt = 1L))
+            dao.upsert(app.tessera.data.local.entity.FolderEntity(id = "c", name = "Sub", parentId = "p", createdAt = 1L, syncedAt = 1L))
+            dao.assignNote(app.tessera.data.local.entity.NoteFolderCrossRef(noteId = "n1", folderId = "p"))
+            remoteFolders.store(
+                app.tessera.data.remote.RemoteFolder(
+                    id = "p", name = "Work", createdAt = 1L, updatedAt = 50L, color = "red", icon = "lucide:star",
+                ),
+            )
+            remoteFolders.store(
+                app.tessera.data.remote.RemoteFolder(id = "c", name = "Sub", parentId = "p", createdAt = 1L, updatedAt = 1L),
+            )
+
+            repo.syncNow(uid)
+
+            assertEquals("p", dao.folderIdForNote("n1"))
+            assertEquals("p", dao.getById("c")?.parentId)
+            assertEquals("red", dao.getById("p")?.color)
+        }
+
+    private val uid = UserId("owner-1")
 }

@@ -1,5 +1,6 @@
 // Firestore security-rules tests for Tessera shared notes.
 // Run with the firestore emulator: `npm test` (wraps `firebase emulators:exec`).
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import {
@@ -289,5 +290,51 @@ describe('sharedNotes delete', () => {
   test('viewer cannot delete the note', async () => {
     await seedNote();
     await assertFails(deleteDoc(noteRef(VIEWER)));
+  });
+});
+
+describe('users/{uid}/tags appearance', () => {
+  const tagRef = (as, of = OWNER, id = 'aWRlYQ') => doc(db(as), 'users', of, 'tags', id);
+  const tag = { name: 'idea', color: 'blue', icon: 'lucide:star', updatedAt: 5 };
+
+  test('owner writes and reads a tag', async () => {
+    await assertSucceeds(setDoc(tagRef(OWNER), tag));
+    const snap = await assertSucceeds(getDoc(tagRef(OWNER)));
+    assert.equal(snap.data().color, 'blue');
+  });
+
+  test('owner writes a reset with color and icon null', async () => {
+    await assertSucceeds(setDoc(tagRef(OWNER), tag));
+    // The doc exists now, so this write goes through the `update` branch.
+    await assertSucceeds(setDoc(tagRef(OWNER), { name: 'idea', color: null, icon: null, updatedAt: 6 }));
+  });
+
+  test('a tag without updatedAt is rejected', async () => {
+    await assertFails(setDoc(tagRef(OWNER), { name: 'idea' }));
+  });
+
+  test('a stranger neither reads nor writes', async () => {
+    await testEnv.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), 'users', OWNER, 'tags', 'aWRlYQ'), tag),
+    );
+    await assertFails(getDoc(tagRef(STRANGER)));
+    await assertFails(setDoc(tagRef(STRANGER), tag));
+  });
+
+  test('an extra key is rejected', async () => {
+    await assertFails(setDoc(tagRef(OWNER), { ...tag, extra: 1 }));
+  });
+
+  test('color as a number is rejected', async () => {
+    await assertFails(setDoc(tagRef(OWNER), { ...tag, color: 7 }));
+  });
+
+  test('owner writes a folder with color and icon', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(OWNER), 'users', OWNER, 'folders', 'f1'), {
+        id: 'f1', name: 'Work', parentId: null, createdAt: 1, updatedAt: 2, deletedAt: null,
+        color: 'teal', icon: 'emoji:🏠',
+      }),
+    );
   });
 });

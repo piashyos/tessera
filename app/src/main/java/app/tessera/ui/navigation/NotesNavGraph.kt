@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.tessera.core.ui.tessera.LocalTagAppearances
 import app.tessera.ui.editor.NoteEditorScreen
 import app.tessera.ui.editor.NoteEditorViewModel
 import app.tessera.ui.notes.NotesListScreen
@@ -38,8 +39,12 @@ fun NotesNavGraph(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
+    val tagStyles by hiltViewModel<TagAppearanceViewModel>().styles.collectAsState()
     SharedTransitionLayout(modifier = modifier) {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+        CompositionLocalProvider(
+            LocalSharedTransitionScope provides this,
+            LocalTagAppearances provides tagStyles,
+        ) {
             NavHost(
                 navController = navController,
                 startDestination = NotesListRoute,
@@ -108,7 +113,8 @@ private fun NavGraphBuilder.notesListDestination(
                 onOpenSettings = onOpenSettings,
                 onSelectFolder = viewModel::selectFolder,
                 onCreateFolder = viewModel::createFolder,
-                onRenameFolder = viewModel::renameFolder,
+                onUpdateFolder = viewModel::updateFolder,
+                onSetTagAppearance = viewModel::setTagAppearance,
                 onDeleteFolder = viewModel::deleteFolder,
                 onMoveNoteToFolder = viewModel::moveNoteToFolder,
                 onEnterSelectionMode = viewModel::enterSelectionMode,

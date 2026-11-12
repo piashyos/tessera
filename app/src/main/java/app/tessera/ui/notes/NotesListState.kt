@@ -62,6 +62,8 @@ sealed interface NotesListState {
         val selectedTags: Set<String>,
         val viewMode: NotesViewMode,
         val currentUserId: UserId? = null,
+        /** Folder colour key per note for the cards; empty where cards are not tinted (inside one folder). */
+        val noteTints: Map<NoteId, String> = emptyMap(),
         override val folders: List<Folder> = emptyList(),
         override val folderTree: List<FolderTreeNode> = emptyList(),
         override val selectedFolderId: FolderId? = null,

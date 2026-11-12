@@ -6,6 +6,8 @@ import android.view.MotionEvent
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.preferences.ThemePalette
 import app.tessera.core.text.notedoc.NoteBlock
+import app.tessera.domain.model.Folder
+import app.tessera.domain.model.FolderSaveResult
 import app.tessera.domain.model.Tag
 import app.tessera.domain.repository.FolderRepository
 import app.tessera.domain.repository.NotesRepository
@@ -14,6 +16,7 @@ import app.tessera.ui.editor.engine.TesseraEditText
 import app.tessera.ui.editor.engine.savePng
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
@@ -40,9 +43,15 @@ class NativeEditorShotsTest : NativeAppTest() {
 
     private fun note(content: String, tags: List<String>, pinned: Boolean, path: List<String>): String = runBlocking {
         val saved = notes.updateNote(notes.createNote().copy(content = content, tags = tags.map(::Tag), isPinned = pinned))
-        var folder = folders.createFolder(path[0])
-        for (name in path.drop(1)) folder = folders.createSubfolder(folder.id, name)
-        folders.assignNote(saved.id, folder.id)
+        // Folder names are unique among live folders now: reuse the one from an earlier call.
+        var folder: Folder? = null
+        for (name in path) {
+            val parent = folder
+            folder = folders.observeFolders().first().firstOrNull { it.name == name && it.parentId == parent?.id }
+                ?: ((if (parent == null) folders.createFolder(name, null, null)
+                else folders.createSubfolder(parent.id, name, null, null)) as FolderSaveResult.Saved).folder
+        }
+        folders.assignNote(saved.id, folder!!.id)
         saved.id.value
     }
 

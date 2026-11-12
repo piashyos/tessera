@@ -1,7 +1,7 @@
 package app.tessera.domain.usecase
 
-import app.tessera.domain.model.Folder
 import app.tessera.domain.model.FolderId
+import app.tessera.domain.model.FolderSaveResult
 import app.tessera.domain.model.NoteId
 import app.tessera.domain.repository.FolderRepository
 import javax.inject.Inject
@@ -23,24 +23,35 @@ class ObserveFolderForNoteUseCase @Inject constructor(private val repo: FolderRe
     operator fun invoke(noteId: NoteId) = repo.observeFolderForNote(noteId)
 }
 
+class ObserveFolderAssignmentsUseCase @Inject constructor(private val repo: FolderRepository) {
+    operator fun invoke() = repo.observeFolderAssignments()
+}
+
 class CreateFolderUseCase @Inject constructor(private val repo: FolderRepository) {
-    suspend operator fun invoke(name: String) = repo.createFolder(name)
+    suspend operator fun invoke(name: String, color: String? = null, icon: String? = null) =
+        repo.createFolder(name, color, icon)
 }
 
 class CreateSubfolderUseCase @Inject constructor(private val repo: FolderRepository) {
-    suspend operator fun invoke(parentId: FolderId, name: String): Result<Folder> {
+    suspend operator fun invoke(
+        parentId: FolderId,
+        name: String,
+        color: String? = null,
+        icon: String? = null,
+    ): FolderSaveResult {
         val folders = repo.observeFolders().first()
         val parent = folders.firstOrNull { it.id == parentId }
-            ?: return Result.failure(FolderValidationException("parent not found"))
+            ?: return FolderSaveResult.Invalid("parent not found")
         if (parent.parentId != null) {
-            return Result.failure(FolderValidationException("depth"))
+            return FolderSaveResult.Invalid("depth")
         }
-        return runCatching { repo.createSubfolder(parentId, name) }
+        return repo.createSubfolder(parentId, name, color, icon)
     }
 }
 
-class RenameFolderUseCase @Inject constructor(private val repo: FolderRepository) {
-    suspend operator fun invoke(id: FolderId, name: String) = repo.renameFolder(id, name)
+class UpdateFolderUseCase @Inject constructor(private val repo: FolderRepository) {
+    suspend operator fun invoke(id: FolderId, name: String, color: String?, icon: String?) =
+        repo.updateFolder(id, name, color, icon)
 }
 
 class MoveFolderUseCase @Inject constructor(private val repo: FolderRepository) {

@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -72,6 +73,7 @@ fun TesseraSwipeableNoteCard(
   modifier: Modifier = Modifier,
   selected: Boolean = false,
   avatars: (@Composable () -> Unit)? = null,
+  tint: Color? = null,
 ) {
   val density = LocalDensity.current
   // Revealed width per side = the buttons plus a gap between each and one at either edge,
@@ -154,6 +156,7 @@ fun TesseraSwipeableNoteCard(
       onLongClick = onLongClick,
       selected = selected,
       avatars = avatars,
+      tint = tint,
       modifier = Modifier
         .testTag(UiTestTags.noteCard(noteId))
         .fillMaxWidth()
