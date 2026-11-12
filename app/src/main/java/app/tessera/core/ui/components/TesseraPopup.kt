@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
@@ -48,7 +49,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -66,16 +70,28 @@ fun TesseraPopup(
     onDismiss: () -> Unit,
     hazeState: HazeState,
     modifier: Modifier = Modifier,
+    /** Room kept free under the card, above the keyboard / navigation bar (the editor's format bar): the card sits over it. */
+    bottomInset: Dp = 0.dp,
+    /** `false`: closing keeps the focus (and the keyboard) where it is. */
+    clearFocusOnDismiss: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
-    val maxCardHeight = (LocalConfiguration.current.screenHeightDp * 0.6f).dp
+    val sixtyPercent = (LocalConfiguration.current.screenHeightDp * 0.6f).dp
     val frostColor = MaterialTheme.colorScheme.surface
     val keyboardVisible = WindowInsets.ime.getBottom(density) > WindowInsets.navigationBars.getBottom(density)
     val cardBottomGap = if (keyboardVisible) 12.dp else 16.dp
+    // With a bottom inset the card also stops under the status bar, but never gets shorter than three rows (landscape with the keyboard up).
+    val maxCardHeight = if (bottomInset == 0.dp) {
+        sixtyPercent
+    } else {
+        val belowCardPx = WindowInsets.ime.union(WindowInsets.navigationBars).getBottom(density) +
+            with(density) { (bottomInset + cardBottomGap).roundToPx() }
+        sheetMaxHeight(LocalWindowInfo.current.containerSize.height, WindowInsets.statusBars.getTop(density), belowCardPx, sixtyPercent, density)
+    }
     val dismiss: () -> Unit = {
-        focusManager.clearFocus(force = true)
+        if (clearFocusOnDismiss) focusManager.clearFocus(force = true)
         onDismiss()
     }
     // Kept current so the remembered NestedScrollConnection never invokes a stale callback.
@@ -180,7 +196,7 @@ fun TesseraPopup(
                     .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    .padding(bottom = cardBottomGap)
+                    .padding(bottom = cardBottomGap + bottomInset)
                     .offset { IntOffset(0, dragOffset.value.roundToInt()) }
                     .testTag(UiTestTags.PopupCard)
                     .nestedScroll(nestedScrollConnection)
@@ -227,3 +243,12 @@ fun TesseraPopup(
         }
     }
 }
+
+/** The room between the status bar and the space kept under the card: at most [sixtyPercent], at least [MinCardHeight]. */
+internal fun sheetMaxHeight(containerPx: Int, statusTopPx: Int, belowCardPx: Int, sixtyPercent: Dp, density: Density): Dp {
+    val room = with(density) { (containerPx - statusTopPx - belowCardPx).coerceAtLeast(0).toDp() }
+    return minOf(sixtyPercent, maxOf(MinCardHeight, room))
+}
+
+/** Where there is hardly any room (landscape with the keyboard up) an empty card is worse than one under the status bar. */
+private val MinCardHeight = 144.dp
