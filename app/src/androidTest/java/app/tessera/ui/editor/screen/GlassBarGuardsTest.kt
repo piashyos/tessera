@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.ui.editor.engine.TesseraEditText
@@ -90,7 +91,12 @@ class GlassBarGuardsTest : NativeAppTest() {
         assertTrue("ink in the strip the bar covers ($strip): $ink dark pixels — the text must run under the bar", ink > 0)
     }
 
-    /** No keyboard, no bar: the note runs under the transparent navigation bar (the gesture strip) — the strip is not an empty band. */
+    /**
+     * No keyboard, no bar: the note runs under the transparent navigation bar (the gesture strip), and the editor keeps no inset of its own for it
+     * (`9b83ada`). Rewritten for the user's decision of 2026-11-11 «Оставить без отступа» (plan `2026-11-11-editor-touch-and-format-sheet.md`, D1;
+     * spec §6.2-9): `bottomInset` is 0 without the keyboard, and the text is drawn in the navigation bar's strip — the part of it above the editor's
+     * own bottom padding, where a line of the note is put for the check.
+     */
     @Test
     fun textRunsUnderTheNavigationBarWithoutTheKeyboard() {
         lightTheme()
@@ -98,17 +104,29 @@ class GlassBarGuardsTest : NativeAppTest() {
         app.launch()
         val e = app.open("guard-nav")
         app.settle(1_500)
-        app.ui { e.clearFocus(); e.scrollTo(0, e.layout.height / 3) }
+        app.ui { e.clearFocus() }
         app.settle(500)
-        val (inset, ink) = app.ui {
+        val (inset, strip) = app.ui {
+            val root = e.rootView
+            val navTop = IntArray(2).also(root::getLocationOnScreen)[1] + root.height - (root.rootWindowInsets?.getInsets(WindowInsets.Type.navigationBars())?.bottom ?: 0)
+            val editorTop = IntArray(2).also(e::getLocationOnScreen)[1]
+            e.bottomInset to ((navTop - editorTop) until (e.height - e.totalPaddingBottom)) // view rows under the navigation bar the text may be drawn in
+        }
+        assertEquals("without the keyboard the editor keeps no inset (D1, 2026-11-11)", 0, inset)
+        assertTrue("the editor reaches under the navigation bar, above its own bottom padding: strip $strip", !strip.isEmpty())
+        app.ui { // a line of the note in the middle of the strip
+            val l = e.layout
+            val line = l.getLineForVertical(l.height / 3)
+            e.scrollTo(0, e.totalPaddingTop + (l.getLineTop(line) + l.getLineBottom(line)) / 2 - (strip.first + strip.last) / 2)
+        }
+        app.settle(500)
+        val ink = app.ui {
             val bmp = Bitmap.createBitmap(e.width, e.height, Bitmap.Config.ARGB_8888)
             Canvas(bmp).also { it.drawColor(Color.WHITE); it.translate(0f, -e.scrollY.toFloat()); e.draw(it) }
-            val d = e.resources.displayMetrics.density
             var n = 0
-            for (y in (e.height - e.bottomInset) until (e.height - (16 * d).toInt())) for (x in 0 until bmp.width) if (Color.luminance(bmp.getPixel(x, y)) < 0.6f) n++
-            e.bottomInset to n
+            for (y in strip) for (x in 0 until bmp.width) if (Color.luminance(bmp.getPixel(x, y)) < 0.6f) n++
+            n
         }
-        assertTrue("the navigation bar's height is the inset ($inset px)", inset > 0)
-        assertTrue("text in the strip under the navigation bar: $ink dark pixels", ink > 0)
+        assertTrue("text in the strip under the navigation bar ($strip): $ink dark pixels", ink > 0)
     }
 }
