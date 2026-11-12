@@ -316,7 +316,7 @@ match /users/{uid}/tags/{tagId} {
 - **Цвет.** `rememberTagChipColors(tag)` берёт `LocalTagAppearances.current[tag]?.color`: цвет есть — его `chipColors()`, иначе хеш, как сейчас. Ключи `remember` — `(tag, dark, color)`. Сигнатура не меняется, все четыре вызова получают цвет без правок.
 - **Иконка.** `@Composable fun rememberTagIcon(tag: String): EntityIcon?` из того же local. Если иконка есть, вместо «#» перед именем рисуется `EntityIconView` (16 dp, `tint = content`):
   - `TesseraChipRow` делает это **сам**: для тег-чипа (определяется по `label.startsWith("#")`, вызывающий лейбл не меняет) при наличии иконки показывает её ведущей и выводит лейбл без «#»;
-  - `TesseraNoteCard`, `TagChipsExpandable`, `SearchScreen.TagPill` — так же, в месте, где сейчас пишется «#».
+  - `TesseraNoteCard`, `TagChipsExpandable`, `SearchScreen.TagPill` — так же, в месте, где сейчас пишется «#». Размер иконки — по тексту чипа: 16 dp в строке фильтров и в `TagPill` (`labelLarge`), 12 dp в чипах карточки и редактора (`labelSmall`; уточнено 2026-11-12 по финальному ревью).
 - **Кто предоставляет карту.** `NotesNavGraph` (корень навигации) через `@HiltViewModel TagAppearanceViewModel` (`ui/navigation`). Он мапит `ObserveTagAppearancesUseCase` в `Map<String, TagStyle>` (`AccentColor.fromKey`, `parseEntityIcon`); вокруг `NavHost` — `CompositionLocalProvider`.
 
 ## 6. Тесты

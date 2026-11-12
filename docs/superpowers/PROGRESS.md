@@ -30,7 +30,7 @@ Resume in a new session by reading this file + the plan, then continuing with th
 | Фича | План | Статус | Заметки |
 |---|---|---|---|
 | Касания вне текста, ручка вставки, меню «⋯» | [plans/2026-11-11-editor-touch-and-format-sheet.md](plans/2026-11-11-editor-touch-and-format-sheet.md) | ✅ done (2026-11-11), ждёт коммита | спека `specs/2026-11-11-editor-touch-and-format-sheet-design.md`; QA `qa/editor-touch-and-format-sheet.md`; ветка `feature/editor-touch-and-format-sheet` (не закоммичено) |
-| Оформление тегов и папок | — | ⬜ pending | спека `specs/2026-11-11-tag-folder-appearance-design.md`; после предыдущей |
+| Оформление тегов и папок | [plans/2026-11-11-tag-folder-appearance.md](plans/2026-11-11-tag-folder-appearance.md) | ✅ done (2026-11-12), ждёт коммита | спека `specs/2026-11-11-tag-folder-appearance-design.md`; QA `qa/tag-folder-appearance.md`; Room 7→8; правила Firestore — деплой пользователем |
 
 Legend: ✅ done · ⏳ in progress · ⬜ pending · ⚠️ blocked
 
