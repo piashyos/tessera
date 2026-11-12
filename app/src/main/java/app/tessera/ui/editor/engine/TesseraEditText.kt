@@ -2,12 +2,10 @@ package app.tessera.ui.editor.engine
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.ColorFilter
 import android.graphics.Paint
-import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.drawable.Drawable
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -22,14 +20,20 @@ import android.text.style.MetricAffectingSpan
 import android.text.method.ArrowKeyMovementMethod
 import android.text.method.KeyListener
 import android.util.TypedValue
+import android.view.ActionMode
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
+import android.view.Menu
+import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.View
 import android.view.VelocityTracker
 import android.view.ViewConfiguration
 import android.view.animation.AnimationUtils
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.core.view.ContentInfoCompat
@@ -244,6 +248,10 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     private var tapTarget: Int? = null
     private var imageTapTarget: Int? = null
     private var tableTapTarget: Int? = null
+    private var downOutside: Outside? = null // this gesture began off the text (no target under it); known to the viewer too; ends with the gesture
+    private var outsideMoved = false // the finger drifted past the slop: the long press stays ours, a lift is no tap
+    private var outsideLongPress = false // performLongClick took this gesture: its lift must not reach the platform
+    private var menu: ActionMode? = null // "Paste / Select all" over the caret after a long press off the text
     private var downX = 0f
     private var downY = 0f
     private var longPressMs = 0L
@@ -272,6 +280,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
         override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
             stopFling() // typing scrolls to the caret: the fling must not fight it
+            menu?.finish()
             markdownCache = null // the version of the editable changes when the replace is over; a step taken in afterTextChanged needs the text as it is now
             restartBlink()
             if (guarded || !ready) return
@@ -430,6 +439,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     /** The host composable leaves: a pending user edit is emitted, nothing else is; no callback fires after this. */
     fun dispose() {
+        menu?.finish()
         flushPendingEdit()
         disposed = true
         images.cancelAll()
@@ -888,6 +898,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         if (event.actionMasked == MotionEvent.ACTION_UP && caughtFling && abs(event.y - flingDownY) <= touchSlop) {
             // a touch that stopped a moving fling is not a tap: no caret, no keyboard
             caughtFling = false
+            downOutside = null; outsideLongPress = false; outsideMoved = false // the gesture is over: a TalkBack long click must not read it
             val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
             super.onTouchEvent(cancel)
             cancel.recycle()
@@ -896,13 +907,16 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         val selectionBefore = selectionStart.toLong() shl 32 or selectionEnd.toLong()
         val handled = handleTouch(event)
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            if (caughtFling) { tapTarget = null; imageTapTarget = null; tableTapTarget = null }
+            if (caughtFling) { tapTarget = null; imageTapTarget = null; tableTapTarget = null } // downOutside stays: performLongClick ignores a touch that caught a fling
             // after the DOWN is handled: a touch that focuses the editor puts the caret under the finger right there, and that is not a selection drag
             selectionAtDown = selectionStart.toLong() shl 32 or selectionEnd.toLong()
         }
         when (event.actionMasked) {
             MotionEvent.ACTION_UP -> {
                 caughtFling = false
+                downOutside = null
+                outsideLongPress = false
+                outsideMoved = false
                 val moved = abs(scrollY - scrollYAtDown) > touchSlop
                 val sameSelection = selectionAtDown == selectionBefore // as the drag left it: the lift itself may put the caret down
                 tracker.computeCurrentVelocity(1000, viewConfig.scaledMaximumFlingVelocity.toFloat())
@@ -911,7 +925,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
                 if (moved && sameSelection && abs(v) >= viewConfig.scaledMinimumFlingVelocity) startFling(v)
                 tracker.recycle(); velocityTracker = null
             }
-            MotionEvent.ACTION_CANCEL -> { caughtFling = false; tracker.recycle(); velocityTracker = null }
+            MotionEvent.ACTION_CANCEL -> { caughtFling = false; downOutside = null; outsideLongPress = false; outsideMoved = false; tracker.recycle(); velocityTracker = null }
         }
         return handled
     }
@@ -948,6 +962,24 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     private fun handleTouch(event: MotionEvent): Boolean {
+        if (ready) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    menu?.finish()
+                    outsideLongPress = false
+                    outsideMoved = false
+                    downX = event.x
+                    downY = event.y
+                    downOutside = null
+                    if (!editable) downOutside = outsideAt(event.x, event.y) // no targets for a viewer
+                }
+                MotionEvent.ACTION_MOVE -> if (abs(event.x - downX) > touchSlop || abs(event.y - downY) > touchSlop) outsideMoved = true // the decision holds to the end of the gesture (§3.2)
+                MotionEvent.ACTION_UP -> if (outsideLongPress) { // the long press has put the caret and the menu: the platform must not see the lift
+                    cancelToPlatform(event)
+                    return true
+                }
+            }
+        }
         if (ready && editable) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -955,6 +987,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
                     imageTapTarget = if (tapTarget == null) imageZones().firstOrNull { it.rect.contains(event.x.toInt(), event.y.toInt()) }?.ps else null
                     // what reaches the editor on a table's line is its margin (the overlay takes the table itself): not a place for the caret
                     tableTapTarget = if (tapTarget == null && imageTapTarget == null) tableLineAt(event.y) else null
+                    if (tapTarget == null && imageTapTarget == null && tableTapTarget == null) downOutside = outsideAt(event.x, event.y)
                     longPressMs = ViewConfiguration.getLongPressTimeout().toLong()
                     downX = event.x
                     downY = event.y
@@ -989,10 +1022,103 @@ class TesseraEditText(context: Context, style: EditorStyle) :
                         toggleCheckAt(ps)
                         return true
                     }
+                    if (downOutside == Outside.BelowText && !outsideMoved && event.eventTime - event.downTime < longPressMs) { // a tap under the last line: the caret goes to the end of the note
+                        cancelToPlatform(event)
+                        caretAtEndOfNote()
+                        return true
+                    }
                 }
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    private fun cancelToPlatform(event: MotionEvent) {
+        val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+        super.onTouchEvent(cancel)
+        cancel.recycle()
+    }
+
+    /** [x], [y] in the view; `null` when the point is on the text (or there is no layout). */
+    internal fun outsideAt(x: Float, y: Float): Outside? {
+        val l = layout ?: return null
+        return outsideTextAt(l, x - totalPaddingLeft + scrollX, y - totalPaddingTop + scrollY)
+    }
+
+    /**
+     * A long press off the text puts the caret there and offers the menu; it selects no word (the platform would: the point is moved to the
+     * nearest line). A viewer gets nothing.
+     */
+    override fun performLongClick(): Boolean {
+        val out = downOutside
+        if (!ready || out == null) return super.performLongClick()
+        outsideLongPress = true
+        if (!editable || caughtFling) return true // a touch that stopped a fling is not a long press
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) // TextView.performLongClick gives it, and is not called
+        when (out) {
+            Outside.BelowText -> caretAtEndOfNote()
+            is Outside.OffLine -> { requestFocus(); setSelection(out.offset.coerceIn(0, text?.length ?: 0)); showKeyboard() }
+        }
+        if (isFocused) showPasteMenu() // a note of one object has no caret: nothing to anchor the menu to
+        return true
+    }
+
+    /** Closes the "Paste / Select all" menu: it is a window of its own, a screen that opens a modal layer over the editor must take it down. */
+    fun dismissTextMenu() { menu?.finish() }
+
+    private fun showKeyboard() {
+        context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showSoftInput(this, 0)
+    }
+
+    /** The caret goes to the end of the last paragraph; when that is an object, next to it (as a tap in a table's margin does). */
+    private fun caretAtEndOfNote() {
+        val e = text ?: return
+        val ps = paragraphStart(e, e.length)
+        if (isObjectParagraph(e, ps)) { caretNextToTable(ps, above = false); return }
+        requestFocus()
+        setSelection(e.length)
+        showKeyboard()
+    }
+
+    private fun showPasteMenu() {
+        val t = text ?: return
+        // the description only: reading the clip shows the "pasted from clipboard" toast on API 31+; our own clip is text/plain too
+        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+        val canPaste = clipboard?.hasPrimaryClip() == true && clipboard.primaryClipDescription?.hasMimeType("text/*") == true
+        if (!canPaste && t.isEmpty()) return // nothing to offer: the caret and the keyboard stay
+        menu?.finish()
+        menu = startActionMode(object : ActionMode.Callback2() {
+            override fun onCreateActionMode(mode: ActionMode, items: Menu): Boolean {
+                if (canPaste) items.add(Menu.NONE, android.R.id.paste, 0, android.R.string.paste)
+                if (t.isNotEmpty()) items.add(Menu.NONE, android.R.id.selectAll, 1, android.R.string.selectAll)
+                return true
+            }
+
+            override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = false
+
+            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+                when (item.itemId) {
+                    android.R.id.paste -> { mode.finish(); onTextContextMenuItem(android.R.id.paste) }
+                    android.R.id.selectAll -> { mode.finish(); selectAllWithHandles() }
+                }
+                return true
+            }
+
+            override fun onDestroyActionMode(mode: ActionMode) { if (menu === mode) menu = null }
+
+            override fun onGetContentRect(mode: ActionMode, view: View, outRect: Rect) {
+                val c = caretRect() ?: return super.onGetContentRect(mode, view, outRect)
+                outRect.set((c.left - scrollX).toInt(), (c.top - scrollY).toInt(), (c.right - scrollX).toInt() + 1, (c.bottom - scrollY).toInt())
+            }
+        }, ActionMode.TYPE_FLOATING)
+    }
+
+    /** `onTextContextMenuItem(selectAll)` only paints the highlight; the accessibility action makes TextView start its own selection mode (handles, Copy). */
+    private fun selectAllWithHandles() {
+        performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, text?.length ?: 0)
+        })
     }
 
     /** The table paragraph whose line is at [y] (view coordinates), else `null`. */
@@ -1053,6 +1179,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     override fun onSelectionChanged(selStart: Int, selEnd: Int) {
         super.onSelectionChanged(selStart, selEnd)
         if (!ready) return // the TextView constructor gets here before this class is built
+        menu?.finish()
         updateHighlight(selStart, selEnd)
         typing.onSelectionChanged(selStart, selEnd)
         trackSelectedObject(selStart, selEnd)
@@ -1063,6 +1190,11 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         }
         notifyFormatState()
         restartBlink()
+    }
+
+    override fun onScrollChanged(horiz: Int, vert: Int, oldHoriz: Int, oldVert: Int) {
+        super.onScrollChanged(horiz, vert, oldHoriz, oldVert)
+        menu?.invalidateContentRect() // the caret moved under the menu: the IME scrolled to it, or a drag after the long press
     }
 
     override fun onFocusChanged(focused: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
@@ -1076,6 +1208,7 @@ class TesseraEditText(context: Context, style: EditorStyle) :
     }
 
     override fun onDetachedFromWindow() {
+        menu?.finish()
         stopFling()
         emitHandler.removeCallbacks(blink)
         super.onDetachedFromWindow()
@@ -1085,11 +1218,11 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     /**
      * The platform caret is as tall as the line, and a line carries the margin of its block (quote padding, the gap above a heading, the
-     * padding of a list item) in its height. A caret that draws nothing stays in its place, so the insertion handle (it needs a visible cursor)
-     * keeps working; before API 29 there is no hook for that and the cursor is hidden whole.
+     * padding of a list item) in its height, so the editor draws its own. A cursor that is not visible has no insertion handle (the drop under
+     * the caret) either: the platform editor turns that controller off with it. Selection handles do not depend on it.
      */
     private fun hidePlatformCaret() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) textCursorDrawable = NoCaret else isCursorVisible = false
+        isCursorVisible = false
     }
 
     private fun caretShown() = ready && !disposed && editable && isFocused && selectionStart >= 0 && selectionStart == selectionEnd
@@ -1181,14 +1314,6 @@ class TesseraEditText(context: Context, style: EditorStyle) :
         return ImageSelection(s, (span.block as NoteBlock.Image).src, rect)
     }
 
-    private object NoCaret : Drawable() {
-        override fun draw(canvas: Canvas) = Unit
-        override fun setAlpha(alpha: Int) = Unit
-        override fun setColorFilter(colorFilter: ColorFilter?) = Unit
-        @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.TRANSPARENT
-        override fun getIntrinsicWidth() = 0
-    }
-
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         if (ready) applyObjectWidth() // also when only the padding changed
@@ -1238,15 +1363,10 @@ class TesseraEditText(context: Context, style: EditorStyle) :
 
     /**
      * `true` while a cell of a table (the host's overlay) has the focus: the editor shows no handle of its own (the caret of the text is parked on the
-     * table's paragraph, and its drop would show over the keyboard). A cursor that is not visible has no handles; the caret itself is drawn by the
-     * editor, never by the platform.
+     * table's paragraph). The platform cursor is hidden always ([hidePlatformCaret]), so there is no insertion handle to hide; the caret itself is drawn
+     * by the editor, never by the platform.
      */
     var handlesHidden: Boolean = false
-        set(value) {
-            if (field == value) return
-            field = value
-            isCursorVisible = !value && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
-        }
 
     /**
      * A command that changes how a paragraph looks (a heading turned off, a list item made a quote) changes its height and the margins of its
