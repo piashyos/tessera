@@ -305,6 +305,8 @@ internal class NoteBodyActions(private val editor: TesseraEditText, private val 
     override fun formatState(): FormatState = editor.formatState()
 
     override fun flushPendingEdit() { commitCells(); editor.flushPendingEdit() }
+
+    override fun dismissTextMenu() = editor.dismissTextMenu()
 }
 
 /**

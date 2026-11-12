@@ -79,6 +79,9 @@ interface RichBodyActions {
     /** Hand over an edit the editor still holds back (its debounce) to the host now. */
     fun flushPendingEdit() {}
 
+    /** Take down the editor's own floating menu (Paste / Select all): it is a window above the screen's modal layers. */
+    fun dismissTextMenu() {}
+
     /** What the format bar shows at the caret. */
     fun formatState(): FormatState = FormatState.Empty
 }

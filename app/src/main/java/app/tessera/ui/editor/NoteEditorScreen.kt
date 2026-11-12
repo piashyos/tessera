@@ -26,8 +26,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -50,6 +50,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -191,6 +192,7 @@ fun NoteEditorScreen(
     val hazeState = remember { HazeState() }
     var tagPickerVisible by remember { mutableStateOf(false) }
     var overflowVisible by remember { mutableStateOf(false) }
+    var formatMenuExpanded by remember { mutableStateOf(false) } // the ⋯ sheet; the bar's ⋯ button toggles it
     var leaveConfirmVisible by remember { mutableStateOf(false) }
     var deleteForAllConfirmVisible by remember { mutableStateOf(false) }
     var unshareConfirmVisible by remember { mutableStateOf(false) }
@@ -199,6 +201,13 @@ fun NoteEditorScreen(
     val imeVisible = WindowInsets.isImeVisible
     val density = androidx.compose.ui.platform.LocalDensity.current
     var barExtentPx by remember { androidx.compose.runtime.mutableIntStateOf(0) } // the floating format bar with its margins
+
+    val tableBarShown = nativeTableBar != null
+    LaunchedEffect(imeVisible, tableBarShown, state.isReadOnly, formatMenuExpanded) {
+        if (!imeVisible || tableBarShown || state.isReadOnly) formatMenuExpanded = false
+    }
+    // Any button of the bar but ⋯ does its job and closes the sheet.
+    val barActions = remember(actions) { actions?.closing { formatMenuExpanded = false } }
 
     // After the VM stores an image and emits its id, splice the span at the editor caret. Reading
     // `actions` inside the collector picks up the live editor action object once it's ready.
@@ -225,293 +234,291 @@ fun NoteEditorScreen(
     }
 
     Box(modifier = modifier.fillMaxSize().testTag(UiTestTags.EditorRoot)) {
-        Scaffold(
-            // Transparent so the app-wide background + film grain shows through the editor.
-            containerColor = Color.Transparent,
-            topBar = {
-                TesseraTopBar(
-                    title = {},
-                    navigationIcon = {
-                        TesseraTopBarIconButton(
-                            onClick = { haptics.tick(); handOverEdit(); onBack() },
-                            contentDescription = stringResource(R.string.editor_back),
-                            modifier = Modifier.testTag(UiTestTags.EditorBack),
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    },
-                    actions = {
-                        // Each action is wrapped in a stable `key` so that when one button toggles
-                        // (e.g. share state resolves and the delete button appears/disappears) Compose
-                        // keeps every other button's node identity instead of positionally reusing a
-                        // removed slot — which otherwise briefly morphs the overflow icon into the
-                        // trash icon on each recomposition while typing.
-                        // Pinning is a content edit — viewers can't pin.
-                        key("editor-action-pin") {
-                            if (state.canEditContent) {
-                                TesseraTopBarIconButton(
-                                    onClick = { haptics.tick(); onTogglePin() },
-                                    contentDescription = stringResource(
-                                        if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
-                                    ),
-                                    modifier = Modifier.testTag(UiTestTags.EditorPin),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.PushPin,
-                                        contentDescription = null,
-                                        tint = if (state.isPinned) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-                        }
-                        // Trash deletes a private note directly. For shared notes, deletion is
-                        // "delete for everyone" and lives in the overflow menu (owner/manager only).
-                        key("editor-action-delete") {
-                            if (!state.isShared) {
-                                TesseraTopBarIconButton(
-                                    onClick = { haptics.tick(); handOverEdit(); onDelete() },
-                                    contentDescription = stringResource(R.string.editor_delete),
-                                    modifier = Modifier.testTag(UiTestTags.EditorDelete),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Delete,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-                        }
-                        val hasOverflow = state.canMakeShared || state.canManageAccess ||
-                            state.canUnshare || state.canLeave || state.canDeleteForAll
-                        key("editor-action-overflow") {
-                            if (hasOverflow) {
-                                Box {
-                                TesseraTopBarIconButton(
-                                    onClick = { haptics.tick(); overflowVisible = true },
-                                    contentDescription = stringResource(R.string.editor_more),
-                                    modifier = Modifier.testTag(UiTestTags.EditorOverflow),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.MoreVert,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                                DropdownMenu(
-                                    expanded = overflowVisible,
-                                    onDismissRequest = { overflowVisible = false },
-                                ) {
-                                    if (state.canMakeShared) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.editor_make_shared)) },
-                                            leadingIcon = { Icon(Icons.Rounded.Group, contentDescription = null) },
-                                            onClick = { overflowVisible = false; onMakeShared() },
-                                        )
-                                    }
-                                    if (state.canManageAccess) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.editor_manage_access)) },
-                                            leadingIcon = { Icon(Icons.Rounded.Group, contentDescription = null) },
-                                            onClick = { overflowVisible = false; onManageAccess() },
-                                        )
-                                    }
-                                    if (state.canUnshare) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.editor_make_private)) },
-                                            leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
-                                            onClick = {
-                                                overflowVisible = false
-                                                unshareConfirmVisible = true
-                                            },
-                                        )
-                                    }
-                                    if (state.canLeave) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.editor_leave)) },
-                                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null) },
-                                            onClick = { overflowVisible = false; leaveConfirmVisible = true },
-                                        )
-                                    }
-                                    if (state.canDeleteForAll) {
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    stringResource(R.string.editor_delete_for_all),
-                                                    color = MaterialTheme.colorScheme.error,
-                                                )
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Rounded.Delete,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.error,
-                                                )
-                                            },
-                                            onClick = {
-                                                overflowVisible = false
-                                                deleteForAllConfirmVisible = true
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                            }
-                        }
-                    },
-                )
-            },
-            bottomBar = {
-                AnimatedVisibility(
-                    visible = imeVisible && !state.isReadOnly,
-                    enter = slideInVertically(
-                        animationSpec = tween(TesseraMotion.DurShort4Ms, easing = TesseraMotion.EaseDecelerate),
-                    ) { it },
-                    exit = slideOutVertically(
-                        animationSpec = tween(150, easing = TesseraMotion.EaseStandard),
-                    ) { it },
-                ) {
-                    // Floating pill toolbar above the keyboard (M3 expressive
-                    // HorizontalFloatingToolbar shape language) instead of a full-width bar.
-                    // The ⋯ block-format panel expands INLINE right above the pill (8dp apart),
-                    // visually attached to it instead of a floating DropdownMenu popup.
-                    // With the caret inside a TABLE cell the pill swaps to the contextual
-                    // TableActionsBar (Docs/OneNote mobile pattern).
-                    var formatMenuExpanded by remember { mutableStateOf(false) }
-                    androidx.compose.foundation.layout.Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .imePadding()
-                            // the margins around the pill are part of the bar: a tap there must not reach the note under it (a checkbox, an image,
-                            // the caret). Handled in the FINAL pass, after the children are done with the event: the pill's own buttons
-                            // and its horizontally scrolling row (whose drag would otherwise arrive consumed) work as usual.
-                            // the margins around the pill are part of the bar: a tap there must not reach the note under it (a checkbox, an image,
-                            // the caret). Any pointer input on the node already takes the hit from the siblings below it; it must NOT consume the
-                            // events, a consumed DOWN makes the pill's horizontally scrolling row ignore the drag.
-                            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                    ) {
-                        val currentActions = actions
-                        // Box anchors the ⋯ block-format panel, which overlays ABOVE the pill as a
-                        // Popup (see MarkdownFormatMenu) rather than growing the bar and compressing
-                        // the editor body above it.
-                        Box(modifier = Modifier.onSizeChanged { barExtentPx = it.height + with(density) { 16.dp.roundToPx() } }) {
-                        val pillColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        Surface(
-                            color = Color.Transparent,
-                            contentColor = contentColorFor(pillColor),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                            // a shadow only outside the pill: under it the glass would show it as a grey fill
-                            modifier = Modifier.tesseraGlassShadow(TesseraElevation.Level2, androidx.compose.foundation.shape.RoundedCornerShape(28.dp)),
-                        ) {
-                            // inside the Surface, which clips to the pill
-                            Box(Modifier.tesseraGlass(hazeState, pillColor)) {
-                            val tableBar = nativeTableBar
-                            if (tableBar != null) {
-                                TableActionsBar(
-                                    canRemoveRow = tableBar.canRemoveRow,
-                                    canRemoveColumn = tableBar.canRemoveColumn,
-                                    canMoveUp = tableBar.canMoveUp,
-                                    canMoveDown = tableBar.canMoveDown,
-                                    onAddRow = tableBar.onAddRow,
-                                    onRemoveRow = tableBar.onRemoveRow,
-                                    onAddColumn = tableBar.onAddColumn,
-                                    onRemoveColumn = tableBar.onRemoveColumn,
-                                    onMoveUp = tableBar.onMoveUp,
-                                    onMoveDown = tableBar.onMoveDown,
-                                    onDeleteTable = tableBar.onDeleteTable,
-                                )
-                            } else {
-                                EditorFormatBar(
-                                    actions = actions,
-                                    menuExpanded = formatMenuExpanded,
-                                    onToggleMenu = { formatMenuExpanded = !formatMenuExpanded },
-                                    formatState = formatState,
+        // The blur source is the whole screen (top bar included); the glass bar and the sheet's backdrop are its siblings.
+        Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+            Scaffold(
+                // Transparent so the app-wide background + film grain shows through the editor.
+                containerColor = Color.Transparent,
+                topBar = {
+                    TesseraTopBar(
+                        title = {},
+                        navigationIcon = {
+                            TesseraTopBarIconButton(
+                                onClick = { haptics.tick(); handOverEdit(); onBack() },
+                                contentDescription = stringResource(R.string.editor_back),
+                                modifier = Modifier.testTag(UiTestTags.EditorBack),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
                                 )
                             }
+                        },
+                        actions = {
+                            // Each action is wrapped in a stable `key` so that when one button toggles
+                            // (e.g. share state resolves and the delete button appears/disappears) Compose
+                            // keeps every other button's node identity instead of positionally reusing a
+                            // removed slot — which otherwise briefly morphs the overflow icon into the
+                            // trash icon on each recomposition while typing.
+                            // Pinning is a content edit — viewers can't pin.
+                            key("editor-action-pin") {
+                                if (state.canEditContent) {
+                                    TesseraTopBarIconButton(
+                                        onClick = { haptics.tick(); onTogglePin() },
+                                        contentDescription = stringResource(
+                                            if (state.isPinned) R.string.editor_unpin else R.string.editor_pin,
+                                        ),
+                                        modifier = Modifier.testTag(UiTestTags.EditorPin),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PushPin,
+                                            contentDescription = null,
+                                            tint = if (state.isPinned) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
                             }
-                        }
-                        if (currentActions != null && nativeTableBar == null) {
-                            MarkdownFormatMenu(
-                                expanded = formatMenuExpanded,
-                                actions = currentActions,
-                                onDismiss = { formatMenuExpanded = false },
-                                formatState = formatState,
-                            )
-                        }
-                        }
-                    }
-                }
-            },
-        ) { padding ->
-            // The note runs under the glass format bar (blurred through it): the Column takes back the part of the bar's height
-            // that is the bar itself; the keyboard's part still resizes it.
-            // Without the keyboard the note runs under the transparent navigation bar the same way (the gesture strip): its height is the inset.
-            val navBarPx = WindowInsets.navigationBars.getBottom(density)
-            val columnInsetPx = if (imeVisible) (if (state.isReadOnly) 0 else barExtentPx) else navBarPx // the column reaches the screen edge
-            // Without the keyboard nothing is reserved inside the editor: the note scrolls to the very edge, under the gesture strip.
-            val barInsetPx = if (imeVisible && !state.isReadOnly) barExtentPx else 0
-            Column(
-                modifier = Modifier
-                    .padding(
-                        top = padding.calculateTopPadding(),
-                        bottom = (padding.calculateBottomPadding() - with(density) { columnInsetPx.toDp() }).coerceAtLeast(0.dp),
+                            // Trash deletes a private note directly. For shared notes, deletion is
+                            // "delete for everyone" and lives in the overflow menu (owner/manager only).
+                            key("editor-action-delete") {
+                                if (!state.isShared) {
+                                    TesseraTopBarIconButton(
+                                        onClick = { haptics.tick(); handOverEdit(); onDelete() },
+                                        contentDescription = stringResource(R.string.editor_delete),
+                                        modifier = Modifier.testTag(UiTestTags.EditorDelete),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                            }
+                            val hasOverflow = state.canMakeShared || state.canManageAccess ||
+                                state.canUnshare || state.canLeave || state.canDeleteForAll
+                            key("editor-action-overflow") {
+                                if (hasOverflow) {
+                                    Box {
+                                    TesseraTopBarIconButton(
+                                        onClick = { haptics.tick(); overflowVisible = true },
+                                        contentDescription = stringResource(R.string.editor_more),
+                                        modifier = Modifier.testTag(UiTestTags.EditorOverflow),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.MoreVert,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = overflowVisible,
+                                        onDismissRequest = { overflowVisible = false },
+                                    ) {
+                                        if (state.canMakeShared) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.editor_make_shared)) },
+                                                leadingIcon = { Icon(Icons.Rounded.Group, contentDescription = null) },
+                                                onClick = { overflowVisible = false; onMakeShared() },
+                                            )
+                                        }
+                                        if (state.canManageAccess) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.editor_manage_access)) },
+                                                leadingIcon = { Icon(Icons.Rounded.Group, contentDescription = null) },
+                                                onClick = { overflowVisible = false; onManageAccess() },
+                                            )
+                                        }
+                                        if (state.canUnshare) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.editor_make_private)) },
+                                                leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
+                                                onClick = {
+                                                    overflowVisible = false
+                                                    unshareConfirmVisible = true
+                                                },
+                                            )
+                                        }
+                                        if (state.canLeave) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.editor_leave)) },
+                                                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null) },
+                                                onClick = { overflowVisible = false; leaveConfirmVisible = true },
+                                            )
+                                        }
+                                        if (state.canDeleteForAll) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        stringResource(R.string.editor_delete_for_all),
+                                                        color = MaterialTheme.colorScheme.error,
+                                                    )
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Rounded.Delete,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                    )
+                                                },
+                                                onClick = {
+                                                    overflowVisible = false
+                                                    deleteForAllConfirmVisible = true
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                                }
+                            }
+                        },
                     )
-                    .fillMaxSize()
-                    .hazeSource(hazeState),
-            ) {
-                EditorMeta(
-                    folderBreadcrumb = state.folderBreadcrumb,
-                    relativeDate = if (state.updatedAt > 0L) noteDateLabel(state.updatedAt) else "",
+                },
+            ) { padding ->
+                // The note runs under the glass format bar (blurred through it): the bar is not in the Scaffold, so the Column keeps clear of the
+                // keyboard only. Without the keyboard it reaches the screen edge, under the gesture strip.
+                val barInsetPx = if (imeVisible && !state.isReadOnly) barExtentPx else 0
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                )
-                TagChipsExpandable(
-                    expanded = true,
-                    tags = state.tags,
-                    onRemoveTag = onRemoveTag,
-                    onAddTagClick = { tagPickerVisible = true },
-                    modifier = Modifier
-                        .testTag(UiTestTags.EditorTagToggle)
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                )
-                Spacer(Modifier.height(8.dp))
-
-                // One editor for reading and editing: it fills the area and scrolls itself; tables and images are
-                // placeholders in it. Nothing is drawn before the note is loaded.
-                if (state.isLoading) {
-                    Box(Modifier.weight(1f).fillMaxWidth())
-                } else {
-                    NoteBody(
-                        markdown = state.content,
-                        onMarkdownChange = { markdown -> if (markdown != currentContent) currentOnContentChange(markdown) },
-                        onActionsReady = { actions = wrapActions(it) },
-                        onFormatStateChanged = { formatState = it },
-                        editable = !state.isReadOnly,
-                        onStopFlushed = onFlush,
-                        imageSource = imageSource,
-                        onImageCommitted = onImageCommitted,
-                        onTableBarChanged = { nativeTableBar = it },
-                        bottomInsetPx = barInsetPx,
+                        .padding(
+                            top = padding.calculateTopPadding(),
+                            bottom = if (imeVisible) with(density) { WindowInsets.ime.getBottom(density).toDp() } else 0.dp,
+                        )
+                        .fillMaxSize(),
+                ) {
+                    EditorMeta(
+                        folderBreadcrumb = state.folderBreadcrumb,
+                        relativeDate = if (state.updatedAt > 0L) noteDateLabel(state.updatedAt) else "",
                         modifier = Modifier
-                            .weight(1f)
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp),
                     )
+                    TagChipsExpandable(
+                        expanded = true,
+                        tags = state.tags,
+                        onRemoveTag = onRemoveTag,
+                        onAddTagClick = { actions?.dismissTextMenu(); tagPickerVisible = true },
+                        modifier = Modifier
+                            .testTag(UiTestTags.EditorTagToggle)
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    // One editor for reading and editing: it fills the area and scrolls itself; tables and images are
+                    // placeholders in it. Nothing is drawn before the note is loaded.
+                    if (state.isLoading) {
+                        Box(Modifier.weight(1f).fillMaxWidth())
+                    } else {
+                        NoteBody(
+                            markdown = state.content,
+                            onMarkdownChange = { markdown -> if (markdown != currentContent) currentOnContentChange(markdown) },
+                            onActionsReady = { actions = wrapActions(it) },
+                            onFormatStateChanged = { formatState = it },
+                            editable = !state.isReadOnly,
+                            onStopFlushed = onFlush,
+                            imageSource = imageSource,
+                            onImageCommitted = onImageCommitted,
+                            onTableBarChanged = { nativeTableBar = it },
+                            bottomInsetPx = barInsetPx,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        // The ⋯ block-format sheet: a modal over the note, under the format bar (§4.2).
+        val sheetActions = actions
+        if (sheetActions != null) {
+            MarkdownFormatMenu(
+                expanded = formatMenuExpanded && imeVisible && nativeTableBar == null && !state.isReadOnly,
+                actions = sheetActions,
+                onDismiss = { formatMenuExpanded = false },
+                hazeState = hazeState,
+                bottomInset = with(density) { barExtentPx.toDp() },
+                formatState = formatState,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = imeVisible && !state.isReadOnly,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(
+                animationSpec = tween(TesseraMotion.DurShort4Ms, easing = TesseraMotion.EaseDecelerate),
+            ) { it },
+            exit = slideOutVertically(
+                animationSpec = tween(150, easing = TesseraMotion.EaseStandard),
+            ) { it },
+        ) {
+            // Floating pill toolbar above the keyboard (M3 expressive
+            // HorizontalFloatingToolbar shape language) instead of a full-width bar.
+            // The ⋯ block-format sheet is a modal below this bar in z-order (MarkdownFormatMenu): the bar stays sharp and the ⋯ button closes it.
+            // With the caret inside a TABLE cell the pill swaps to the contextual
+            // TableActionsBar (Docs/OneNote mobile pattern).
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    // the margins around the pill are part of the bar: a tap there must not reach the note under it (a checkbox, an image,
+                    // the caret). Handled in the FINAL pass, after the children are done with the event: the pill's own buttons
+                    // and its horizontally scrolling row (whose drag would otherwise arrive consumed) work as usual.
+                    // the margins around the pill are part of the bar: a tap there must not reach the note under it (a checkbox, an image,
+                    // the caret). Any pointer input on the node already takes the hit from the siblings below it; it must NOT consume the
+                    // events, a consumed DOWN makes the pill's horizontally scrolling row ignore the drag.
+                    .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            ) {
+                // The size of the bar with its margins: the ⋯ sheet stands over it, the note keeps clear of it.
+                Box(modifier = Modifier.onSizeChanged { barExtentPx = it.height + with(density) { 16.dp.roundToPx() } }) {
+                val pillColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                Surface(
+                    color = Color.Transparent,
+                    contentColor = contentColorFor(pillColor),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                    // a shadow only outside the pill: under it the glass would show it as a grey fill
+                    modifier = Modifier.tesseraGlassShadow(TesseraElevation.Level2, androidx.compose.foundation.shape.RoundedCornerShape(28.dp)),
+                ) {
+                    // inside the Surface, which clips to the pill
+                    Box(Modifier.tesseraGlass(hazeState, pillColor)) {
+                    val tableBar = nativeTableBar
+                    if (tableBar != null) {
+                        TableActionsBar(
+                            canRemoveRow = tableBar.canRemoveRow,
+                            canRemoveColumn = tableBar.canRemoveColumn,
+                            canMoveUp = tableBar.canMoveUp,
+                            canMoveDown = tableBar.canMoveDown,
+                            onAddRow = tableBar.onAddRow,
+                            onRemoveRow = tableBar.onRemoveRow,
+                            onAddColumn = tableBar.onAddColumn,
+                            onRemoveColumn = tableBar.onRemoveColumn,
+                            onMoveUp = tableBar.onMoveUp,
+                            onMoveDown = tableBar.onMoveDown,
+                            onDeleteTable = tableBar.onDeleteTable,
+                        )
+                    } else {
+                        EditorFormatBar(
+                            actions = barActions,
+                            menuExpanded = formatMenuExpanded,
+                            onToggleMenu = { if (!formatMenuExpanded) actions?.dismissTextMenu(); formatMenuExpanded = !formatMenuExpanded },
+                            formatState = formatState,
+                        )
+                    }
+                    }
+                }
                 }
             }
         }
@@ -593,6 +600,34 @@ fun NoteEditorScreen(
                 },
             )
         }
+    }
+}
+
+/** [this] whose bar actions also call [close] (the ⋯ sheet closes on any button of the bar but ⋯; the editor's text menu goes down). */
+internal fun RichBodyActions.closing(close: () -> Unit): RichBodyActions {
+    val base = this
+    fun done() { base.dismissTextMenu(); close() } // the editor's floating menu is a window above the sheet: down with it too
+    return object : RichBodyActions by base {
+        override fun undo() { base.undo(); done() }
+        override fun redo() { base.redo(); done() }
+        override fun toggleTaskList() { base.toggleTaskList(); done() }
+        override fun toggleBulletList() { base.toggleBulletList(); done() }
+        override fun toggleDashList() { base.toggleDashList(); done() }
+        override fun toggleOrderedList() { base.toggleOrderedList(); done() }
+        override fun toggleBold() { base.toggleBold(); done() }
+        override fun toggleItalic() { base.toggleItalic(); done() }
+        override fun toggleUnderline() { base.toggleUnderline(); done() }
+        override fun toggleStrikethrough() { base.toggleStrikethrough(); done() }
+        override fun toggleHeading1() { base.toggleHeading1(); done() }
+        override fun toggleHeading2() { base.toggleHeading2(); done() }
+        override fun indent() { base.indent(); done() }
+        override fun outdent() { base.outdent(); done() }
+        override fun toggleQuote() { base.toggleQuote(); done() }
+        override fun toggleCode() { base.toggleCode(); done() }
+        override fun insertHorizontalRule() { base.insertHorizontalRule(); done() }
+        override fun insertTable() { base.insertTable(); done() }
+        override fun onInsertImage() { base.onInsertImage(); done() }
+        override fun onCaptureImage() { base.onCaptureImage(); done() }
     }
 }
 

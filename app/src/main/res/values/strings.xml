@@ -263,6 +263,7 @@
     <string name="image_rotate_button_description">Rotate image 90 degrees</string>
 
     <!-- Native editor (beta) -->
+    <string name="editor_style_menu_title">Paragraph style</string>
     <string name="editor_style_title">Title</string>
     <string name="editor_style_heading">Heading</string>
     <string name="editor_style_subheading">Subheading</string>

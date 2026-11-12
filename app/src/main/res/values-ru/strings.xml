@@ -270,6 +270,7 @@
     <string name="image_rotate_button_description">Повернуть изображение на 90 градусов</string>
 
     <!-- Native editor (beta) -->
+    <string name="editor_style_menu_title">Стиль абзаца</string>
     <string name="editor_style_title">Название</string>
     <string name="editor_style_heading">Заголовок</string>
     <string name="editor_style_subheading">Подзаголовок</string>

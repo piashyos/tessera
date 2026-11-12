@@ -172,6 +172,8 @@ class EditorFormatBarNativeTest {
                     expanded = true,
                     actions = Recording(),
                     onDismiss = {},
+                    hazeState = dev.chrisbanes.haze.HazeState(),
+                    bottomInset = 80.dp,
                     formatState = FormatState.Empty,
                 )
             }
@@ -191,6 +193,8 @@ class EditorFormatBarNativeTest {
                     expanded = true,
                     actions = actions,
                     onDismiss = { dismissed++ },
+                    hazeState = dev.chrisbanes.haze.HazeState(),
+                    bottomInset = 80.dp,
                     formatState = FormatState.Empty,
                 )
             }

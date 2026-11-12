@@ -1,14 +1,18 @@
 package app.tessera.ui.editor.components
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import app.tessera.core.text.notedoc.ParagraphKind
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.ui.editor.engine.FormatState
 import app.tessera.ui.editor.engine.ParagraphFormat
+import dev.chrisbanes.haze.HazeState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -45,25 +49,48 @@ class MarkdownFormatMenuTest {
         override fun focusBody() = Unit
     }
 
-    @Test fun `panel shows the paragraph kinds and dispatches the right callback`() {
-        var dismissed = false
-        composeRule.setContent {
-            TesseraTheme(darkTheme = false, dynamicColor = false) {
-                MarkdownFormatMenu(
-                    expanded = true,
-                    actions = fakeActions,
-                    onDismiss = { dismissed = true },
-                    formatState = FormatState(paragraph = ParagraphFormat.Single(ParagraphKind.Title)),
-                )
-            }
+    private fun setMenu(
+        formatState: FormatState = FormatState.Empty,
+        expanded: Boolean = true,
+        onDismiss: () -> Unit = {},
+    ) = composeRule.setContent {
+        TesseraTheme(darkTheme = false, dynamicColor = false) {
+            MarkdownFormatMenu(
+                expanded = expanded,
+                actions = fakeActions,
+                onDismiss = onDismiss,
+                hazeState = HazeState(),
+                bottomInset = 80.dp,
+                formatState = formatState,
+            )
         }
+    }
 
+    @Test fun `the sheet shows its title and the six paragraph kinds`() {
+        setMenu()
+        composeRule.onNodeWithText("Paragraph style").assertIsDisplayed()
         listOf("Title", "Heading", "Subheading", "Body", "Monospaced", "Quote")
             .forEach { composeRule.onNodeWithText(it).performScrollTo().assertIsDisplayed() }
+    }
 
+    @Test fun `only the row of the caret paragraph is selected`() {
+        setMenu(FormatState(paragraph = ParagraphFormat.Single(ParagraphKind.Title)))
+        composeRule.onNodeWithText("Title").assertIsSelected()
+        listOf("Heading", "Subheading", "Body", "Monospaced", "Quote")
+            .forEach { composeRule.onNodeWithText(it).performScrollTo().assertIsNotSelected() }
+    }
+
+    @Test fun `a tap on a row runs its action and closes the sheet`() {
+        var dismissed = false
+        setMenu(onDismiss = { dismissed = true })
         composeRule.onNodeWithText("Subheading").performScrollTo().performClick()
         assertEquals(listOf("subheading"), calls)
         assertTrue(dismissed)
+    }
+
+    @Test fun `a collapsed menu shows nothing`() {
+        setMenu(expanded = false)
+        composeRule.onNodeWithText("Paragraph style").assertDoesNotExist()
     }
 
     @Test fun `the catalogue maps every entry to its paragraph kind`() {
