@@ -31,6 +31,7 @@ Resume in a new session by reading this file + the plan, then continuing with th
 |---|---|---|---|
 | Касания вне текста, ручка вставки, меню «⋯» | [plans/2026-11-11-editor-touch-and-format-sheet.md](plans/2026-11-11-editor-touch-and-format-sheet.md) | ✅ done (2026-11-11), ждёт коммита | спека `specs/2026-11-11-editor-touch-and-format-sheet-design.md`; QA `qa/editor-touch-and-format-sheet.md`; ветка `feature/editor-touch-and-format-sheet` (не закоммичено) |
 | Оформление тегов и папок | [plans/2026-11-11-tag-folder-appearance.md](plans/2026-11-11-tag-folder-appearance.md) | ✅ done (2026-11-12), ждёт коммита | спека `specs/2026-11-11-tag-folder-appearance-design.md`; QA `qa/tag-folder-appearance.md`; Room 7→8; правила Firestore — деплой пользователем |
+| Шапка редактора, свайп в модалках, размытие 28dp | [plans/2026-11-12-editor-header-and-popup-gestures.md](plans/2026-11-12-editor-header-and-popup-gestures.md) | ✅ done (2026-11-12), ждёт коммита | спека `specs/2026-11-12-editor-header-and-popup-gestures-design.md`; QA `qa/editor-header-and-popup-gestures-gestures.md`, `qa/editor-header-and-popup-gestures-design-diff.md`; ветка `feature/editor-header-and-popup-gestures` (не закоммичено) |
 
 Legend: ✅ done · ⏳ in progress · ⬜ pending · ⚠️ blocked
 
