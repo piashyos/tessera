@@ -197,6 +197,44 @@ class SettingsViewModelTest {
             assertEquals(1, scheduler.requestCount)
         }
 
+    @Test
+    fun `gradient and grain size defaults are reflected in state`() =
+        runTest(dispatcher.scheduler) {
+            val viewModel = createViewModel(
+                FakeAuthRepository(signInResult = Result.success(UserId("uid-new"))),
+                FakeAccountRepository(owner = null),
+            )
+
+            viewModel.state.test {
+                awaitItem()
+                advanceUntilIdle()
+                val current = viewModel.state.value
+                assertTrue(current.gradientEnabled)
+                assertEquals(1, current.grainSize)
+            }
+        }
+
+    @Test
+    fun `gradient and grain size setters reach preferences and state`() =
+        runTest(dispatcher.scheduler) {
+            val viewModel = createViewModel(
+                FakeAuthRepository(signInResult = Result.success(UserId("uid-new"))),
+                FakeAccountRepository(owner = null),
+            )
+
+            viewModel.state.test {
+                awaitItem()
+                advanceUntilIdle()
+
+                viewModel.setGradientEnabled(false)
+                viewModel.setGrainSize(3)
+                advanceUntilIdle()
+                val current = expectMostRecentItem()
+                assertFalse(current.gradientEnabled)
+                assertEquals(3, current.grainSize)
+            }
+        }
+
     private fun createViewModel(
         auth: AuthRepository,
         account: AccountRepository,
@@ -257,10 +295,16 @@ private class FakeUserPreferences : UserPreferences {
     override val cachedAmoled: Boolean get() = amoledFlow.value
     private val grainEnabledFlow = MutableStateFlow(true)
     private val grainIntensityFlow = MutableStateFlow(0.5f)
+    private val grainSizeFlow = MutableStateFlow(1)
+    private val gradientEnabledFlow = MutableStateFlow(true)
     override val grainEnabled: Flow<Boolean> get() = grainEnabledFlow
     override val cachedGrainEnabled: Boolean get() = grainEnabledFlow.value
     override val grainIntensity: Flow<Float> get() = grainIntensityFlow
     override val cachedGrainIntensity: Float get() = grainIntensityFlow.value
+    override val grainSize: Flow<Int> get() = grainSizeFlow
+    override val cachedGrainSize: Int get() = grainSizeFlow.value
+    override val gradientEnabled: Flow<Boolean> get() = gradientEnabledFlow
+    override val cachedGradientEnabled: Boolean get() = gradientEnabledFlow.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<app.tessera.ui.notes.NotesViewMode> get() = viewMode
     override val recentSearches: Flow<List<String>> get() = recent
@@ -290,6 +334,14 @@ private class FakeUserPreferences : UserPreferences {
 
     override suspend fun setGrainIntensity(intensity: Float) {
         grainIntensityFlow.value = intensity.coerceIn(0f, 1f)
+    }
+
+    override suspend fun setGrainSize(size: Int) {
+        grainSizeFlow.value = size.coerceIn(1, 4)
+    }
+
+    override suspend fun setGradientEnabled(enabled: Boolean) {
+        gradientEnabledFlow.value = enabled
     }
 
     override suspend fun setLanguageTag(tag: String) {

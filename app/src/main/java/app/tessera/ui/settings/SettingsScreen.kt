@@ -50,6 +50,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import app.tessera.R
 import app.tessera.core.preferences.ThemeMode
 import app.tessera.core.preferences.ThemePalette
@@ -74,6 +75,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Balance
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Gradient
 import androidx.compose.material.icons.rounded.Grain
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
@@ -100,6 +102,8 @@ fun SettingsScreen(
     onSetAmoled: (Boolean) -> Unit = {},
     onSetGrainEnabled: (Boolean) -> Unit = {},
     onSetGrainIntensity: (Float) -> Unit = {},
+    onSetGradientEnabled: (Boolean) -> Unit = {},
+    onSetGrainSize: (Int) -> Unit = {},
     onSelectLanguage: (String) -> Unit = {},
     onRetrySync: () -> Unit = {},
     onExport: (OutputStream) -> Unit = {},
@@ -215,10 +219,14 @@ fun SettingsScreen(
                     languageTag = state.languageTag,
                     grainEnabled = state.grainEnabled,
                     grainIntensity = state.grainIntensity,
+                    grainSize = state.grainSize,
+                    gradientEnabled = state.gradientEnabled,
                     onOpenThemeSheet = { showThemeSheet = true },
                     onOpenLanguageSheet = { showLanguageSheet = true },
                     onSetGrainEnabled = onSetGrainEnabled,
                     onSetGrainIntensity = onSetGrainIntensity,
+                    onSetGradientEnabled = onSetGradientEnabled,
+                    onSetGrainSize = onSetGrainSize,
                 )
             }
 
@@ -374,10 +382,14 @@ private fun AppearanceSection(
     languageTag: String,
     grainEnabled: Boolean,
     grainIntensity: Float,
+    grainSize: Int,
+    gradientEnabled: Boolean,
     onOpenThemeSheet: () -> Unit,
     onOpenLanguageSheet: () -> Unit,
     onSetGrainEnabled: (Boolean) -> Unit,
     onSetGrainIntensity: (Float) -> Unit,
+    onSetGradientEnabled: (Boolean) -> Unit,
+    onSetGrainSize: (Int) -> Unit,
 ) {
     SettingsGroup(label = stringResource(R.string.settings_section_appearance)) {
         SettingsRow(
@@ -395,6 +407,16 @@ private fun AppearanceSection(
         )
         SettingsDivider()
         SettingsRow(
+            leadingIcon = Icons.Rounded.Gradient,
+            title = stringResource(R.string.settings_gradient_title),
+            subtitle = stringResource(R.string.settings_gradient_subtitle),
+            onClick = { onSetGradientEnabled(!gradientEnabled) },
+            trailing = {
+                Switch(checked = gradientEnabled, onCheckedChange = onSetGradientEnabled)
+            },
+        )
+        SettingsDivider()
+        SettingsRow(
             leadingIcon = Icons.Rounded.Grain,
             title = stringResource(R.string.settings_grain_title),
             subtitle = stringResource(R.string.settings_grain_subtitle),
@@ -405,39 +427,51 @@ private fun AppearanceSection(
         )
         if (grainEnabled) {
             GrainIntensityRow(
-                intensity = grainIntensity,
-                onIntensityChange = onSetGrainIntensity,
+                label = stringResource(R.string.settings_grain_intensity),
+                value = grainIntensity,
+                onValueChange = onSetGrainIntensity,
+            )
+            GrainIntensityRow(
+                label = stringResource(R.string.settings_grain_size),
+                value = grainSize.toFloat(),
+                onValueChange = { onSetGrainSize(it.roundToInt()) },
+                valueRange = 1f..4f,
+                steps = 2,
             )
         }
     }
 }
 
 /**
- * Intensity slider for the film-grain overlay. Tracks the drag locally for a smooth thumb and only
+ * Labelled slider for the film-grain overlay (intensity, size). Tracks the drag locally for a smooth thumb and only
  * persists on release (via [Slider.onValueChangeFinished]) so it doesn't spam DataStore mid-drag.
- * Re-seeds from [intensity] when the persisted value changes elsewhere.
+ * Re-seeds from [value] when the persisted value changes elsewhere.
  */
 @Composable
 private fun GrainIntensityRow(
-    intensity: Float,
-    onIntensityChange: (Float) -> Unit,
+    label: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
 ) {
-    var sliderValue by remember(intensity) { mutableStateOf(intensity) }
+    var sliderValue by remember(value) { mutableStateOf(value) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = TesseraSpacing.lg, vertical = TesseraSpacing.sm),
     ) {
         Text(
-            text = stringResource(R.string.settings_grain_intensity),
+            text = label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Slider(
             value = sliderValue,
             onValueChange = { sliderValue = it },
-            onValueChangeFinished = { onIntensityChange(sliderValue) },
-            valueRange = 0f..1f,
+            onValueChangeFinished = { onValueChange(sliderValue) },
+            valueRange = valueRange,
+            steps = steps,
         )
     }
 }

@@ -127,6 +127,9 @@
     <string name="settings_grain_title">Зернистость</string>
     <string name="settings_grain_subtitle">Лёгкая текстура шума на всех фонах</string>
     <string name="settings_grain_intensity">Интенсивность</string>
+    <string name="settings_grain_size">Размер зерна</string>
+    <string name="settings_gradient_title">Градиент фона</string>
+    <string name="settings_gradient_subtitle">Мягкие цвета, которые двигаются от касаний</string>
     <string name="settings_palette_section">Палитра акцента</string>
     <string name="settings_palette_warm">Тёплая</string>
     <string name="settings_palette_neutral">Нейтральная</string>

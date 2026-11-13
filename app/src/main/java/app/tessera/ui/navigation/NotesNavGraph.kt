@@ -171,6 +171,8 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
                 onSetAmoled = viewModel::setAmoled,
                 onSetGrainEnabled = viewModel::setGrainEnabled,
                 onSetGrainIntensity = viewModel::setGrainIntensity,
+                onSetGradientEnabled = viewModel::setGradientEnabled,
+                onSetGrainSize = viewModel::setGrainSize,
                 onSelectLanguage = viewModel::setLanguage,
                 onRetrySync = viewModel::onRetrySync,
                 onExport = viewModel::onExport,

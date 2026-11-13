@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.tessera.ui.notes.NotesViewMode
@@ -25,6 +26,8 @@ private val KEY_STYLE = stringPreferencesKey("theme_style")
 private val KEY_AMOLED = booleanPreferencesKey("theme_amoled")
 private val KEY_GRAIN_ENABLED = booleanPreferencesKey("grain_enabled")
 private val KEY_GRAIN_INTENSITY = floatPreferencesKey("grain_intensity")
+private val KEY_GRAIN_SIZE = intPreferencesKey("grain_size")
+private val KEY_GRADIENT_ENABLED = booleanPreferencesKey("background_gradient_enabled")
 private val KEY_LANG = stringPreferencesKey("language_tag")
 private val KEY_VIEW_MODE = stringPreferencesKey("notes_view_mode")
 private val KEY_RECENT_SEARCHES = stringPreferencesKey("recent_searches")
@@ -35,6 +38,12 @@ private const val RECENT_SEARCHES_DELIMITER = "\n"
 /** Grain is on by default at a subtle mid strength, matching the Arc-style baseline. */
 private const val DEFAULT_GRAIN_ENABLED = true
 private const val DEFAULT_GRAIN_INTENSITY = 0.5f
+
+/** Grain size = noise pixels per grain; 1 is the original fine grain. */
+private const val DEFAULT_GRAIN_SIZE = 1
+private const val MIN_GRAIN_SIZE = 1
+private const val MAX_GRAIN_SIZE = 4
+private const val DEFAULT_GRADIENT_ENABLED = true
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
@@ -100,6 +109,22 @@ class UserPreferencesRepository @Inject constructor(
         (p[KEY_GRAIN_INTENSITY] ?: DEFAULT_GRAIN_INTENSITY).coerceIn(0f, 1f)
     }.onEach { lastGrainIntensity = it }
 
+    @Volatile
+    private var lastGrainSize: Int = DEFAULT_GRAIN_SIZE
+    override val cachedGrainSize: Int get() = lastGrainSize
+
+    @Volatile
+    private var lastGradientEnabled: Boolean = DEFAULT_GRADIENT_ENABLED
+    override val cachedGradientEnabled: Boolean get() = lastGradientEnabled
+
+    override val grainSize: Flow<Int> = store.data.map { p ->
+        (p[KEY_GRAIN_SIZE] ?: DEFAULT_GRAIN_SIZE).coerceIn(MIN_GRAIN_SIZE, MAX_GRAIN_SIZE)
+    }.onEach { lastGrainSize = it }
+
+    override val gradientEnabled: Flow<Boolean> = store.data.map { p ->
+        p[KEY_GRADIENT_ENABLED] ?: DEFAULT_GRADIENT_ENABLED
+    }.onEach { lastGradientEnabled = it }
+
     /** Empty string = follow system default. */
     override val languageTag: Flow<String> = store.data.map { it[KEY_LANG] ?: "" }
 
@@ -140,6 +165,14 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun setGrainIntensity(intensity: Float) {
         store.edit { it[KEY_GRAIN_INTENSITY] = intensity.coerceIn(0f, 1f) }
+    }
+
+    override suspend fun setGrainSize(size: Int) {
+        store.edit { it[KEY_GRAIN_SIZE] = size.coerceIn(MIN_GRAIN_SIZE, MAX_GRAIN_SIZE) }
+    }
+
+    override suspend fun setGradientEnabled(enabled: Boolean) {
+        store.edit { it[KEY_GRADIENT_ENABLED] = enabled }
     }
 
     override suspend fun setLanguageTag(tag: String) {

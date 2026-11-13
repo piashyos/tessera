@@ -53,6 +53,18 @@ interface UserPreferences {
     /** Synchronously-readable last [grainIntensity] value, used to seed the UI on (re)creation. */
     val cachedGrainIntensity: Float
 
+    /** Film-grain size in 1..4 — how many noise pixels make up one grain; only applies while [grainEnabled]. */
+    val grainSize: Flow<Int>
+
+    /** Synchronously-readable last [grainSize] value, used to seed the UI on (re)creation. */
+    val cachedGrainSize: Int
+
+    /** Whether the soft touch-reactive gradient is painted behind the app content. */
+    val gradientEnabled: Flow<Boolean>
+
+    /** Synchronously-readable last [gradientEnabled] value, used to seed the UI on (re)creation. */
+    val cachedGradientEnabled: Boolean
+
     val languageTag: Flow<String>
     val notesViewMode: Flow<NotesViewMode>
 
@@ -68,6 +80,10 @@ interface UserPreferences {
 
     /** Persists [intensity], clamped to 0f..1f. */
     suspend fun setGrainIntensity(intensity: Float)
+
+    /** Persists [size], clamped to 1..4. */
+    suspend fun setGrainSize(size: Int)
+    suspend fun setGradientEnabled(enabled: Boolean)
     suspend fun setLanguageTag(tag: String)
     suspend fun setNotesViewMode(mode: NotesViewMode)
 

@@ -16,6 +16,8 @@ class FakeUserPreferences : UserPreferences {
     private val amoledFlow = MutableStateFlow(false)
     private val grainEnabledFlow = MutableStateFlow(true)
     private val grainIntensityFlow = MutableStateFlow(0.5f)
+    private val grainSizeFlow = MutableStateFlow(1)
+    private val gradientEnabledFlow = MutableStateFlow(true)
     private val lang = MutableStateFlow("")
     private val viewMode = MutableStateFlow(NotesViewMode.List)
     private val recent = MutableStateFlow<List<String>>(emptyList())
@@ -34,6 +36,10 @@ class FakeUserPreferences : UserPreferences {
     override val cachedGrainEnabled: Boolean get() = grainEnabledFlow.value
     override val grainIntensity: Flow<Float> get() = grainIntensityFlow
     override val cachedGrainIntensity: Float get() = grainIntensityFlow.value
+    override val grainSize: Flow<Int> get() = grainSizeFlow
+    override val cachedGrainSize: Int get() = grainSizeFlow.value
+    override val gradientEnabled: Flow<Boolean> get() = gradientEnabledFlow
+    override val cachedGradientEnabled: Boolean get() = gradientEnabledFlow.value
     override val languageTag: Flow<String> get() = lang
     override val notesViewMode: Flow<NotesViewMode> get() = viewMode
     override val recentSearches: Flow<List<String>> get() = recent
@@ -64,6 +70,14 @@ class FakeUserPreferences : UserPreferences {
 
     override suspend fun setGrainIntensity(intensity: Float) {
         grainIntensityFlow.value = intensity.coerceIn(0f, 1f)
+    }
+
+    override suspend fun setGrainSize(size: Int) {
+        grainSizeFlow.value = size.coerceIn(1, 4)
+    }
+
+    override suspend fun setGradientEnabled(enabled: Boolean) {
+        gradientEnabledFlow.value = enabled
     }
 
     override suspend fun setLanguageTag(tag: String) {

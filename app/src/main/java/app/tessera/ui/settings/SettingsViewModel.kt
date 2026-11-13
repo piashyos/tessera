@@ -57,10 +57,12 @@ class SettingsViewModel @Inject constructor(
         val amoled: Boolean,
         val grainEnabled: Boolean,
         val grainIntensity: Float,
+        val grainSize: Int,
+        val gradientEnabled: Boolean,
     )
 
-    // The 5-arg color prefs + the 2 grain prefs = 7 flows; nest a 5-way combine inside a 3-way one
-    // to stay within combine's typed arity while keeping it fully type-safe.
+    // The 5-arg color prefs + grain, intensity, size and gradient = 9 flows; nest a 5-way combine
+    // inside another 5-way one to stay within combine's typed arity while keeping it type-safe.
     private val themePrefs =
         combine(
             combine(
@@ -70,12 +72,22 @@ class SettingsViewModel @Inject constructor(
                 userPreferences.themeStyle,
                 userPreferences.amoled,
             ) { mode, dynamic, palette, style, amoled ->
-                ThemePrefs(mode, dynamic, palette, style, amoled, grainEnabled = true, grainIntensity = 0.5f)
+                ThemePrefs(
+                    mode, dynamic, palette, style, amoled,
+                    grainEnabled = true, grainIntensity = 0.5f, grainSize = 1, gradientEnabled = true,
+                )
             },
             userPreferences.grainEnabled,
             userPreferences.grainIntensity,
-        ) { base, grainEnabled, grainIntensity ->
-            base.copy(grainEnabled = grainEnabled, grainIntensity = grainIntensity)
+            userPreferences.grainSize,
+            userPreferences.gradientEnabled,
+        ) { base, grainEnabled, grainIntensity, grainSize, gradientEnabled ->
+            base.copy(
+                grainEnabled = grainEnabled,
+                grainIntensity = grainIntensity,
+                grainSize = grainSize,
+                gradientEnabled = gradientEnabled,
+            )
         }
 
     // languageTag + trash size — grouped for the same arity reason as themePrefs.
@@ -107,6 +119,8 @@ class SettingsViewModel @Inject constructor(
                 amoled = theme.amoled,
                 grainEnabled = theme.grainEnabled,
                 grainIntensity = theme.grainIntensity,
+                grainSize = theme.grainSize,
+                gradientEnabled = theme.gradientEnabled,
                 languageTag = langTrash.first,
                 trashCount = langTrash.second,
                 syncStatus = sync,
@@ -143,6 +157,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setGrainIntensity(intensity: Float) {
         viewModelScope.launch { userPreferences.setGrainIntensity(intensity) }
+    }
+
+    fun setGradientEnabled(enabled: Boolean) {
+        viewModelScope.launch { userPreferences.setGradientEnabled(enabled) }
+    }
+
+    fun setGrainSize(size: Int) {
+        viewModelScope.launch { userPreferences.setGrainSize(size) }
     }
 
     fun setLanguage(tag: String) {

@@ -126,6 +126,9 @@
     <string name="settings_grain_title">Film grain</string>
     <string name="settings_grain_subtitle">Subtle noise texture over every background</string>
     <string name="settings_grain_intensity">Intensity</string>
+    <string name="settings_grain_size">Grain size</string>
+    <string name="settings_gradient_title">Background gradient</string>
+    <string name="settings_gradient_subtitle">Soft colors that move with your touch</string>
     <string name="settings_palette_section">Accent palette</string>
     <string name="settings_palette_warm">Warm</string>
     <string name="settings_palette_neutral">Neutral</string>
