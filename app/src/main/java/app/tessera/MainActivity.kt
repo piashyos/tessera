@@ -101,6 +101,18 @@ class MainActivity : ComponentActivity() {
             ) {
                 userPreferences.grainIntensity.collect { value = it }
             }
+            val grainSize by produceState(
+                initialValue = userPreferences.cachedGrainSize,
+                userPreferences,
+            ) {
+                userPreferences.grainSize.collect { value = it }
+            }
+            val gradientEnabled by produceState(
+                initialValue = userPreferences.cachedGradientEnabled,
+                userPreferences,
+            ) {
+                userPreferences.gradientEnabled.collect { value = it }
+            }
 
             val context = LocalContext.current
             LaunchedEffect(languageTag) {
@@ -144,7 +156,13 @@ class MainActivity : ComponentActivity() {
                 style = themeStyle,
                 amoled = amoled,
             ) {
-                GrainOverlay(enabled = grainEnabled, intensity = grainIntensity) {
+                GrainOverlay(
+                    enabled = grainEnabled,
+                    intensity = grainIntensity,
+                    grainSize = grainSize,
+                    // AMOLED black stays pure: no gradient behind it.
+                    gradientEnabled = gradientEnabled && !(amoled && resolvedDark),
+                ) {
                     TesseraApp()
                 }
             }
