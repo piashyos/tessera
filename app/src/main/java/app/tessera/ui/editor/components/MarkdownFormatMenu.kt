@@ -1,6 +1,7 @@
 package app.tessera.ui.editor.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -81,33 +82,36 @@ fun MarkdownFormatMenu(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
         )
-        formatMenuEntries(actions).forEach { entry ->
-            val active = formatState.paragraph == ParagraphFormat.Single(entry.kind)
-            Surface(
-                onClick = { entry.onClick(); onDismiss() },
-                color = if (active) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().semantics { selected = active },
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.md),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = TesseraSpacing.md, vertical = TesseraSpacing.md),
+        // The rows touch each other (no popup gap between them): each stays a 48 dp touch target.
+        Column {
+            formatMenuEntries(actions).forEach { entry ->
+                val active = formatState.paragraph == ParagraphFormat.Single(entry.kind)
+                Surface(
+                    onClick = { entry.onClick(); onDismiss() },
+                    color = if (active) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().semantics { selected = active },
                 ) {
-                    Icon(
-                        imageVector = entry.icon,
-                        contentDescription = null,
-                        tint = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        text = stringResource(entry.labelRes),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
-                        color = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.md),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = TesseraSpacing.md, vertical = TesseraSpacing.md),
+                    ) {
+                        Icon(
+                            imageVector = entry.icon,
+                            contentDescription = null,
+                            tint = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = stringResource(entry.labelRes),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
+                            color = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }
