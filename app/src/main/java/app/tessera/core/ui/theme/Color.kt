@@ -380,7 +380,7 @@ object TesseraSageDark : TesseraBrandColors {
 const val GlassTintAlpha = 0.48f
 
 /** Blur of a Haze backdrop. Haze has no default radius: nothing is blurred without one. */
-val GlassBlurRadius = 16.dp
+val GlassBlurRadius = 28.dp
 
 val CapsuleBorder            = Color.White.copy(alpha = 0.20f)
 val CapsuleTintLight         = Color.White.copy(alpha = 0.65f)
