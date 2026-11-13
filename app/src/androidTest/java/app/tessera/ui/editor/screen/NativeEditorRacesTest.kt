@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.pm.ActivityInfo
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -206,8 +207,17 @@ class NativeEditorRacesTest : NativeAppTest() {
         app.seed("qa-del-1", "Delete\nme", BASE)
         val e = app.open("qa-del-1")
         app.ui { e.setSelection(e.text!!.length) }
-        app.ime(e) { commitText("Z", 1) } // pending in the editor when the trash is tapped
-        compose.onNodeWithTag(UiTestTags.EditorDelete).performClick()
+        // The trash is the last item of the "⋯" menu now (spec §2.5): the menu opens first. A tap through the test rule waits for the
+        // app to idle (~0.4 s here, past the editor's 300 ms emit), so the item is pressed by its own click action right after the key,
+        // as an IME committing its word when the menu takes the focus would leave it.
+        compose.onNodeWithTag(UiTestTags.EditorOverflow).performClick()
+        val deleteItem = compose.onNodeWithTag(UiTestTags.EditorDelete).fetchSemanticsNode()
+        val keyAt = SystemClock.uptimeMillis()
+        app.ime(e) { commitText("Z", 1) } // pending in the editor when "Delete note" is pressed
+        app.ui { deleteItem.config[SemanticsActions.OnClick].action!!.invoke() }
+        val keyToDeleteMs = SystemClock.uptimeMillis() - keyAt
+        android.util.Log.i("NativeEditorRacesTest", "delete $keyToDeleteMs ms after the key")
+        assertTrue("the delete came $keyToDeleteMs ms after the key, past the editor's 300 ms emit: no race", keyToDeleteMs < 300)
         compose.waitUntil(15_000) { app.editorOrNull() == null }
         app.settle(2_000) // the editor's last emit and the screen's autosave would land here
         val after = app.entity("qa-del-1")

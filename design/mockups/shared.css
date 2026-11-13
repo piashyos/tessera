@@ -499,15 +499,23 @@ body.standalone {
 }
 
 /* ---------- Editor specifics ---------- */
-.editor-meta {
-  padding: 4px 16px 8px;
-  display: flex; align-items: center; gap: 10px;
-  font: 400 11px/15px var(--font-sans);
-  color: var(--on-surface-variant);
+/* Editor bar: the title is centred on the whole bar (iOS), folder path over the date */
+.top-bar.centered { position: relative; }
+.top-bar.centered .center-title {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  max-width: calc(100% - 224px); /* both sides keep the room of the wider button group (16 + 36 + 12 + 36 + 12) */
+  text-align: center; pointer-events: none;
 }
-.editor-meta .crumb { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-.editor-meta .crumb b { font-weight: 500; color: var(--on-surface-variant); }
-.editor-meta .date { margin-left: auto; }
+.top-bar.centered .center-title .title {
+  font: 500 var(--title-small);
+  color: var(--on-surface);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.top-bar.centered .center-title .subtitle {
+  font: 400 var(--body-small);
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
 .editor-divider { height: 1px; background: var(--outline-variant); margin: 8px 16px; }
 .editor-body { padding: 0 20px 200px; flex: 1; overflow-y: auto; }
 .editor-h1 {

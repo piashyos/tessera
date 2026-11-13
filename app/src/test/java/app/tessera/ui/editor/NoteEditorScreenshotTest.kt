@@ -116,8 +116,13 @@ class NoteEditorScreenshotTest {
     }
 }
 
+// Noon UTC of a past year: the label is "12 Jun 2024" whatever "today" and the time zone (±11 h) are.
+private val headerDate = java.time.Instant.parse("2024-06-12T12:00:00Z").toEpochMilli()
+
 private fun contentState() =
     NoteEditorState(
+        folderBreadcrumb = listOf("Work", "Projects"),
+        updatedAt = headerDate,
         content = "Material You redesign\n\nFinal QA pass for the Tessera editor surface.",
         tags = listOf("android", "compose"),
         isPinned = true,
@@ -136,6 +141,9 @@ private fun emptyState() =
 
 private fun imageState() =
     NoteEditorState(
+        // three levels: the path loses its start ("… › Lisbon 2026") and stays clear of the buttons
+        folderBreadcrumb = listOf("Personal", "Travel plans and ideas", "Lisbon 2026"),
+        updatedAt = headerDate,
         content = "Trip photos\n\n![](tessera-img://demo-1)\n\nSunset over the bay.",
         tags = listOf("travel"),
         isPinned = false,

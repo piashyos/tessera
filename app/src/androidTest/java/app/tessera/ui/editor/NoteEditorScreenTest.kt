@@ -68,6 +68,8 @@ class NoteEditorScreenTest {
             )
         }
 
+        // The trash is no longer on the bar: deleting is the last item of the "⋯" menu (spec §2.5).
+        composeRule.onNodeWithTag(UiTestTags.EditorOverflow).performClick()
         composeRule.onNodeWithTag(UiTestTags.EditorDelete).performClick()
 
         assertTrue(deleteInvoked)

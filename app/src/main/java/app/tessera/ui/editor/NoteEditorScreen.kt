@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -83,17 +84,18 @@ import app.tessera.ui.editor.components.TableBarState
 import app.tessera.ui.editor.components.TagChipsExpandable
 import app.tessera.ui.editor.components.TagPickerPopup
 import app.tessera.ui.notes.noteDateLabel
+import com.composables.icons.lucide.ChevronLeft
+import com.composables.icons.lucide.Lucide
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PushPin
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -241,7 +243,13 @@ fun NoteEditorScreen(
                 containerColor = Color.Transparent,
                 topBar = {
                     TesseraTopBar(
-                        title = {},
+                        centerTitle = true,
+                        title = {
+                            EditorMeta(
+                                folderBreadcrumb = state.folderBreadcrumb,
+                                relativeDate = if (state.updatedAt > 0L) noteDateLabel(state.updatedAt) else "",
+                            )
+                        },
                         navigationIcon = {
                             TesseraTopBarIconButton(
                                 onClick = { haptics.tick(); handOverEdit(); onBack() },
@@ -249,7 +257,7 @@ fun NoteEditorScreen(
                                 modifier = Modifier.testTag(UiTestTags.EditorBack),
                             ) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    imageVector = Lucide.ChevronLeft,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp),
@@ -258,10 +266,8 @@ fun NoteEditorScreen(
                         },
                         actions = {
                             // Each action is wrapped in a stable `key` so that when one button toggles
-                            // (e.g. share state resolves and the delete button appears/disappears) Compose
-                            // keeps every other button's node identity instead of positionally reusing a
-                            // removed slot — which otherwise briefly morphs the overflow icon into the
-                            // trash icon on each recomposition while typing.
+                            // (e.g. share state resolves) Compose keeps every other button's node identity
+                            // instead of positionally reusing a removed slot.
                             // Pinning is a content edit — viewers can't pin.
                             key("editor-action-pin") {
                                 if (state.canEditContent) {
@@ -285,25 +291,7 @@ fun NoteEditorScreen(
                                     }
                                 }
                             }
-                            // Trash deletes a private note directly. For shared notes, deletion is
-                            // "delete for everyone" and lives in the overflow menu (owner/manager only).
-                            key("editor-action-delete") {
-                                if (!state.isShared) {
-                                    TesseraTopBarIconButton(
-                                        onClick = { haptics.tick(); handOverEdit(); onDelete() },
-                                        contentDescription = stringResource(R.string.editor_delete),
-                                        modifier = Modifier.testTag(UiTestTags.EditorDelete),
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                }
-                            }
-                            val hasOverflow = state.canMakeShared || state.canManageAccess ||
+                            val hasOverflow = !state.isShared || state.canMakeShared || state.canManageAccess ||
                                 state.canUnshare || state.canLeave || state.canDeleteForAll
                             key("editor-action-overflow") {
                                 if (hasOverflow) {
@@ -314,7 +302,7 @@ fun NoteEditorScreen(
                                         modifier = Modifier.testTag(UiTestTags.EditorOverflow),
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Rounded.MoreVert,
+                                            imageVector = Icons.Rounded.MoreHoriz,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(20.dp),
@@ -353,6 +341,37 @@ fun NoteEditorScreen(
                                                 text = { Text(stringResource(R.string.editor_leave)) },
                                                 leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null) },
                                                 onClick = { overflowVisible = false; leaveConfirmVisible = true },
+                                            )
+                                        }
+                                        val hasAbove = state.canMakeShared || state.canManageAccess ||
+                                            state.canUnshare || state.canLeave
+                                        if (hasAbove && (!state.isShared || state.canDeleteForAll)) {
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                        }
+                                        // A private note is deleted right away (no confirmation): the editor hands over its
+                                        // pending edit FIRST, then the note goes.
+                                        if (!state.isShared) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        stringResource(R.string.editor_delete),
+                                                        color = MaterialTheme.colorScheme.error,
+                                                    )
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Rounded.Delete,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                    )
+                                                },
+                                                onClick = {
+                                                    overflowVisible = false
+                                                    haptics.tick()
+                                                    handOverEdit()
+                                                    onDelete()
+                                                },
+                                                modifier = Modifier.testTag(UiTestTags.EditorDelete),
                                             )
                                         }
                                         if (state.canDeleteForAll) {
@@ -395,13 +414,6 @@ fun NoteEditorScreen(
                         )
                         .fillMaxSize(),
                 ) {
-                    EditorMeta(
-                        folderBreadcrumb = state.folderBreadcrumb,
-                        relativeDate = if (state.updatedAt > 0L) noteDateLabel(state.updatedAt) else "",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp),
-                    )
                     TagChipsExpandable(
                         expanded = true,
                         tags = state.tags,

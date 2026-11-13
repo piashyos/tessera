@@ -10,11 +10,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.theme.TesseraTheme
 import app.tessera.domain.model.NoteId
 import app.tessera.ui.editor.engine.TesseraEditText
@@ -309,7 +311,12 @@ class NoteEditorNativeRacesTest {
         open("abc")
         type(3, "!")
         pass(50)
-        rule.onNodeWithContentDescription("Delete note").performClick()
+        // Delete lives in the ⋯ menu now: open it and pick the item (no time passes between them but the compose idle).
+        val keyAt = android.os.SystemClock.uptimeMillis()
+        rule.onNodeWithTag(UiTestTags.EditorOverflow).performClick()
+        rule.onNodeWithTag(UiTestTags.EditorDelete).performClick()
+        // The race is "deleted while the edit is still in the engine" (it emits after 300 ms): the menu must not eat that window.
+        assertTrue("the ⋯ menu took the race window", android.os.SystemClock.uptimeMillis() - keyAt < 250)
         rule.waitForIdle()
         stop()
         pass(3_000)
