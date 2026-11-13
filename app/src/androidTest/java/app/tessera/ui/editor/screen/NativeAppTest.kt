@@ -39,6 +39,9 @@ abstract class NativeAppTest {
         db.clearAllTables()
         runBlocking {
             prefs.setLanguageTag("") // a test that switched to Russian must not leave the app (and Gboard) in it
+            // the live background as a user has it (on by default) — whatever an earlier class left in DataStore;
+            // `-e gradient off` runs a class without it (to tell its effect from a flake)
+            prefs.setGradientEnabled(InstrumentationRegistry.getArguments().getString("gradient") != "off")
         }
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
         ctx.getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.getEmptyLocaleList()

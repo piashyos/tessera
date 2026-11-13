@@ -99,12 +99,18 @@ abstract class AppearanceAppTest {
     }
 
     /** Light or dark, a palette, dynamic colour off (the palettes are what the user picks in Settings), the list as a list. */
-    protected fun theme(mode: ThemeMode, palette: ThemePalette = ThemePalette.Default, grain: Boolean = false): Unit = runBlocking {
+    protected fun theme(
+        mode: ThemeMode,
+        palette: ThemePalette = ThemePalette.Default,
+        grain: Boolean = false,
+        gradient: Boolean = false,
+    ): Unit = runBlocking {
         prefs.setLanguageTag("")
         prefs.setThemeMode(mode)
         prefs.setDynamicColor(false)
         prefs.setThemePalette(palette)
         prefs.setGrainEnabled(grain) // the film grain is noise over flat colours: off where pixels are compared
+        prefs.setGradientEnabled(gradient) // the live background tints the flat colours and moves under a touch: off there too
         prefs.setNotesViewMode(NotesViewMode.List)
     }
 

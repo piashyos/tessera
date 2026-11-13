@@ -16,7 +16,7 @@ import org.junit.Test
  * - D6: the folder popup with the keyboard up (focus in the name field) — where the title and the name field are against the status bar
  *   and the keyboard, in the device's geometry and in Pixel 9 Pro's (1280×2856, 480 dpi). Read from logcat (tag `TagFolderAppearance`).
  *
- * Shots go to [AppearanceDevice.ShotDir] on the device (`adb pull` them). Grain stays at its default (on), as the user sees the app.
+ * Shots go to [AppearanceDevice.ShotDir] on the device (`adb pull` them). Grain and the live background stay at their defaults (on), as the user sees the app.
  */
 @HiltAndroidTest
 class TagFolderAppearanceShotsTest : AppearanceAppTest() {
@@ -38,7 +38,7 @@ class TagFolderAppearanceShotsTest : AppearanceAppTest() {
     }
 
     private fun launchList(mode: ThemeMode, palette: ThemePalette = ThemePalette.Default) {
-        theme(mode, palette, grain = true)
+        theme(mode, palette, grain = true, gradient = true)
         d.launch()
         d.awaitTrue("the cards") { d.card("n-1") != null }
         showTagRow("garden") // the first chip: at font ×1.3 the later ones run past the screen's edge
@@ -95,7 +95,7 @@ class TagFolderAppearanceShotsTest : AppearanceAppTest() {
     fun dynamicColor() {
         seed()
         for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
-            theme(mode, grain = true)
+            theme(mode, grain = true, gradient = true)
             kotlinx.coroutines.runBlocking { prefs.setDynamicColor(true) }
             d.launch()
             d.awaitTrue("the cards") { d.card("n-1") != null }
@@ -161,7 +161,7 @@ class TagFolderAppearanceShotsTest : AppearanceAppTest() {
 
     private fun d6(geometry: String) {
         seed()
-        theme(ThemeMode.LIGHT, grain = true)
+        theme(ThemeMode.LIGHT, grain = true, gradient = true)
         d.launch()
         openDrawer()
         editFolder("Garden")
