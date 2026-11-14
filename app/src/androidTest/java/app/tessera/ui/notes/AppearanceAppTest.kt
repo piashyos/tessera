@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
@@ -98,19 +99,25 @@ abstract class AppearanceAppTest {
         d.close()
     }
 
-    /** Light or dark, a palette, dynamic colour off (the palettes are what the user picks in Settings), the list as a list. */
+    /**
+     * Light or dark, a palette, dynamic colour off (the palettes are what the user picks in Settings), the list as a list.
+     * The live background is off by default (it tints flat colours and moves under a touch); `-e gradient on` runs a class with it
+     * on, as a user has it — the gesture regression of the QA. Its animation is set every time: DataStore outlives a test.
+     */
     protected fun theme(
         mode: ThemeMode,
         palette: ThemePalette = ThemePalette.Default,
         grain: Boolean = false,
-        gradient: Boolean = false,
+        gradient: Boolean = InstrumentationRegistry.getArguments().getString("gradient") == "on",
+        motion: Boolean = true,
     ): Unit = runBlocking {
         prefs.setLanguageTag("")
         prefs.setThemeMode(mode)
         prefs.setDynamicColor(false)
         prefs.setThemePalette(palette)
         prefs.setGrainEnabled(grain) // the film grain is noise over flat colours: off where pixels are compared
-        prefs.setGradientEnabled(gradient) // the live background tints the flat colours and moves under a touch: off there too
+        prefs.setGradientEnabled(gradient)
+        prefs.setBackgroundMotionEnabled(motion)
         prefs.setNotesViewMode(NotesViewMode.List)
     }
 
@@ -171,6 +178,24 @@ abstract class AppearanceAppTest {
         d.tap(d.descs(s(R.string.folders_open_drawer)).first { d.onScreen(it) })
         d.awaitTrue("the drawer open") { drawerOpen() }
         d.settle(500)
+    }
+
+    /** The drawer → "Settings": the main settings screen. [str] reads a string in the app's language (Russian shots). */
+    protected fun openSettings(str: (Int) -> String = ::s) {
+        d.tap(d.await("the drawer button") { d.descs(str(R.string.folders_open_drawer)).firstOrNull { d.onScreen(it) } })
+        // the drawer slides in: a tap on its row while it moves can miss
+        d.awaitTrue("the drawer open") { d.texts(str(R.string.drawer_folders_section)).any { d.onScreen(it) } }
+        d.settle(500)
+        d.tap(d.await("Settings in the drawer") { d.texts(str(R.string.settings_title)).firstOrNull { d.onScreen(it) } })
+        d.await("the settings", 15_000) { d.byTag(UiTestTags.SettingsRoot).firstOrNull() }
+        d.settle(800)
+    }
+
+    /** Settings → "Appearance" (its row is the first of "General", on the first screen). */
+    protected fun openAppearance() {
+        d.tap(d.await("the Appearance row") { d.byTag(UiTestTags.SettingsAppearanceRow).firstOrNull { d.onScreen(it) } })
+        d.await("the Appearance screen", 15_000) { d.byTag(UiTestTags.AppearanceRoot).firstOrNull() }
+        d.settle(800)
     }
 
     /** The drawer row's name (not a card title, not the popup's preview). */
@@ -242,6 +267,8 @@ internal data class UiNode(
     val selected: Boolean?,
     val editable: Boolean,
     val bounds: Rect,
+    /** A switch's state: on / off, `null` for a node that is not toggleable. */
+    val toggled: Boolean? = null,
 ) {
     val inCard get() = tags.any { it.startsWith("note_card_") }
     val inPopup get() = UiTestTags.PopupCard in tags
@@ -322,6 +349,7 @@ internal class AppearanceDevice {
             selected = c.getOrNull(SemanticsProperties.Selected),
             editable = SemanticsProperties.EditableText in c,
             bounds = Rect(p.x.roundToInt(), p.y.roundToInt(), (p.x + n.size.width).roundToInt(), (p.y + n.size.height).roundToInt()),
+            toggled = c.getOrNull(SemanticsProperties.ToggleableState)?.let { it == ToggleableState.On },
         )
         n.children.forEach { walk(it, tags, out) }
     }

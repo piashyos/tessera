@@ -18,12 +18,15 @@ import org.junit.After
 import org.junit.Test
 
 /**
- * Screens of the live background for the user (there is no mockup; spec §3, §6) — not assertions:
+ * Screens of the live background and of Settings → Appearance for the user (there is no mockup; spec 2026-11-13-appearance-screen-and-
+ * motion §2–§4) — not assertions:
  * - the list and the editor in light and dark × WARM, SLATE, SAGE (gradient on, grain at its default);
  * - AMOLED dark (no gradient), the gradient off, grain ×1 and ×4, a flat reference (no gradient, no grain);
- * - Settings → Appearance in English and Russian, grain on ("Intensity" and "Grain size" shown) and off.
+ * - Settings and Appearance in English and Russian, light and dark; the licenses' list and text;
+ * - the motion's strength: series of frames of a tap's breath, a held drag and swipes, with the colour levels in logcat.
  *
- * Every shot waits past the last touch (a tap "breathes" the blobs): the background is at rest. Shots go to [ShotDir] (`adb pull`).
+ * Every still shot waits past the last touch (a tap "breathes" the blobs): the background is at rest. Shots go to [ShotDir] (`adb pull`),
+ * series to Download/native-editor-qa.
  */
 @HiltAndroidTest
 class BackgroundGradientShotsTest : AppearanceAppTest() {
@@ -31,6 +34,7 @@ class BackgroundGradientShotsTest : AppearanceAppTest() {
     @After
     fun backToDefaults() = runBlocking {
         prefs.setGradientEnabled(true)
+        prefs.setBackgroundMotionEnabled(true)
         prefs.setAmoled(false)
         prefs.setGrainSize(1)
         prefs.setLanguageTag("")
@@ -84,11 +88,12 @@ class BackgroundGradientShotsTest : AppearanceAppTest() {
     }
 
     /**
-     * A tap on a note card (the press pulse, spec §4.1–§4.2): frames ~0 / 150 / 400 / 800 ms after the press and the editor at rest 3 s
-     * later; logcat gives how far the lower empty part of each frame is from that rest frame. Frames go to Download/native-editor-qa.
+     * A tap on a note card (the breath starts on the release, spec §3.2): frames ~0 / 150 / 400 / 800 ms after the up and the editor at
+     * rest 3 s later; logcat gives how far the lower empty part of each frame is from that rest frame. Frames go to
+     * Download/native-editor-qa.
      */
     @Test
-    fun aTapOnACardPulsesBehindTheEditor() {
+    fun aTapOnACardBreathesBehindTheEditor() {
         seed()
         look(ThemeMode.LIGHT)
         list("tap-card-list-rest")
@@ -96,53 +101,102 @@ class BackgroundGradientShotsTest : AppearanceAppTest() {
         val card = d.card("n-2") ?: error("no card")
         val (x, y) = card.bounds.centerX() to card.bounds.centerY()
         val frames = ArrayList<Pair<Long, Bitmap>>()
-        val t0 = SystemClock.uptimeMillis()
-        d.inject(t0, MotionEvent.ACTION_DOWN, x, y)
-        frames += (SystemClock.uptimeMillis() - t0) to d.screenshot()
-        sleepUntil(t0 + 60)
-        d.inject(t0, MotionEvent.ACTION_UP, x, y)
-        for (ms in listOf(150L, 400L, 800L)) {
-            sleepUntil(t0 + ms)
-            frames += (SystemClock.uptimeMillis() - t0) to d.screenshot()
+        val down = SystemClock.uptimeMillis()
+        d.inject(down, MotionEvent.ACTION_DOWN, x, y)
+        sleepUntil(down + 60)
+        val up = d.lift(down, x, y)
+        for (ms in listOf(0L, 150L, 400L, 800L)) {
+            sleepUntil(up + ms)
+            frames += (SystemClock.uptimeMillis() - up) to d.screenshot()
         }
         d.await("the editor", 60_000) { d.byTag(UiTestTags.EditorRoot).firstOrNull() }
         Thread.sleep(3_000)
         val rest = d.screenshot()
         val band = Rect(d.dp(16f), d.screenHeight() * 55 / 100, d.screenWidth() - d.dp(16f), d.screenHeight() * 85 / 100)
         for ((at, b) in frames) {
-            d.log("tap on a card, $at ms after the press: band $band vs the editor at rest: ${diff(rest, b, band)}")
-            savePng(ctx, "ab-tap-card-${at}ms", b)
+            d.log("tap on a card, $at ms after the up: band $band vs the editor at rest: ${diff(rest, b, band)}")
+            savePng(ctx, "am-tap-card-${at}ms", b)
         }
-        savePng(ctx, "ab-tap-card-editor-rest", rest)
+        savePng(ctx, "am-tap-card-editor-rest", rest)
     }
 
-    /** A tap on the empty list: the pulse frame by frame against the frame at rest (logcat), light and dark; frames as above. */
+    /**
+     * The strength of the motion on the empty list (spec §3.4: "noticeable, never in your face"; ~4–6 colour levels at the breath's peak,
+     * ~2–4 for a scroll's shift), light and dark, each frame against the frame at rest, in logcat (`-s TagFolderAppearance`, `MOTION`):
+     * - a tap: frames from the up (the breath starts on the release) until rest;
+     * - a held drag (the finger still down 500 ms after the slow pull), then its return;
+     * - a short and a long quick swipe, each twice: released at speed (a glide) and held still 300 ms before the up (no glide) — the same
+     *   travel, so a glide shows as the released one going further; frames ~100 / 300 / 600 / 1000 ms after the up, then until rest.
+     * Frames are kept in memory and saved after each series (a PNG takes ~0.4 s); the frame times of the app (`dumpsys gfxinfo`) are logged
+     * for each swipe: the velocity of a swipe is read from the touches the app gets per frame.
+     */
     @Test
-    fun aTapOnTheEmptyListPulses() {
+    fun theMotionsStrengthOnTheEmptyList() {
         for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
             val t = mode.name.lowercase()
             look(mode)
-            list("tap-empty-$t-rest")
-            Thread.sleep(2_500)
-            val band = Rect(d.dp(16f), d.dp(100f), d.screenWidth() - d.dp(16f), d.screenHeight() * 48 / 100)
-            val rest = d.screenshot()
-            val (x, y) = d.screenWidth() / 2 to band.centerY()
-            val frames = ArrayList<Pair<Long, Bitmap>>()
-            val t0 = SystemClock.uptimeMillis()
-            d.inject(t0, MotionEvent.ACTION_DOWN, x, y)
-            sleepUntil(t0 + 60)
-            d.inject(t0, MotionEvent.ACTION_UP, x, y)
-            for (ms in listOf(100L, 200L, 350L, 500L, 800L, 1_200L, 1_800L, 2_500L)) {
-                sleepUntil(t0 + ms)
-                frames += (SystemClock.uptimeMillis() - t0) to d.screenshot()
+            list("am-empty-$t-rest")
+            val title = d.await("the empty list") { d.texts(s(R.string.notes_empty_title)).firstOrNull { d.onScreen(it) } }
+            val bar = d.descs(s(R.string.folders_open_drawer)).filter { d.onScreen(it) }.minByOrNull { it.bounds.top } ?: error("no top bar")
+            val band = Rect(d.dp(16f), bar.bounds.bottom + d.dp(24f), d.screenWidth() - d.dp(16f), title.bounds.top - d.dp(24f))
+            val x = d.screenWidth() / 2
+
+            var rest = d.restFrame(band, "$t: before the tap")
+            savePng(ctx, "am-$t-rest", rest)
+            val down = SystemClock.uptimeMillis()
+            d.inject(down, MotionEvent.ACTION_DOWN, x, band.centerY())
+            sleepUntil(down + 60)
+            var up = d.lift(down, x, band.centerY())
+            report("$t tap", rest, band, up, listOf(100L, 200L, 300L, 400L, 600L, 900L, 1_300L, 1_800L, 2_500L))
+
+            rest = d.restFrame(band, "$t: before the held drag")
+            val d0 = SystemClock.uptimeMillis()
+            d.inject(d0, MotionEvent.ACTION_DOWN, x, band.top + d.dp(8f))
+            for (i in 1..20) {
+                Thread.sleep(16)
+                d.inject(d0, MotionEvent.ACTION_MOVE, x, band.top + d.dp(8f) + (band.height() - d.dp(16f)) * i / 20)
             }
-            for ((at, b) in frames) {
-                d.log("tap on the empty list ($t), $at ms after the press: band $band vs rest: ${diff(rest, b, band)}")
-                savePng(ctx, "ab-tap-empty-$t-${at}ms", b)
+            Thread.sleep(500)
+            val held = d.screenshot()
+            d.log("MOTION $t held drag (${band.height() - d.dp(16f)} px pulled): ${diff(rest, held, band)}")
+            savePng(ctx, "am-$t-drag-held", held)
+            up = d.lift(d0, x, band.bottom - d.dp(8f))
+            d.awaitBack(rest, band, up, 3_000, "MOTION $t held drag, the return")
+
+            for ((name, travel) in listOf("short" to d.dp(110f), "long" to band.height() - d.dp(32f))) {
+                for (hold in listOf(0L, 300L)) {
+                    val what = "$t $name swipe ($travel px), " + if (hold == 0L) "released at speed" else "held $hold ms before the up"
+                    rest = d.restFrame(band, "$what: before")
+                    d.shell("dumpsys gfxinfo app.tessera reset")
+                    val y0 = band.top + d.dp(16f)
+                    val t0 = SystemClock.uptimeMillis()
+                    d.inject(t0, MotionEvent.ACTION_DOWN, x, y0, t0)
+                    for (i in 1..6) {
+                        sleepUntil(t0 + i * 16L)
+                        d.inject(t0, MotionEvent.ACTION_MOVE, x, y0 + travel * i / 6, t0 + i * 16L)
+                    }
+                    Thread.sleep(hold)
+                    up = d.lift(t0, x, y0 + travel, if (hold > 0) SystemClock.uptimeMillis() else t0 + 7 * 16L)
+                    report(what, rest, band, up, listOf(0L, 100L, 300L, 600L, 1_000L, 1_500L, 2_200L), "am-$t-swipe-$name-hold$hold")
+                    val gfx = d.shell("dumpsys gfxinfo app.tessera").lines()
+                        .filter { it.contains("Total frames") || it.contains("percentile") }.joinToString("; ") { it.trim() }
+                    d.log("MOTION $what: the app's frames: $gfx")
+                    d.awaitBack(rest, band, up, 4_200, "MOTION $what, the return")
+                }
             }
-            savePng(ctx, "ab-tap-empty-$t-rest", rest)
             d.close()
         }
+    }
+
+    /** Frames of [band] at [at] ms after [up] (as near as screenshots allow), logged against [rest] and then saved as [prefix]-<ms>. */
+    private fun report(what: String, rest: Bitmap, band: Rect, up: Long, at: List<Long>, prefix: String = "am-${what.replace(' ', '-')}") {
+        val frames = ArrayList<Pair<Long, Bitmap>>()
+        for (ms in at) {
+            sleepUntil(up + ms)
+            frames += (SystemClock.uptimeMillis() - up) to d.screenshot()
+        }
+        for ((ms, b) in frames) d.log("MOTION $what, $ms ms after the up: ${diff(rest, b, band)}")
+        frames.forEachIndexed { i, (ms, b) -> if (i in listOf(0, 2, 4)) savePng(ctx, "$prefix-${ms}ms", b) }
     }
 
     @Test
@@ -170,29 +224,67 @@ class BackgroundGradientShotsTest : AppearanceAppTest() {
         list("list-dark-grain-x4")
     }
 
+    /**
+     * Settings in English and Russian, light and dark (spec §2.1–§2.2): the main screen ("General": Appearance, Language) and the
+     * Appearance screen; in light also with grain off (no sliders) and with the gradient off (no "Background animation"). Every shot
+     * waits until the background is at rest (each tap breathes it).
+     */
     @Test
-    fun settingsInEnglishAndRussian() {
+    fun settingsAndAppearanceInEnglishAndRussian() {
         for (lang in listOf("en", "ru")) {
-            look(ThemeMode.LIGHT)
-            runBlocking { prefs.setLanguageTag(if (lang == "en") "" else lang) }
-            val res = ctx.createConfigurationContext(Configuration(ctx.resources.configuration).apply { setLocale(Locale.forLanguageTag(lang)) })
-            fun str(id: Int) = res.getString(id)
+            for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+                val tag = "$lang-${mode.name.lowercase()}"
+                look(mode)
+                runBlocking { prefs.setLanguageTag(if (lang == "en") "" else lang) }
+                val res = ctx.createConfigurationContext(Configuration(ctx.resources.configuration).apply { setLocale(Locale.forLanguageTag(lang)) })
+                fun str(id: Int) = res.getString(id)
+                d.launch()
+                openSettings(::str)
+                atRest()
+                shot("settings-$tag-top")
+                openAppearance()
+                atRest()
+                shot("appearance-$tag")
+                if (mode == ThemeMode.LIGHT) {
+                    d.tap(d.byTag(UiTestTags.AppearanceGrainRow).first { d.onScreen(it) })
+                    d.awaitTrue("grain off") { d.texts(str(R.string.settings_grain_size)).none { d.onScreen(it) } }
+                    atRest()
+                    shot("appearance-$tag-grain-off")
+                    d.tap(d.byTag(UiTestTags.AppearanceGradientRow).first { d.onScreen(it) })
+                    d.awaitTrue("gradient off") { d.byTag(UiTestTags.AppearanceMotionRow).isEmpty() }
+                    atRest()
+                    shot("appearance-$tag-gradient-off")
+                }
+                d.close()
+            }
+        }
+    }
+
+    /** The licenses' list (debug: the plugin's one "Debug License Info" entry) in light and dark, and its text in light. */
+    @Test
+    fun licensesListAndText() {
+        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            val t = mode.name.lowercase()
+            look(mode)
             d.launch()
-            d.tap(d.await("the drawer button") { d.descs(str(R.string.folders_open_drawer)).firstOrNull { d.onScreen(it) } })
-            d.tap(d.await("Settings in the drawer") { d.texts(str(R.string.settings_title)).firstOrNull { d.onScreen(it) } })
-            d.await("the settings", 15_000) { d.byTag(UiTestTags.SettingsRoot).firstOrNull() }
-            d.settle(800)
-            shot("settings-$lang-top")
-            d.reveal(str(R.string.settings_gradient_title))
-            d.reveal(str(R.string.settings_grain_size))
-            d.settle(600)
-            shot("settings-$lang-appearance-grain-on")
-            d.tap(d.reveal(str(R.string.settings_grain_title)))
-            d.settle(800)
-            shot("settings-$lang-appearance-grain-off")
-            d.tap(d.reveal(str(R.string.settings_grain_title)))
-            d.settle(600)
+            openSettings()
+            d.tap(d.reveal(s(R.string.settings_licenses), bottomDp = 48f))
+            d.await("the licenses", 15_000) { d.byTag(UiTestTags.LicensesRoot).firstOrNull() }
+            d.await("an entry") { d.texts("Debug License Info").firstOrNull { d.onScreen(it) } }
+            atRest()
+            shot("licenses-$t")
+            if (mode == ThemeMode.LIGHT) {
+                d.tap(d.texts("Debug License Info").first { d.onScreen(it) })
+                d.await("the license text") { d.byTag(UiTestTags.LicensesText).firstOrNull() }
+                atRest()
+                shot("licenses-text-$t")
+            }
             d.close()
         }
+    }
+
+    /** The screen under the status bar still: three frames 400 ms apart equal (each tap breathes the background for ~2 s). */
+    private fun atRest() {
+        d.restFrame(Rect(0, d.statusBarBottom(), d.screenWidth(), d.screenHeight()), "the screen for a shot")
     }
 }
