@@ -25,6 +25,7 @@ import app.tessera.ui.editor.NoteEditorState
 import app.tessera.ui.notes.NotesListScreen
 import app.tessera.ui.notes.NotesListState
 import app.tessera.ui.notes.NotesViewMode
+import app.tessera.ui.settings.AppearanceScreen
 import app.tessera.ui.settings.SettingsScreen
 import app.tessera.ui.settings.SettingsState
 import org.junit.Assert.assertTrue
@@ -75,6 +76,8 @@ class AccessibilityAuditTest {
             "#", "Toggle tags", "Toggle list or grid view", "Folders",
             // Settings — Material3 buttons / rows (real 48dp touch slop, underreported bounds).
             "Back", "Sign out", "Open source licenses",
+            // Appearance — Material3 Switches (52x32dp visual box, real 48dp touch slop), named after their row.
+            "Background gradient", "Background animation", "Film grain",
         )
 
     @Test fun notesListClickablesAreLabeled() {
@@ -105,6 +108,16 @@ class AccessibilityAuditTest {
     @Test fun settingsCompactTargetsAreDocumented() {
         renderInTheme { SettingsScreenFixture() }
         assertOnlyDocumentedCompactTargets("SettingsScreen")
+    }
+
+    @Test fun appearanceClickablesAreLabeled() {
+        renderInTheme { AppearanceScreenFixture() }
+        assertAllClickablesLabeled("AppearanceScreen")
+    }
+
+    @Test fun appearanceCompactTargetsAreDocumented() {
+        renderInTheme { AppearanceScreenFixture() }
+        assertOnlyDocumentedCompactTargets("AppearanceScreen")
     }
 
     private fun renderInTheme(content: @Composable () -> Unit) {
@@ -236,6 +249,12 @@ class AccessibilityAuditTest {
                     syncStatus = SyncIndicator.Ok(),
                 ),
         )
+    }
+
+    @Composable
+    private fun AppearanceScreenFixture() {
+        // Defaults turn everything on: gradient + animation rows and both grain sliders are all in the audit.
+        AppearanceScreen(state = SettingsState())
     }
 
     private fun sampleNote() =

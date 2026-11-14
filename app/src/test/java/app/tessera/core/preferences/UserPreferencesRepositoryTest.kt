@@ -25,6 +25,7 @@ class UserPreferencesRepositoryTest {
         repo.setDynamicColor(true)
         repo.setLanguageTag("")
         repo.setGradientEnabled(true)
+        repo.setBackgroundMotionEnabled(true)
         repo.setGrainSize(1)
     }
 
@@ -53,8 +54,10 @@ class UserPreferencesRepositoryTest {
         // (it starts from the same DEFAULT_* as the flows' fallback).
         val fresh = UserPreferencesRepository(ApplicationProvider.getApplicationContext())
         assertEquals(true, fresh.cachedGradientEnabled)
+        assertEquals(true, fresh.cachedBackgroundMotionEnabled)
         assertEquals(1, fresh.cachedGrainSize)
         assertEquals(true, repo.gradientEnabled.first())
+        assertEquals(true, repo.backgroundMotionEnabled.first())
         assertEquals(1, repo.grainSize.first())
     }
 
@@ -64,6 +67,16 @@ class UserPreferencesRepositoryTest {
         assertEquals(false, repo.gradientEnabled.first())
         repo.setGradientEnabled(true)
         assertEquals(true, repo.gradientEnabled.first())
+    }
+
+    @Test
+    fun `background motion flag persists and the cache follows it`() = runBlocking {
+        repo.setBackgroundMotionEnabled(false)
+        assertEquals(false, repo.backgroundMotionEnabled.first())
+        assertEquals(false, repo.cachedBackgroundMotionEnabled)
+        repo.setBackgroundMotionEnabled(true)
+        assertEquals(true, repo.backgroundMotionEnabled.first())
+        assertEquals(true, repo.cachedBackgroundMotionEnabled)
     }
 
     @Test

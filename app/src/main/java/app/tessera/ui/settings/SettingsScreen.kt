@@ -27,8 +27,6 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -50,10 +48,8 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import app.tessera.R
 import app.tessera.core.preferences.ThemeMode
-import app.tessera.core.preferences.ThemePalette
 import app.tessera.core.ui.UiTestTags
 import app.tessera.core.ui.theme.TesseraSpacing
 import app.tessera.core.ui.theme.TesseraTheme
@@ -67,7 +63,6 @@ import app.tessera.ui.settings.components.SettingsGroup
 import app.tessera.ui.settings.components.SettingsRow
 import app.tessera.ui.settings.components.SettingsValue
 import app.tessera.ui.settings.components.SyncStatusRow
-import app.tessera.ui.settings.components.ThemePickerSheet
 import coil.compose.AsyncImage
 import java.io.OutputStream
 import androidx.compose.material.icons.Icons
@@ -75,8 +70,6 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Balance
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Gradient
-import androidx.compose.material.icons.rounded.Grain
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Palette
@@ -95,22 +88,14 @@ fun SettingsScreen(
     onConfirmMove: () -> Unit = {},
     onDeleteLocal: () -> Unit = {},
     onDismissDialog: () -> Unit = {},
-    onSelectThemeMode: (ThemeMode) -> Unit = {},
-    onSetDynamicColor: (Boolean) -> Unit = {},
-    onSelectPalette: (ThemePalette) -> Unit = {},
-    onSelectStyle: (app.tessera.core.preferences.ThemeStyle) -> Unit = {},
-    onSetAmoled: (Boolean) -> Unit = {},
-    onSetGrainEnabled: (Boolean) -> Unit = {},
-    onSetGrainIntensity: (Float) -> Unit = {},
-    onSetGradientEnabled: (Boolean) -> Unit = {},
-    onSetGrainSize: (Int) -> Unit = {},
+    onOpenAppearance: () -> Unit = {},
+    onOpenLicenses: () -> Unit = {},
     onSelectLanguage: (String) -> Unit = {},
     onRetrySync: () -> Unit = {},
     onExport: (OutputStream) -> Unit = {},
     onEmptyTrash: () -> Unit = {},
     onMessageShown: () -> Unit = {},
 ) {
-    var showThemeSheet by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
     var showEmptyTrashDialog by remember { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -214,19 +199,10 @@ fun SettingsScreen(
             }
 
             item {
-                AppearanceSection(
-                    themeMode = state.themeMode,
+                GeneralSection(
                     languageTag = state.languageTag,
-                    grainEnabled = state.grainEnabled,
-                    grainIntensity = state.grainIntensity,
-                    grainSize = state.grainSize,
-                    gradientEnabled = state.gradientEnabled,
-                    onOpenThemeSheet = { showThemeSheet = true },
+                    onOpenAppearance = onOpenAppearance,
                     onOpenLanguageSheet = { showLanguageSheet = true },
-                    onSetGrainEnabled = onSetGrainEnabled,
-                    onSetGrainIntensity = onSetGrainIntensity,
-                    onSetGradientEnabled = onSetGradientEnabled,
-                    onSetGrainSize = onSetGrainSize,
                 )
             }
 
@@ -241,25 +217,9 @@ fun SettingsScreen(
             }
 
             item {
-                AboutSection()
+                AboutSection(onOpenLicenses = onOpenLicenses)
             }
         }
-    }
-
-    if (showThemeSheet) {
-        ThemePickerSheet(
-            selected = state.themeMode,
-            dynamicColor = state.dynamicColor,
-            selectedPalette = state.themePalette,
-            selectedStyle = state.themeStyle,
-            amoled = state.amoled,
-            onSelectTheme = onSelectThemeMode,
-            onToggleDynamic = onSetDynamicColor,
-            onSelectPalette = onSelectPalette,
-            onSelectStyle = onSelectStyle,
-            onToggleAmoled = onSetAmoled,
-            onDismiss = { showThemeSheet = false },
-        )
     }
 
     if (showLanguageSheet) {
@@ -377,26 +337,18 @@ private fun AccountSection(
 }
 
 @Composable
-private fun AppearanceSection(
-    themeMode: ThemeMode,
+private fun GeneralSection(
     languageTag: String,
-    grainEnabled: Boolean,
-    grainIntensity: Float,
-    grainSize: Int,
-    gradientEnabled: Boolean,
-    onOpenThemeSheet: () -> Unit,
+    onOpenAppearance: () -> Unit,
     onOpenLanguageSheet: () -> Unit,
-    onSetGrainEnabled: (Boolean) -> Unit,
-    onSetGrainIntensity: (Float) -> Unit,
-    onSetGradientEnabled: (Boolean) -> Unit,
-    onSetGrainSize: (Int) -> Unit,
 ) {
-    SettingsGroup(label = stringResource(R.string.settings_section_appearance)) {
+    SettingsGroup(label = stringResource(R.string.settings_section_general)) {
         SettingsRow(
+            modifier = Modifier.testTag(UiTestTags.SettingsAppearanceRow),
             leadingIcon = Icons.Rounded.Palette,
-            title = stringResource(R.string.settings_theme_sheet_title),
-            onClick = onOpenThemeSheet,
-            trailing = { ValueChevron(themeChoiceLabel(themeMode)) },
+            title = stringResource(R.string.settings_appearance),
+            onClick = onOpenAppearance,
+            trailing = { SettingsChevron() },
         )
         SettingsDivider()
         SettingsRow(
@@ -404,74 +356,6 @@ private fun AppearanceSection(
             title = stringResource(R.string.settings_section_language),
             onClick = onOpenLanguageSheet,
             trailing = { ValueChevron(languageLabel(languageTag)) },
-        )
-        SettingsDivider()
-        SettingsRow(
-            leadingIcon = Icons.Rounded.Gradient,
-            title = stringResource(R.string.settings_gradient_title),
-            subtitle = stringResource(R.string.settings_gradient_subtitle),
-            onClick = { onSetGradientEnabled(!gradientEnabled) },
-            trailing = {
-                Switch(checked = gradientEnabled, onCheckedChange = onSetGradientEnabled)
-            },
-        )
-        SettingsDivider()
-        SettingsRow(
-            leadingIcon = Icons.Rounded.Grain,
-            title = stringResource(R.string.settings_grain_title),
-            subtitle = stringResource(R.string.settings_grain_subtitle),
-            onClick = { onSetGrainEnabled(!grainEnabled) },
-            trailing = {
-                Switch(checked = grainEnabled, onCheckedChange = onSetGrainEnabled)
-            },
-        )
-        if (grainEnabled) {
-            GrainIntensityRow(
-                label = stringResource(R.string.settings_grain_intensity),
-                value = grainIntensity,
-                onValueChange = onSetGrainIntensity,
-            )
-            GrainIntensityRow(
-                label = stringResource(R.string.settings_grain_size),
-                value = grainSize.toFloat(),
-                onValueChange = { onSetGrainSize(it.roundToInt()) },
-                valueRange = 1f..4f,
-                steps = 2,
-            )
-        }
-    }
-}
-
-/**
- * Labelled slider for the film-grain overlay (intensity, size). Tracks the drag locally for a smooth thumb and only
- * persists on release (via [Slider.onValueChangeFinished]) so it doesn't spam DataStore mid-drag.
- * Re-seeds from [value] when the persisted value changes elsewhere.
- */
-@Composable
-private fun GrainIntensityRow(
-    label: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-    steps: Int = 0,
-) {
-    var sliderValue by remember(value) { mutableStateOf(value) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = TesseraSpacing.lg, vertical = TesseraSpacing.sm),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Slider(
-            value = sliderValue,
-            onValueChange = { sliderValue = it },
-            onValueChangeFinished = { onValueChange(sliderValue) },
-            valueRange = valueRange,
-            steps = steps,
         )
     }
 }
@@ -530,7 +414,7 @@ private fun RowSpinner() {
 }
 
 @Composable
-private fun AboutSection() {
+private fun AboutSection(onOpenLicenses: () -> Unit) {
     val context = LocalContext.current
     val appVersion = remember(context) {
         runCatching {
@@ -546,15 +430,16 @@ private fun AboutSection() {
         SettingsDivider()
         SettingsRow(
             leadingIcon = Icons.Rounded.Balance,
+            modifier = Modifier.testTag(UiTestTags.SettingsLicensesRow),
             title = stringResource(R.string.settings_licenses),
-            onClick = {},
+            onClick = onOpenLicenses,
             trailing = { SettingsChevron() },
         )
     }
 }
 
 @Composable
-private fun ValueChevron(value: String) {
+internal fun ValueChevron(value: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TesseraSpacing.xs),
@@ -565,7 +450,7 @@ private fun ValueChevron(value: String) {
 }
 
 @Composable
-private fun themeChoiceLabel(mode: ThemeMode): String = when (mode) {
+internal fun themeChoiceLabel(mode: ThemeMode): String = when (mode) {
     ThemeMode.AUTO -> stringResource(R.string.settings_theme_system)
     ThemeMode.LIGHT -> stringResource(R.string.settings_theme_light)
     ThemeMode.DARK -> stringResource(R.string.settings_theme_dark)

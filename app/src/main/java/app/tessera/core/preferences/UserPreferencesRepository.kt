@@ -28,6 +28,7 @@ private val KEY_GRAIN_ENABLED = booleanPreferencesKey("grain_enabled")
 private val KEY_GRAIN_INTENSITY = floatPreferencesKey("grain_intensity")
 private val KEY_GRAIN_SIZE = intPreferencesKey("grain_size")
 private val KEY_GRADIENT_ENABLED = booleanPreferencesKey("background_gradient_enabled")
+private val KEY_BACKGROUND_MOTION_ENABLED = booleanPreferencesKey("background_motion_enabled")
 private val KEY_LANG = stringPreferencesKey("language_tag")
 private val KEY_VIEW_MODE = stringPreferencesKey("notes_view_mode")
 private val KEY_RECENT_SEARCHES = stringPreferencesKey("recent_searches")
@@ -44,6 +45,7 @@ private const val DEFAULT_GRAIN_SIZE = 1
 private const val MIN_GRAIN_SIZE = 1
 private const val MAX_GRAIN_SIZE = 4
 private const val DEFAULT_GRADIENT_ENABLED = true
+private const val DEFAULT_BACKGROUND_MOTION_ENABLED = true
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
@@ -117,6 +119,10 @@ class UserPreferencesRepository @Inject constructor(
     private var lastGradientEnabled: Boolean = DEFAULT_GRADIENT_ENABLED
     override val cachedGradientEnabled: Boolean get() = lastGradientEnabled
 
+    @Volatile
+    private var lastBackgroundMotionEnabled: Boolean = DEFAULT_BACKGROUND_MOTION_ENABLED
+    override val cachedBackgroundMotionEnabled: Boolean get() = lastBackgroundMotionEnabled
+
     override val grainSize: Flow<Int> = store.data.map { p ->
         (p[KEY_GRAIN_SIZE] ?: DEFAULT_GRAIN_SIZE).coerceIn(MIN_GRAIN_SIZE, MAX_GRAIN_SIZE)
     }.onEach { lastGrainSize = it }
@@ -124,6 +130,10 @@ class UserPreferencesRepository @Inject constructor(
     override val gradientEnabled: Flow<Boolean> = store.data.map { p ->
         p[KEY_GRADIENT_ENABLED] ?: DEFAULT_GRADIENT_ENABLED
     }.onEach { lastGradientEnabled = it }
+
+    override val backgroundMotionEnabled: Flow<Boolean> = store.data.map { p ->
+        p[KEY_BACKGROUND_MOTION_ENABLED] ?: DEFAULT_BACKGROUND_MOTION_ENABLED
+    }.onEach { lastBackgroundMotionEnabled = it }
 
     /** Empty string = follow system default. */
     override val languageTag: Flow<String> = store.data.map { it[KEY_LANG] ?: "" }
@@ -173,6 +183,10 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun setGradientEnabled(enabled: Boolean) {
         store.edit { it[KEY_GRADIENT_ENABLED] = enabled }
+    }
+
+    override suspend fun setBackgroundMotionEnabled(enabled: Boolean) {
+        store.edit { it[KEY_BACKGROUND_MOTION_ENABLED] = enabled }
     }
 
     override suspend fun setLanguageTag(tag: String) {

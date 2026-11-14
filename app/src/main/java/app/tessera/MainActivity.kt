@@ -113,6 +113,12 @@ class MainActivity : ComponentActivity() {
             ) {
                 userPreferences.gradientEnabled.collect { value = it }
             }
+            val backgroundMotionEnabled by produceState(
+                initialValue = userPreferences.cachedBackgroundMotionEnabled,
+                userPreferences,
+            ) {
+                userPreferences.backgroundMotionEnabled.collect { value = it }
+            }
 
             val context = LocalContext.current
             LaunchedEffect(languageTag) {
@@ -162,6 +168,7 @@ class MainActivity : ComponentActivity() {
                     grainSize = grainSize,
                     // AMOLED black stays pure: no gradient behind it.
                     gradientEnabled = gradientEnabled && !(amoled && resolvedDark),
+                    motionEnabled = backgroundMotionEnabled,
                 ) {
                     TesseraApp()
                 }

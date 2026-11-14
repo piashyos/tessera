@@ -10,6 +10,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.tessera.core.ui.theme.TesseraSpacing
@@ -51,11 +52,11 @@ fun SettingsGroup(
     }
 }
 
-/** Inset hairline separator between rows inside a [SettingsGroup]. */
+/** Inset hairline separator between rows inside a [SettingsGroup]; [inset] lines it up with the rows' text (56dp after an icon). */
 @Composable
-fun SettingsDivider(modifier: Modifier = Modifier) {
+fun SettingsDivider(modifier: Modifier = Modifier, inset: Dp = 56.dp) {
     HorizontalDivider(
-        modifier = modifier.padding(start = 56.dp),
+        modifier = modifier.padding(start = inset),
         thickness = 1.dp,
         color = MaterialTheme.colorScheme.outlineVariant,
     )

@@ -59,10 +59,12 @@ class SettingsViewModel @Inject constructor(
         val grainIntensity: Float,
         val grainSize: Int,
         val gradientEnabled: Boolean,
+        val backgroundMotionEnabled: Boolean,
     )
 
-    // The 5-arg color prefs + grain, intensity, size and gradient = 9 flows; nest a 5-way combine
-    // inside another 5-way one to stay within combine's typed arity while keeping it type-safe.
+    // The 5-arg color prefs + grain, intensity, size, gradient and its motion = 10 flows; nest a 5-way combine
+    // inside another 5-way one (gradient + motion paired) to stay within combine's typed arity while
+    // keeping it type-safe.
     private val themePrefs =
         combine(
             combine(
@@ -74,19 +76,23 @@ class SettingsViewModel @Inject constructor(
             ) { mode, dynamic, palette, style, amoled ->
                 ThemePrefs(
                     mode, dynamic, palette, style, amoled,
-                    grainEnabled = true, grainIntensity = 0.5f, grainSize = 1, gradientEnabled = true,
+                    grainEnabled = true, grainIntensity = 0.5f, grainSize = 1,
+                    gradientEnabled = true, backgroundMotionEnabled = true,
                 )
             },
             userPreferences.grainEnabled,
             userPreferences.grainIntensity,
             userPreferences.grainSize,
-            userPreferences.gradientEnabled,
-        ) { base, grainEnabled, grainIntensity, grainSize, gradientEnabled ->
+            combine(userPreferences.gradientEnabled, userPreferences.backgroundMotionEnabled) { gradient, motion ->
+                gradient to motion
+            },
+        ) { base, grainEnabled, grainIntensity, grainSize, gradientMotion ->
             base.copy(
                 grainEnabled = grainEnabled,
                 grainIntensity = grainIntensity,
                 grainSize = grainSize,
-                gradientEnabled = gradientEnabled,
+                gradientEnabled = gradientMotion.first,
+                backgroundMotionEnabled = gradientMotion.second,
             )
         }
 
@@ -121,6 +127,7 @@ class SettingsViewModel @Inject constructor(
                 grainIntensity = theme.grainIntensity,
                 grainSize = theme.grainSize,
                 gradientEnabled = theme.gradientEnabled,
+                backgroundMotionEnabled = theme.backgroundMotionEnabled,
                 languageTag = langTrash.first,
                 trashCount = langTrash.second,
                 syncStatus = sync,
@@ -161,6 +168,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setGradientEnabled(enabled: Boolean) {
         viewModelScope.launch { userPreferences.setGradientEnabled(enabled) }
+    }
+
+    fun setBackgroundMotionEnabled(enabled: Boolean) {
+        viewModelScope.launch { userPreferences.setBackgroundMotionEnabled(enabled) }
     }
 
     fun setGrainSize(size: Int) {

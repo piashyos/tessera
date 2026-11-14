@@ -65,6 +65,12 @@ interface UserPreferences {
     /** Synchronously-readable last [gradientEnabled] value, used to seed the UI on (re)creation. */
     val cachedGradientEnabled: Boolean
 
+    /** Whether the background gradient reacts to touches; only applies while [gradientEnabled]. */
+    val backgroundMotionEnabled: Flow<Boolean>
+
+    /** Synchronously-readable last [backgroundMotionEnabled] value, used to seed the UI on (re)creation. */
+    val cachedBackgroundMotionEnabled: Boolean
+
     val languageTag: Flow<String>
     val notesViewMode: Flow<NotesViewMode>
 
@@ -84,6 +90,7 @@ interface UserPreferences {
     /** Persists [size], clamped to 1..4. */
     suspend fun setGrainSize(size: Int)
     suspend fun setGradientEnabled(enabled: Boolean)
+    suspend fun setBackgroundMotionEnabled(enabled: Boolean)
     suspend fun setLanguageTag(tag: String)
     suspend fun setNotesViewMode(mode: NotesViewMode)
 

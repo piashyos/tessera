@@ -23,13 +23,18 @@ import app.tessera.ui.editor.NoteEditorScreen
 import app.tessera.ui.editor.NoteEditorViewModel
 import app.tessera.ui.notes.NotesListScreen
 import app.tessera.ui.notes.NotesListViewModel
+import app.tessera.ui.settings.AppearanceScreen
 import app.tessera.ui.settings.SettingsScreen
 import app.tessera.ui.settings.SettingsViewModel
+import app.tessera.ui.settings.licenses.LicensesScreen
+import app.tessera.ui.settings.licenses.rememberLicenses
 import kotlinx.coroutines.launch
 
 private const val NotesListRoute = "notesList"
 private const val EditorRoute = "editor"
 private const val SettingsRoute = "settings"
+private const val AppearanceRoute = "settings/appearance"
+private const val LicensesRoute = "settings/licenses"
 private const val NoteIdArg = "noteId"
 private const val FromDraftArg = "fromDraft"
 
@@ -63,6 +68,8 @@ fun NotesNavGraph(
                     },
                 )
                 settingsDestination(navController)
+                appearanceDestination(navController)
+                licensesDestination(navController)
                 editorDestination(navController)
             }
         }
@@ -164,20 +171,52 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
                 onConfirmMove = viewModel::onConfirmMove,
                 onDeleteLocal = viewModel::onDeleteLocal,
                 onDismissDialog = viewModel::onDismissDialog,
-                onSelectThemeMode = viewModel::setThemeMode,
-                onSetDynamicColor = viewModel::setDynamicColor,
-                onSelectPalette = viewModel::setThemePalette,
-                onSelectStyle = viewModel::setThemeStyle,
-                onSetAmoled = viewModel::setAmoled,
-                onSetGrainEnabled = viewModel::setGrainEnabled,
-                onSetGrainIntensity = viewModel::setGrainIntensity,
-                onSetGradientEnabled = viewModel::setGradientEnabled,
-                onSetGrainSize = viewModel::setGrainSize,
+                onOpenAppearance = { navController.navigate(AppearanceRoute) },
+                onOpenLicenses = { navController.navigate(LicensesRoute) },
                 onSelectLanguage = viewModel::setLanguage,
                 onRetrySync = viewModel::onRetrySync,
                 onExport = viewModel::onExport,
                 onEmptyTrash = viewModel::onEmptyTrash,
                 onMessageShown = viewModel::onMessageShown,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+private fun NavGraphBuilder.appearanceDestination(navController: NavHostController) {
+    composable(route = AppearanceRoute) { entry ->
+        CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
+            // Same instance as the Settings screen's, so the rows don't flash through the defaults.
+            val viewModel: SettingsViewModel =
+                hiltViewModel(remember(entry) { navController.getBackStackEntry(SettingsRoute) })
+            val state by viewModel.state.collectAsState()
+
+            AppearanceScreen(
+                state = state,
+                onBack = { navController.popBackStack() },
+                onSelectThemeMode = viewModel::setThemeMode,
+                onSetDynamicColor = viewModel::setDynamicColor,
+                onSelectPalette = viewModel::setThemePalette,
+                onSelectStyle = viewModel::setThemeStyle,
+                onSetAmoled = viewModel::setAmoled,
+                onSetGradientEnabled = viewModel::setGradientEnabled,
+                onSetBackgroundMotionEnabled = viewModel::setBackgroundMotionEnabled,
+                onSetGrainEnabled = viewModel::setGrainEnabled,
+                onSetGrainIntensity = viewModel::setGrainIntensity,
+                onSetGrainSize = viewModel::setGrainSize,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+private fun NavGraphBuilder.licensesDestination(navController: NavHostController) {
+    composable(route = LicensesRoute) {
+        CompositionLocalProvider(LocalAnimatedVisibilityScope provides this) {
+            LicensesScreen(
+                licenses = rememberLicenses(),
+                onBack = { navController.popBackStack() },
             )
         }
     }

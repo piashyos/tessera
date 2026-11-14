@@ -33,6 +33,7 @@ data class SettingsState(
     val grainIntensity: Float = 0.5f,
     val grainSize: Int = 1,
     val gradientEnabled: Boolean = true,
+    val backgroundMotionEnabled: Boolean = true,
     val languageTag: String = "",
     val syncStatus: SyncIndicator = SyncIndicator.Ok(),
     /** Number of notes currently in Trash; drives the "Empty trash" row's enabled state. */
