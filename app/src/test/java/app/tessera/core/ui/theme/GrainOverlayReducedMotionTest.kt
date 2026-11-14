@@ -58,5 +58,12 @@ class GrainOverlayReducedMotionTest {
         for (t in 1..10) { composeRule.mainClock.advanceTimeBy(100); assertRest("release $t") }
         composeRule.onNodeWithTag("area").performTouchInput { down(center); up() }
         for (t in 1..10) { composeRule.mainClock.advanceTimeBy(50); assertRest("tap $t") }
+        // a whole swipe in one go: the fling must not move anything either
+        composeRule.onNodeWithTag("area").performTouchInput {
+            down(center)
+            repeat(5) { moveBy(Offset(0f, 40f)) }
+            up()
+        }
+        for (t in 1..20) { composeRule.mainClock.advanceTimeBy(16); assertRest("fling $t") }
     }
 }
