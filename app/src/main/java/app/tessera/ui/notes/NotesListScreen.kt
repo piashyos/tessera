@@ -180,7 +180,6 @@ fun NotesListScreen(
     var tagEditorTarget by remember { mutableStateOf<String?>(null) }
     var folderNameTaken by remember { mutableStateOf(false) }
     var folderSaving by remember { mutableStateOf(false) }
-    var selectedSystemKey by remember { mutableStateOf("all") }
     var tagsVisible by remember { mutableStateOf(false) }
     var searchFolderPickerVisible by remember { mutableStateOf(false) }
     var searchTagPickerVisible by remember { mutableStateOf(false) }
@@ -272,6 +271,16 @@ fun NotesListScreen(
         else -> allNotesLabel
     }
 
+    // Derived from the state (not remembered): the screen leaves composition on Settings and comes back with the
+    // ViewModel still showing e.g. Trash.
+    val selectedSystemKey = when {
+        state.isTrashView -> "trash"
+        state.isArchiveView -> "archive"
+        state.isPinnedView -> "pinned"
+        state.isSharedView -> "shared"
+        else -> "all"
+    }
+
     TesseraNotesDrawer(
         drawerState = drawerState,
         folderTree = state.folderTree,
@@ -279,7 +288,6 @@ fun NotesListScreen(
         selectedSystemKey = selectedSystemKey,
         showSharedSection = state.hasSharedNotes,
         onSystemSelect = { key ->
-            selectedSystemKey = key
             when (key) {
                 "all" -> onShowAllNotes()
                 "pinned" -> onShowPinned()
@@ -290,7 +298,6 @@ fun NotesListScreen(
             scope.launch { drawerState.close() }
         },
         onFolderSelect = { id ->
-            selectedSystemKey = "all"
             onSelectFolder(id)
             scope.launch { drawerState.close() }
         },
