@@ -26,8 +26,8 @@ android {
         applicationId = "app.tessera"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.4.1"
+        versionCode = 17
+        versionName = "0.7.0"
         testInstrumentationRunner = "app.tessera.HiltTestRunner"
     }
     signingConfigs {
